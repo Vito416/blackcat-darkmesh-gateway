@@ -18,6 +18,7 @@ const help: Record<string, string> = {
   gateway_webhook_paypal_ok_total: 'PayPal webhooks verified',
   gateway_webhook_paypal_verify_fail_total: 'PayPal webhook verify failures',
   gateway_webhook_cert_seen_total: 'Webhook certificates observed',
+  gateway_webhook_replay_total: 'Webhook replay detections',
 }
 
 const types: Record<string, 'counter' | 'gauge'> = {}

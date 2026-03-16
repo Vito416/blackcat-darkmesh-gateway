@@ -10,6 +10,7 @@ function stripeSig(body: string, ts: number, secret: string) {
 }
 
 import crypto from 'crypto'
+import { markAndCheck } from '../src/replay'
 
 describe('webhook verification', () => {
   it('verifies stripe signature', () => {
@@ -41,5 +42,13 @@ describe('webhook verification', () => {
     const headers = new Headers()
     const ok = await verifyPayPal(body, headers, 'ppsecret')
     expect(ok).toBe(false)
+  })
+
+  it('detects replay via markAndCheck', () => {
+    const key = 'stripe:evt_1'
+    const first = markAndCheck(key)
+    const second = markAndCheck(key)
+    expect(first).toBe(false)
+    expect(second).toBe(true)
   })
 })
