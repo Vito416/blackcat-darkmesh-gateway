@@ -1,6 +1,7 @@
 import { get, put, sweep } from './cache'
 import { inc, gauge, snapshot } from './metrics'
 import { check as rateCheck } from './ratelimit'
+import { verifyStripe, verifyPayPal, noteCert } from './webhooks'
 
 async function handleInbox(req: Request): Promise<Response> {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown'
@@ -38,6 +39,22 @@ export async function handleRequest(request: Request): Promise<Response> {
   if (url.pathname === '/metrics') {
     const snap = snapshot()
     return new Response(JSON.stringify(snap), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+  if (url.pathname === '/webhook/stripe') {
+    const body = await request.text()
+    const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), process.env.STRIPE_WEBHOOK_SECRET || '', parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE_MS || '300000', 10))
+    if (!ok) { inc('gateway.webhook.stripe.verify_fail'); return new Response('sig invalid', { status: 401 }) }
+    inc('gateway.webhook.stripe.ok')
+    return new Response('ok', { status: 200 })
+  }
+  if (url.pathname === '/webhook/paypal') {
+    const body = await request.text()
+    const headers = request.headers
+    noteCert(headers.get('PayPal-Cert-Url') || undefined)
+    const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
+    if (!ok) { inc('gateway.webhook.paypal.verify_fail'); return new Response('sig invalid', { status: 401 }) }
+    inc('gateway.webhook.paypal.ok')
+    return new Response('ok', { status: 200 })
   }
   // periodic sweep
   sweep()

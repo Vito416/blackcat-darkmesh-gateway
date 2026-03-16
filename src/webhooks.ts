@@ -1,0 +1,84 @@
+import { inc } from './metrics'
+import crypto from 'crypto'
+
+// Stripe webhook verification (t=timestamp,v1=signature)
+export function verifyStripe(body: string, sigHeader: string | null, secret: string, toleranceMs: number): boolean {
+  if (!body || !sigHeader || !secret) return false
+  const parts: Record<string, string> = {}
+  sigHeader.split(',').forEach((p) => {
+    const [k, v] = p.split('='); if (k && v) parts[k.trim()] = v.trim()
+  })
+  if (!parts.t || !parts.v1) return false
+  const signedPayload = `${parts.t}.${body}`
+  const expected = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex')
+  if (expected !== parts.v1) return false
+  const tol = isNaN(toleranceMs) ? 300000 : toleranceMs
+  const ts = parseInt(parts.t, 10) * 1000
+  if (isFinite(ts) && Math.abs(Date.now() - ts) > tol) return false
+  return true
+}
+
+// PayPal webhook verification (HMAC fallback + RSA remote)
+export async function verifyPayPal(body: string, headers: Headers, secret?: string): Promise<boolean> {
+  if (!body) return false
+  // HMAC short-path if secret provided
+  if (secret) {
+    const sig = headers.get('PayPal-Transmission-Sig') || headers.get('PP-Signature')
+    if (!sig) return false
+    const expected = crypto.createHmac('sha256', secret).update(body).digest('hex')
+    if (expected === sig) return true
+  }
+  // Remote verify (requires PAYPAL_WEBHOOK_ID and client creds via env)
+  const webhookId = process.env.PAYPAL_WEBHOOK_ID
+  if (!webhookId) return false
+  const token = await paypalToken()
+  if (!token) return false
+  const payload = {
+    auth_algo: headers.get('PayPal-Auth-Algo'),
+    cert_url: headers.get('PayPal-Cert-Url'),
+    transmission_id: headers.get('PayPal-Transmission-Id'),
+    transmission_sig: headers.get('PayPal-Transmission-Sig') || headers.get('PayPal-Transmission-Signature'),
+    transmission_time: headers.get('PayPal-Transmission-Time'),
+    webhook_id: webhookId,
+    webhook_event: JSON.parse(body),
+  }
+  const resp = await fetch(`${paypalBase()}/v1/notifications/verify-webhook-signature`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!resp.ok) return false
+  const data = await resp.json()
+  return data && data.verification_status === 'SUCCESS'
+}
+
+async function paypalToken(): Promise<string | null> {
+  const cid = process.env.PAYPAL_CLIENT_ID
+  const sec = process.env.PAYPAL_CLIENT_SECRET
+  if (!cid || !sec) return null
+  const base = paypalBase()
+  const resp = await fetch(`${base}/v1/oauth2/token`, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${Buffer.from(`${cid}:${sec}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=client_credentials',
+  })
+  if (!resp.ok) return null
+  const data = await resp.json()
+  return data.access_token || null
+}
+
+function paypalBase() {
+  return process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com'
+}
+
+// Simple cert cache placeholder (for future pinning)
+const certCache = new Map<string, number>()
+const CERT_TTL = parseInt(process.env.GW_CERT_CACHE_TTL_MS || '21600000', 10) // 6h
+export function noteCert(url?: string) {
+  if (!url) return
+  certCache.set(url, Date.now() + CERT_TTL)
+  inc('gateway.webhook.cert_seen')
+}
