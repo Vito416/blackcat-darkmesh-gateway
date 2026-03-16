@@ -7,13 +7,14 @@ Purpose
 - Universal edge/backend that serves many sites from web3 (Arweave templates) to web2 UX.
 - Caches and serves trusted front-end bundles, proxies API calls to Write AO, AO (read), and Worker.
 - Holds only time‑bounded encrypted envelopes needed to deliver emails/webhooks; never stores long‑term PII.
+- Webhook ingress (Stripe/PayPal) with signature verification, optional HMAC secret, and metrics.
 
 Key responsibilities
 - Fetch + cache site front-end from Arweave (verified via manifest of trusted templates).
 - API surface to browser: cart/checkout/session endpoints that forward to Write AO.
 - PSP/webhook bridge: accept PSP callbacks, verify signature/cert, enqueue to Write AO; cache certs.
 - Envelope cache: short TTL cache of encrypted PII blobs for async email/ops; wipe on expiry or ForgetSubject.
-- Observability: expose metrics for cache hit/miss/expired, PSP retry lag, breaker state, ingest/apply errors.
+- Observability: expose metrics for cache hit/miss/expired, inbox rate-limit, webhook verify ok/fail, cert touches.
 
 Data & privacy model
 - PII stays encrypted at the edge; TTL cache only, bounded by Worker inbox TTL and merchant TTL.
@@ -81,7 +82,7 @@ Open items to design/implement
 - `/api/cart/*`, `/api/checkout/*`, `/api/session/*` → proxied to Write AO.
 - `/api/public/*` → served from AO read state (cached).
 - `/webhook/:psp` → PSP bridge ingress.
-- `/metrics` → OpenMetrics (protected).
+- `/metrics` → Prom/OpenMetrics (protected, text format).
 - `/cache/forget` → internal, called by AO ForgetSubject (token-protected).
 
 ## Security hardening (to implement)

@@ -1,5 +1,5 @@
 import { get, put, sweep } from './cache'
-import { inc, gauge, snapshot } from './metrics'
+import { inc, gauge, snapshot, toProm } from './metrics'
 import { check as rateCheck } from './ratelimit'
 import { verifyStripe, verifyPayPal, noteCert } from './webhooks'
 
@@ -37,8 +37,8 @@ export async function handleRequest(request: Request): Promise<Response> {
     return handleInbox(request)
   }
   if (url.pathname === '/metrics') {
-    const snap = snapshot()
-    return new Response(JSON.stringify(snap), { status: 200, headers: { 'content-type': 'application/json' } })
+    const prom = toProm()
+    return new Response(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } })
   }
   if (url.pathname === '/webhook/stripe') {
     const body = await request.text()

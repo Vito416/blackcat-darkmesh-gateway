@@ -20,3 +20,14 @@ export function gauge(name: string, value: number) {
 export function snapshot() {
   return { counters: { ...counters }, gauges: { ...gauges } }
 }
+
+export function toProm(): string {
+  const lines: string[] = []
+  for (const [k, v] of Object.entries(counters)) {
+    lines.push(`${k}_total ${v}`)
+  }
+  for (const [k, v] of Object.entries(gauges)) {
+    lines.push(`${k} ${v}`)
+  }
+  return lines.join('\n') + '\n'
+}
