@@ -81,15 +81,28 @@ const CERT_ALLOW_PREFIXES = (process.env.PAYPAL_CERT_ALLOW_PREFIXES || '')
   .split(',')
   .map((s) => s.trim())
   .filter((s) => s.length > 0)
+const CERT_PIN_SHA256 = (process.env.GW_CERT_PIN_SHA256 || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0)
 
-function certAllowed(url: string): boolean {
+function certAllowed(url: string, fingerprint?: string): boolean {
   if (CERT_ALLOW_PREFIXES.length === 0) return true
   return CERT_ALLOW_PREFIXES.some((p) => url.startsWith(p))
 }
 
-export function noteCert(url?: string): boolean {
+function certPinnedOk(fingerprint?: string): boolean {
+  if (CERT_PIN_SHA256.length === 0) return true
+  if (!fingerprint) return false
+  return CERT_PIN_SHA256.includes(fingerprint)
+}
+
+export function noteCert(url?: string, fingerprint?: string): boolean {
   if (!url) return true
-  if (!certAllowed(url)) {
+  if (!certAllowed(url, fingerprint)) {
+    return false
+  }
+  if (!certPinnedOk(fingerprint)) {
     return false
   }
   certCache.set(url, Date.now() + CERT_TTL)

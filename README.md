@@ -42,7 +42,8 @@ Configuration (per site)
 - Env knobs:
   - `GATEWAY_CACHE_TTL_MS`, `GATEWAY_RL_WINDOW_MS`, `GATEWAY_RL_MAX`
   - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
-  - `GW_CERT_CACHE_TTL_MS`, `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
+  - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
+  - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
 
 Security
 - Never store plaintext PII; only encrypted blobs with TTL.

@@ -38,7 +38,10 @@ export function sweep() {
   for (const [k, v] of store.entries()) {
     if (v.expiresAt <= now) {
       store.delete(k)
-      for (const set of subjects.values()) { set.delete(k) }
+      for (const [subj, set] of subjects.entries()) {
+        set.delete(k)
+        if (set.size === 0) subjects.delete(subj)
+      }
       removed++
     }
   }

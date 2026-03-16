@@ -34,6 +34,12 @@ export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
   if (url.pathname.startsWith('/cache/forget')) {
     if (request.method !== 'POST') return new Response('method', { status: 405 })
+    const token = process.env.GATEWAY_FORGET_TOKEN
+    if (token) {
+      const auth = request.headers.get('authorization') || request.headers.get('x-forget-token') || ''
+      const presented = auth.replace(/^Bearer\\s+/i, '').trim()
+      if (presented !== token) return new Response('unauthorized', { status: 401 })
+    }
     const body = await request.json().catch(() => ({}))
     const subject = body.subject as string | undefined
     const key = body.key as string | undefined
@@ -69,7 +75,7 @@ export async function handleRequest(request: Request): Promise<Response> {
   if (url.pathname === '/webhook/paypal') {
     const body = await request.text()
     const headers = request.headers
-    const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined)
+    const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
     const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
     if (!ok || !certOk) {
       inc('gateway_webhook_paypal_verify_fail')
