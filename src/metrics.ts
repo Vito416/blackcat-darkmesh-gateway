@@ -20,6 +20,8 @@ const help: Record<string, string> = {
   gateway_webhook_cert_seen_total: 'Webhook certificates observed',
   gateway_webhook_replay_total: 'Webhook replay detections',
   gateway_webhook_cert_cache_size: 'Cached webhook cert entries',
+  gateway_webhook_cert_allow_fail_total: 'Webhook cert URL rejected by allowlist',
+  gateway_webhook_cert_pin_fail_total: 'Webhook cert fingerprint failed pin',
 }
 
 const types: Record<string, 'counter' | 'gauge'> = {}

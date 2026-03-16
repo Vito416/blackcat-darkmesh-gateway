@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { get, put, sweep, forgetSubject, dropKey } from './cache'
 import { inc, gauge, snapshot, toProm } from './metrics'
 import { check as rateCheck } from './ratelimit'
@@ -56,6 +57,30 @@ export async function handleRequest(request: Request): Promise<Response> {
     return handleInbox(request)
   }
   if (url.pathname === '/metrics') {
+    const needBasic = !!(process.env.METRICS_BASIC_USER && process.env.METRICS_BASIC_PASS)
+    const needBearer = !!process.env.METRICS_BEARER_TOKEN
+    if (needBasic || needBearer) {
+      const auth = request.headers.get('authorization') || ''
+      const alt = request.headers.get('x-metrics-token') || ''
+      let authed = false
+      if (needBearer && /^Bearer\\s+/i.test(auth)) {
+        authed = auth.replace(/^Bearer\\s+/i, '').trim() === process.env.METRICS_BEARER_TOKEN
+      }
+      if (needBearer && !authed && alt) {
+        authed = alt === process.env.METRICS_BEARER_TOKEN
+      }
+      if (!authed && needBasic && /^Basic\\s+/i.test(auth)) {
+        const b64 = auth.replace(/^Basic\\s+/i, '')
+        try {
+          const decoded = Buffer.from(b64, 'base64').toString()
+          const [user, pass] = decoded.split(':')
+          if (user === process.env.METRICS_BASIC_USER && pass === process.env.METRICS_BASIC_PASS) authed = true
+        } catch (_) { /* ignore */ }
+      }
+      if (!authed) {
+        return new Response('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } })
+      }
+    }
     const prom = toProm()
     return new Response(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } })
   }

@@ -86,7 +86,15 @@ const CERT_PIN_SHA256 = (process.env.GW_CERT_PIN_SHA256 || '')
   .map((s) => s.trim())
   .filter((s) => s.length > 0)
 
-function certAllowed(url: string, fingerprint?: string): boolean {
+function sweepCerts(now: number) {
+  let removed = 0
+  for (const [u, exp] of certCache.entries()) {
+    if (exp <= now) { certCache.delete(u); removed = removed + 1 }
+  }
+  if (removed > 0) gauge('gateway_webhook_cert_cache_size', certCache.size)
+}
+
+function certAllowed(url: string): boolean {
   if (CERT_ALLOW_PREFIXES.length === 0) return true
   return CERT_ALLOW_PREFIXES.some((p) => url.startsWith(p))
 }
@@ -99,10 +107,13 @@ function certPinnedOk(fingerprint?: string): boolean {
 
 export function noteCert(url?: string, fingerprint?: string): boolean {
   if (!url) return true
-  if (!certAllowed(url, fingerprint)) {
+  sweepCerts(Date.now())
+  if (!certAllowed(url)) {
+    inc('gateway_webhook_cert_allow_fail')
     return false
   }
   if (!certPinnedOk(fingerprint)) {
+    inc('gateway_webhook_cert_pin_fail')
     return false
   }
   certCache.set(url, Date.now() + CERT_TTL)

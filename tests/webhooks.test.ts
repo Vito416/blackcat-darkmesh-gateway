@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { verifyStripe, verifyPayPal } from '../src/webhooks'
+import { describe, it, expect, vi } from 'vitest'
+import { verifyStripe, verifyPayPal, noteCert } from '../src/webhooks'
 
 const stripeSecret = 'whsec_test'
 
@@ -50,5 +50,13 @@ describe('webhook verification', () => {
     const second = markAndCheck(key)
     expect(first).toBe(false)
     expect(second).toBe(true)
+  })
+
+  it('fails cert pin mismatch', async () => {
+    process.env.GW_CERT_PIN_SHA256 = 'goodpin'
+    vi.resetModules()
+    const { noteCert: nc } = await import('../src/webhooks')
+    const ok = nc('https://cert.example.com', 'badpin')
+    expect(ok).toBe(false)
   })
 })
