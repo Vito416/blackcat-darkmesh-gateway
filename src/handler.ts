@@ -1,4 +1,4 @@
-import { get, put, sweep } from './cache'
+import { get, put, sweep, forgetSubject, dropKey } from './cache'
 import { inc, gauge, snapshot, toProm } from './metrics'
 import { check as rateCheck } from './ratelimit'
 import { verifyStripe, verifyPayPal, noteCert } from './webhooks'
@@ -18,7 +18,8 @@ async function handleInbox(req: Request): Promise<Response> {
 async function handleCache(req: Request, key: string): Promise<Response> {
   if (req.method === 'PUT') {
     const buf = await req.arrayBuffer()
-    put(key, buf)
+    const subject = req.headers.get('X-Subject') || undefined
+    put(key, buf, subject)
     return new Response('stored', { status: 201 })
   }
   if (req.method === 'GET') {
@@ -31,6 +32,16 @@ async function handleCache(req: Request, key: string): Promise<Response> {
 
 export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
+  if (url.pathname.startsWith('/cache/forget')) {
+    if (request.method !== 'POST') return new Response('method', { status: 405 })
+    const body = await request.json().catch(() => ({}))
+    const subject = body.subject as string | undefined
+    const key = body.key as string | undefined
+    let removed = 0
+    if (subject) removed = forgetSubject(subject)
+    if (key) removed = dropKey(key) ? 1 : removed
+    return new Response(JSON.stringify({ removed }), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
   if (url.pathname.startsWith('/cache/')) {
     const key = url.pathname.replace('/cache/', '')
     return handleCache(request, key)
@@ -45,7 +56,11 @@ export async function handleRequest(request: Request): Promise<Response> {
   if (url.pathname === '/webhook/stripe') {
     const body = await request.text()
     const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), process.env.STRIPE_WEBHOOK_SECRET || '', parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE_MS || '300000', 10))
-    if (!ok) { inc('gateway_webhook_stripe_verify_fail'); return new Response('sig invalid', { status: 401 }) }
+    if (!ok) {
+      inc('gateway_webhook_stripe_verify_fail')
+      const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
+      return new Response('sig invalid', { status: shadow ? 202 : 401 })
+    }
     const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
     if (id && markAndCheck(`stripe:${id}`)) return new Response('replay', { status: 200 })
     inc('gateway_webhook_stripe_ok')
@@ -56,7 +71,11 @@ export async function handleRequest(request: Request): Promise<Response> {
     const headers = request.headers
     noteCert(headers.get('PayPal-Cert-Url') || undefined)
     const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
-    if (!ok) { inc('gateway_webhook_paypal_verify_fail'); return new Response('sig invalid', { status: 401 }) }
+    if (!ok) {
+      inc('gateway_webhook_paypal_verify_fail')
+      const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
+      return new Response('sig invalid', { status: shadow ? 202 : 401 })
+    }
     const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
     if (replayKey && markAndCheck(`paypal:${replayKey}`)) return new Response('replay', { status: 200 })
     inc('gateway_webhook_paypal_ok')

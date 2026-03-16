@@ -21,3 +21,8 @@ export function check(key: string): boolean {
   }
   return true
 }
+
+export function _reset() {
+  buckets.clear()
+  gauge('gateway_ratelimit_buckets', 0)
+}

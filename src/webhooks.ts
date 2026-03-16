@@ -1,4 +1,4 @@
-import { inc } from './metrics'
+import { inc, gauge } from './metrics'
 import crypto from 'crypto'
 
 // Stripe webhook verification (t=timestamp,v1=signature)
@@ -77,8 +77,23 @@ function paypalBase() {
 // Simple cert cache placeholder (for future pinning)
 const certCache = new Map<string, number>()
 const CERT_TTL = parseInt(process.env.GW_CERT_CACHE_TTL_MS || '21600000', 10) // 6h
+const CERT_ALLOW_PREFIXES = (process.env.PAYPAL_CERT_ALLOW_PREFIXES || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0)
+
+function certAllowed(url: string): boolean {
+  if (CERT_ALLOW_PREFIXES.length === 0) return true
+  return CERT_ALLOW_PREFIXES.some((p) => url.startsWith(p))
+}
+
 export function noteCert(url?: string) {
   if (!url) return
+  if (!certAllowed(url)) {
+    inc('gateway_webhook_paypal_verify_fail')
+    return
+  }
   certCache.set(url, Date.now() + CERT_TTL)
   inc('gateway_webhook_cert_seen')
+  gauge('gateway_webhook_cert_cache_size', certCache.size)
 }

@@ -45,6 +45,15 @@
     summary: "Webhook replay detected"
     description: "Repeated webhook replays; investigate duplicate deliveries."
 
+- alert: GatewayCacheSizeHigh
+  expr: gateway_cache_size > 5000
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Gateway cache growing large"
+    description: "Encrypted envelope cache above 5k entries; verify TTL and ForgetSubject hooks."
+
 - alert: GatewayCertSeen
   expr: increase(gateway_webhook_cert_seen_total[1h]) > 100
   for: 0m
@@ -61,4 +70,7 @@ scrape_configs:
     static_configs:
       - targets: ["gateway.local:8787"]
     metrics_path: /metrics
+    basic_auth:
+      username: "prom"
+      password: "${PROM_PASSWORD}"
 ```

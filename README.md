@@ -39,6 +39,10 @@ Configuration (per site)
 - PSP configs (keys, cert endpoints, webhook paths).
 - Email/notify routing (via Worker notify).
 - AO/Write endpoints + signing keys (if applicable).
+- Env knobs:
+  - `GATEWAY_CACHE_TTL_MS`, `GATEWAY_RL_WINDOW_MS`, `GATEWAY_RL_MAX`
+  - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
+  - `GW_CERT_CACHE_TTL_MS`, `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
 
 Security
 - Never store plaintext PII; only encrypted blobs with TTL.
