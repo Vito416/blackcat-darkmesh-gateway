@@ -15,6 +15,7 @@ Key responsibilities
 - PSP/webhook bridge: accept PSP callbacks, verify signature/cert, enqueue to Write AO; cache certs.
 - Envelope cache: short TTL cache of encrypted PII blobs for async email/ops; wipe on expiry or ForgetSubject.
 - Observability: expose metrics for cache hit/miss/expired, inbox rate-limit, webhook verify ok/fail, cert touches.
+  - Replay visibility: `gateway_webhook_replay_total` increments on duplicate PSP deliveries (10m window by default).
 
 Data & privacy model
 - PII stays encrypted at the edge; TTL cache only, bounded by Worker inbox TTL and merchant TTL.
