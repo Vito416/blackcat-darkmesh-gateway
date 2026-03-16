@@ -75,7 +75,7 @@ Open items to design/implement
 - **Cache/Envelope Store**: encrypted TTL cache with wipe scheduler, subject-index for ForgetSubject, metrics emit.
 - **API Proxy**: forwards browser API calls to Write AO (auth, idempotency key propagation), injects public AO state.
 - **PSP Bridge**: webhook ingress, signature/cert verify, retry/backoff queue, breaker per PSP, emits status to Write AO.
-- **Metrics/Alerts Exporter**: Prometheus/OpenMetrics; supports scrape auth tokens.
+- **Metrics/Alerts Exporter**: Prometheus/OpenMetrics; supports scrape auth tokens (see `ops/alerts.md`).
 - **Config Service**: per-merchant config (template txid, TTLs, PSP endpoints) hot-reloadable without restart.
 
 ## API surface (draft)
