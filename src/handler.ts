@@ -6,9 +6,10 @@ import { verifyStripe, verifyPayPal, noteCert } from './webhooks'
 async function handleInbox(req: Request): Promise<Response> {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown'
   if (!rateCheck(`inbox:${ip}`)) {
+    inc('gateway_ratelimit_blocked')
     return new Response('Too Many Requests', { status: 429 })
   }
-  inc('gateway.inbox.accept')
+  inc('gateway_inbox_accept')
   // skeleton: just ack
   return new Response('ok', { status: 200 })
 }
@@ -43,8 +44,8 @@ export async function handleRequest(request: Request): Promise<Response> {
   if (url.pathname === '/webhook/stripe') {
     const body = await request.text()
     const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), process.env.STRIPE_WEBHOOK_SECRET || '', parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE_MS || '300000', 10))
-    if (!ok) { inc('gateway.webhook.stripe.verify_fail'); return new Response('sig invalid', { status: 401 }) }
-    inc('gateway.webhook.stripe.ok')
+    if (!ok) { inc('gateway_webhook_stripe_verify_fail'); return new Response('sig invalid', { status: 401 }) }
+    inc('gateway_webhook_stripe_ok')
     return new Response('ok', { status: 200 })
   }
   if (url.pathname === '/webhook/paypal') {
@@ -52,8 +53,8 @@ export async function handleRequest(request: Request): Promise<Response> {
     const headers = request.headers
     noteCert(headers.get('PayPal-Cert-Url') || undefined)
     const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
-    if (!ok) { inc('gateway.webhook.paypal.verify_fail'); return new Response('sig invalid', { status: 401 }) }
-    inc('gateway.webhook.paypal.ok')
+    if (!ok) { inc('gateway_webhook_paypal_verify_fail'); return new Response('sig invalid', { status: 401 }) }
+    inc('gateway_webhook_paypal_ok')
     return new Response('ok', { status: 200 })
   }
   // periodic sweep

@@ -80,5 +80,5 @@ const CERT_TTL = parseInt(process.env.GW_CERT_CACHE_TTL_MS || '21600000', 10) //
 export function noteCert(url?: string) {
   if (!url) return
   certCache.set(url, Date.now() + CERT_TTL)
-  inc('gateway.webhook.cert_seen')
+  inc('gateway_webhook_cert_seen')
 }

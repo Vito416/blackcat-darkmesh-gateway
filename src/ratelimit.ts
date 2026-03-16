@@ -14,9 +14,9 @@ export function check(key: string): boolean {
   }
   b.count++
   buckets.set(key, b)
-  gauge('gateway.ratelimit.buckets', buckets.size)
+  gauge('gateway_ratelimit_buckets', buckets.size)
   if (b.count > MAX_REQ) {
-    inc('gateway.ratelimit.blocked')
+    inc('gateway_ratelimit_blocked')
     return false
   }
   return true

@@ -7,22 +7,22 @@ const TTL_MS = (parseInt(process.env.GATEWAY_CACHE_TTL_MS || '300000', 10) || 30
 
 export function put(key: string, value: ArrayBuffer) {
   store.set(key, { value, expiresAt: Date.now() + TTL_MS })
-  gauge('gateway.cache.size', store.size)
+  gauge('gateway_cache_size', store.size)
 }
 
 export function get(key: string): ArrayBuffer | null {
   const entry = store.get(key)
   if (!entry) {
-    inc('gateway.cache.miss')
+    inc('gateway_cache_miss')
     return null
   }
   if (Date.now() > entry.expiresAt) {
     store.delete(key)
-    inc('gateway.cache.expired')
-    gauge('gateway.cache.size', store.size)
+    inc('gateway_cache_expired')
+    gauge('gateway_cache_size', store.size)
     return null
   }
-  inc('gateway.cache.hit')
+  inc('gateway_cache_hit')
   return entry.value
 }
 
@@ -36,7 +36,7 @@ export function sweep() {
     }
   }
   if (removed > 0) {
-    inc('gateway.cache.swept', removed)
-    gauge('gateway.cache.size', store.size)
+    inc('gateway_cache_swept', removed)
+    gauge('gateway_cache_size', store.size)
   }
 }
