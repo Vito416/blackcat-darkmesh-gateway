@@ -1,4 +1,5 @@
 # Blackcat Darkmesh Gateway
+[![Project: Blackcat Mesh Nexus](https://img.shields.io/badge/Project-Blackcat%20Mesh%20Nexus-000?logo=github)](https://github.com/users/Vito416/projects/2)
 
 Purpose
 - Universal edge/backend that serves many sites from web3 (Arweave templates) to web2 UX.
