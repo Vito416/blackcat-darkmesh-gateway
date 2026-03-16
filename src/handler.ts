@@ -69,9 +69,9 @@ export async function handleRequest(request: Request): Promise<Response> {
   if (url.pathname === '/webhook/paypal') {
     const body = await request.text()
     const headers = request.headers
-    noteCert(headers.get('PayPal-Cert-Url') || undefined)
+    const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined)
     const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
-    if (!ok) {
+    if (!ok || !certOk) {
       inc('gateway_webhook_paypal_verify_fail')
       const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
       return new Response('sig invalid', { status: shadow ? 202 : 401 })

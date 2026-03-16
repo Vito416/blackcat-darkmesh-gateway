@@ -87,13 +87,13 @@ function certAllowed(url: string): boolean {
   return CERT_ALLOW_PREFIXES.some((p) => url.startsWith(p))
 }
 
-export function noteCert(url?: string) {
-  if (!url) return
+export function noteCert(url?: string): boolean {
+  if (!url) return true
   if (!certAllowed(url)) {
-    inc('gateway_webhook_paypal_verify_fail')
-    return
+    return false
   }
   certCache.set(url, Date.now() + CERT_TTL)
   inc('gateway_webhook_cert_seen')
   gauge('gateway_webhook_cert_cache_size', certCache.size)
+  return true
 }
