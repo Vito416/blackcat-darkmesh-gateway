@@ -54,6 +54,15 @@
     summary: "Gateway cache growing large"
     description: "Encrypted envelope cache above 5k entries; verify TTL and ForgetSubject hooks."
 
+- alert: GatewayCacheTTLMisconfigured
+  expr: gateway_cache_ttl_ms > 900000 or gateway_cache_ttl_ms < 60000
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Gateway cache TTL outside expected range"
+    description: "TTL too high (>15m) or too low (<1m). Align with Worker inbox TTL and data retention policy."
+
 - alert: GatewayCertSeen
   expr: increase(gateway_webhook_cert_seen_total[1h]) > 100
   for: 0m
@@ -62,6 +71,33 @@
   annotations:
     summary: "Many webhook certs observed"
     description: "Monitor for cert churn; may indicate provider rotation or MITM attempts."
+
+- alert: GatewayCertAllowFail
+  expr: increase(gateway_webhook_cert_allow_fail_total[10m]) > 5
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Webhook cert URL blocked by allowlist"
+    description: "PayPal cert URL not in allowlist prefixes. Check PAYPAL_CERT_ALLOW_PREFIXES."
+
+- alert: GatewayCertPinFail
+  expr: increase(gateway_webhook_cert_pin_fail_total[10m]) > 3
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Webhook cert pin mismatch"
+    description: "Cert fingerprint not in GW_CERT_PIN_SHA256 pins. Investigate MITM or rotation."
+
+- alert: GatewayMetricsAuthBlocked
+  expr: increase(gateway_metrics_auth_blocked_total[5m]) > 3
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Metrics endpoint rejecting scrapes"
+    description: "Repeated 401s on /metrics. Check scrape credentials or probe activity."
 
 ## Scrape example
 ```
@@ -73,4 +109,5 @@ scrape_configs:
     basic_auth:
       username: "prom"
       password: "${PROM_PASSWORD}"
+    scheme: https # drop if scraping over plain HTTP in dev
 ```

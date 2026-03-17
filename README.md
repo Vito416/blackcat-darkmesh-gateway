@@ -1,5 +1,5 @@
 # Blackcat Darkmesh Gateway
-[![Project: Blackcat Mesh Nexus](https://img.shields.io/badge/Project-Blackcat%20Mesh%20Nexus-000?logo=github)](https://github.com/users/Vito416/projects/2) [![CI](https://github.com/Vito416/blackcat-darkmesh-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/Vito416/blackcat-darkmesh-gateway/actions/workflows/ci.yml)
+[![Project: Blackcat Mesh Nexus](https://img.shields.io/badge/Project-Blackcat%20Mesh%20Nexus-000?logo=github)](https://github.com/users/Vito416/projects/2) [![CI](https://github.com/Vito416/blackcat-darkmesh-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/Vito416/blackcat-darkmesh-gateway/actions/workflows/ci.yml) [![Releases](https://img.shields.io/github/v/release/Vito416/blackcat-darkmesh-gateway?display_name=tag&sort=semver)](https://github.com/Vito416/blackcat-darkmesh-gateway/releases)
 
 ![Gateway Banner](.github/blackcat-darkmesh-gateway-banner.jpg)
 
@@ -102,6 +102,9 @@ Open items to design/implement
 - Integration: end-to-end checkout flow with fake PSP; webhook retries; cache wipe on ForgetSubject.
 - Load: cache hit/miss ratios under concurrency; PSP breaker thresholds.
 - Security: CSP/SRI enforcement tests; replay attacks for webhooks; envelope tamper tests.
+
+## Releases
+- Release drafts are created from main; see the latest draft and published tags in [Releases](https://github.com/Vito416/blackcat-darkmesh-gateway/releases).
 Open items to design/implement
 - Exact endpoint contract with browser (cart/checkout/session).
 - Metrics/alerts defaults (thresholds).

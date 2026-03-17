@@ -4,7 +4,8 @@ type CacheEntry = { value: ArrayBuffer; expiresAt: number }
 
 const store = new Map<string, CacheEntry>()
 const subjects = new Map<string, Set<string>>()
-const TTL_MS = (parseInt(process.env.GATEWAY_CACHE_TTL_MS || '300000', 10) || 300000)
+const TTL_MS = parseInt(process.env.GATEWAY_CACHE_TTL_MS || '300000', 10) || 300000
+gauge('gateway_cache_ttl_ms', TTL_MS)
 
 export function put(key: string, value: ArrayBuffer, subject?: string) {
   store.set(key, { value, expiresAt: Date.now() + TTL_MS })

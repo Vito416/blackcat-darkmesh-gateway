@@ -38,7 +38,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     const token = process.env.GATEWAY_FORGET_TOKEN
     if (token) {
       const auth = request.headers.get('authorization') || request.headers.get('x-forget-token') || ''
-      const presented = auth.replace(/^Bearer\\s+/i, '').trim()
+      const presented = auth.replace(/^Bearer\s+/i, '').trim()
       if (presented !== token) return new Response('unauthorized', { status: 401 })
     }
     const body = await request.json().catch(() => ({}))
@@ -63,14 +63,14 @@ export async function handleRequest(request: Request): Promise<Response> {
       const auth = request.headers.get('authorization') || ''
       const alt = request.headers.get('x-metrics-token') || ''
       let authed = false
-      if (needBearer && /^Bearer\\s+/i.test(auth)) {
-        authed = auth.replace(/^Bearer\\s+/i, '').trim() === process.env.METRICS_BEARER_TOKEN
+      if (needBearer && /^Bearer\s+/i.test(auth)) {
+        authed = auth.replace(/^Bearer\s+/i, '').trim() === process.env.METRICS_BEARER_TOKEN
       }
       if (needBearer && !authed && alt) {
         authed = alt === process.env.METRICS_BEARER_TOKEN
       }
-      if (!authed && needBasic && /^Basic\\s+/i.test(auth)) {
-        const b64 = auth.replace(/^Basic\\s+/i, '')
+      if (!authed && needBasic && /^Basic\s+/i.test(auth)) {
+        const b64 = auth.replace(/^Basic\s+/i, '')
         try {
           const decoded = Buffer.from(b64, 'base64').toString()
           const [user, pass] = decoded.split(':')
@@ -78,6 +78,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         } catch (_) { /* ignore */ }
       }
       if (!authed) {
+        inc('gateway_metrics_auth_blocked')
         return new Response('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } })
       }
     }
