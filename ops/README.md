@@ -20,3 +20,19 @@ scrape_configs:
       username: ${GATEWAY_METRICS_USER}
       password: ${GATEWAY_METRICS_PASS}
 ```
+
+## Grafana panel: Worker Notify health
+```yaml
+title: "Worker Notify"
+targets:
+  - expr: increase(worker_notify_retry_total[5m])
+    legendFormat: retry
+  - expr: increase(worker_notify_failed_total[5m])
+    legendFormat: failed
+  - expr: increase(worker_notify_breaker_open_total[5m])
+    legendFormat: breaker_open
+  - expr: increase(worker_notify_breaker_blocked_total[5m])
+    legendFormat: breaker_blocked
+  - expr: increase(worker_notify_deduped_total[5m])
+    legendFormat: deduped
+```
