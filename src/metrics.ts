@@ -1,8 +1,12 @@
 export type CounterMap = Record<string, number>
 export type GaugeMap = Record<string, number>
 
-const counters: CounterMap = {}
-const gauges: GaugeMap = {}
+type MetricState = { counters: CounterMap; gauges: GaugeMap }
+const globalState: MetricState = (globalThis as any).__gatewayMetrics || { counters: {}, gauges: {} }
+;(globalThis as any).__gatewayMetrics = globalState
+
+const counters: CounterMap = globalState.counters
+const gauges: GaugeMap = globalState.gauges
 
 const help: Record<string, string> = {
   gateway_cache_hit_total: 'Cache hits',
@@ -61,4 +65,9 @@ export function toProm(): string {
     lines.push(`${k} ${v}`)
   }
   return lines.join('\n') + '\n'
+}
+
+export function reset() {
+  Object.keys(counters).forEach((k) => delete counters[k])
+  Object.keys(gauges).forEach((k) => delete gauges[k])
 }

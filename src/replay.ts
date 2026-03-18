@@ -16,7 +16,7 @@ export function markAndCheck(key: string): boolean {
   const prev = seen.get(key)
   seen.set(key, now + ttlMs)
   if (prev) {
-    inc('gateway_webhook_replay_total')
+    inc('gateway_webhook_replay')
     return true
   }
   return false
