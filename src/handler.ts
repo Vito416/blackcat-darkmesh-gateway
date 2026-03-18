@@ -77,7 +77,11 @@ export async function handleRequest(request: Request): Promise<Response> {
   if (url.pathname === '/metrics') {
     const needBasic = !!(process.env.METRICS_BASIC_USER && process.env.METRICS_BASIC_PASS)
     const needBearer = !!process.env.METRICS_BEARER_TOKEN
-    if (needBasic || needBearer) {
+    const mustGuard = process.env.GATEWAY_REQUIRE_METRICS_AUTH !== '0'
+    if (!needBasic && !needBearer && mustGuard) {
+      return new Response('metrics_auth_not_configured', { status: 500 })
+    }
+    if (needBasic || needBearer || mustGuard) {
       const auth = request.headers.get('authorization') || ''
       const alt = request.headers.get('x-metrics-token') || ''
       let authed = false
@@ -138,22 +142,28 @@ export async function handleRequest(request: Request): Promise<Response> {
 
   if (url.pathname === '/webhook/demo-forward') {
     const target = process.env.WORKER_NOTIFY_URL || 'http://localhost:8787/notify'
-    const token = process.env.WORKER_NOTIFY_TOKEN || 'test-notify'
+    const token = process.env.WORKER_AUTH_TOKEN || process.env.WORKER_NOTIFY_TOKEN || 'test-notify'
     const hmacSecret = process.env.WORKER_NOTIFY_HMAC || ''
     const body = await request.text()
 
-    // Pick breaker key by provider (env overrides per PSP), fallback to generic.
+    // Pick breaker key by provider (query/header/body) with per-PSP overrides, fallback to generic.
+    const provider = (() => {
+      const q = url.searchParams.get('provider')
+      if (q) return q.toLowerCase()
+      const hdr = request.headers.get('x-provider')
+      if (hdr) return hdr.toLowerCase()
+      try {
+        const parsed = JSON.parse(body)
+        if (parsed?.provider) return String(parsed.provider).toLowerCase()
+      } catch {}
+      return undefined
+    })()
+
     const breakerKey = (() => {
-      if (/stripe/i.test(url.pathname) && process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE) {
-        return process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE
-      }
-      if (/paypal/i.test(url.pathname) && process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL) {
-        return process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL
-      }
-      if (/gopay/i.test(url.pathname) && process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY) {
-        return process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY
-      }
-      return process.env.WORKER_NOTIFY_BREAKER_KEY || 'gateway'
+      if (provider === 'stripe' && process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE) return process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE
+      if (provider === 'paypal' && process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL) return process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL
+      if (provider === 'gopay' && process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY) return process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY
+      return process.env.WORKER_NOTIFY_BREAKER_KEY || provider || 'gateway'
     })()
 
     const headers: Record<string, string> = {

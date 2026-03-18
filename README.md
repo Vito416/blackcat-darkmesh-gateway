@@ -48,7 +48,7 @@ Configuration (per site)
 - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
 - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
 - Notify → Worker:
-  - `WORKER_NOTIFY_URL`, `WORKER_NOTIFY_TOKEN`, `WORKER_NOTIFY_HMAC`
+- `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
 - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.
 - Metrics scrape example (Prometheus):
   ```
@@ -104,7 +104,7 @@ Open items to design/implement
 - `/api/cart/*`, `/api/checkout/*`, `/api/session/*` → proxied to Write AO.
 - `/api/public/*` → served from AO read state (cached).
 - `/webhook/:psp` → PSP bridge ingress.
-- `/metrics` → Prom/OpenMetrics (protected, text format).
+- `/metrics` → Prom/OpenMetrics (protected, text format; set `GATEWAY_REQUIRE_METRICS_AUTH=1` + bearer/basic creds).
 - `/cache/forget` → internal, called by AO ForgetSubject (token-protected).
 
 ## Security hardening (to implement)
