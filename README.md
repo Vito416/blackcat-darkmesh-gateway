@@ -47,6 +47,9 @@ Configuration (per site)
 - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
 - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
 - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
+- Notify → Worker:
+  - `WORKER_NOTIFY_URL`, `WORKER_NOTIFY_TOKEN`, `WORKER_NOTIFY_HMAC`
+  - `WORKER_NOTIFY_BREAKER_KEY` (doporučeno per provider: `stripe`, `paypal`, `gopay`…), propadne do hlavičky `x-breaker-key` pro izolaci breaker stavu.
 - Metrics scrape example (Prometheus):
   ```
   scrape_configs:
