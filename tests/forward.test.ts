@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { handleRequest } from '../src/handler'
+import { handleRequest } from '../src/handler.js'
 
 describe('demo forward webhook -> worker notify', () => {
   it('forwards body with bearer and HMAC', { timeout: 15000 }, async () => {

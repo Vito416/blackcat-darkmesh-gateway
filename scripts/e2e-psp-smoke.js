@@ -1,9 +1,17 @@
 import crypto from 'crypto'
-const useDist = process.env.USE_DIST === '1'
-const metricsPath = useDist ? '../dist/metrics.js' : '../src/metrics.ts'
-const handlerPath = useDist ? '../dist/handler.js' : '../src/handler.ts'
+import { existsSync } from 'fs'
 
-const { toProm } = await import(metricsPath)
+const buildDir = new URL('../dist/', import.meta.url)
+
+function importBuilt(relPath) {
+  const url = new URL(relPath, buildDir)
+  if (!existsSync(url)) {
+    throw new Error(`missing build output: ${url.pathname} (run \"npm run build\" first)`)
+  }
+  return import(url.href)
+}
+
+const { toProm } = await importBuilt('metrics.js')
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg)
@@ -30,7 +38,7 @@ async function main() {
   process.env.PAYPAL_WEBHOOK_SECRET = 'sec_test'
   process.env.PAYPAL_CERT_ALLOW_PREFIXES = 'https://trusted.paypal.com/'
   process.env.GW_CERT_PIN_SHA256 = 'deadbeef'
-  ;({ handleRequest } = await import(handlerPath))
+  ;({ handleRequest } = await importBuilt('handler.js'))
 
   // Stripe missing signature
   let res = await req('http://gateway/webhook/stripe', '{}')

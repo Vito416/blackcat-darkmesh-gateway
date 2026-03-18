@@ -1,5 +1,5 @@
 // Simple in-memory replay detector with TTL
-import { inc } from './metrics'
+import { inc } from './metrics.js'
 
 const ttlMs = parseInt(process.env.GATEWAY_WEBHOOK_REPLAY_TTL_MS || '600000', 10) // 10 minutes default
 const seen = new Map<string, number>()

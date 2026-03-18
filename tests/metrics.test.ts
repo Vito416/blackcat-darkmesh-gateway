@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { inc, gauge, toProm } from '../src/metrics'
+import { inc, gauge, toProm } from '../src/metrics.js'
 
 describe('metrics exporter', () => {
   it('emits counters with _total suffix and HELP/TYPE', () => {

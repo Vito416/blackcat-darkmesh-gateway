@@ -11,7 +11,7 @@ describe('cache TTL and rate-limit', () => {
   it('evicts entries after TTL', async () => {
     process.env.GATEWAY_CACHE_TTL_MS = '100'
     vi.resetModules()
-    const { put, get } = await import('../src/cache')
+    const { put, get } = await import('../src/cache.js')
     const key = 'k1'
     put(key, new TextEncoder().encode('v1').buffer)
     expect(get(key)).not.toBeNull()
@@ -23,7 +23,7 @@ describe('cache TTL and rate-limit', () => {
     process.env.GATEWAY_RL_MAX = '2'
     process.env.GATEWAY_RL_WINDOW_MS = '1000'
     vi.resetModules()
-    const rl = await import('../src/ratelimit')
+    const rl = await import('../src/ratelimit.js')
     rl._reset()
     expect(rl.check('ip')).toBe(true)
     expect(rl.check('ip')).toBe(true)

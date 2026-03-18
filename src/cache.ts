@@ -1,4 +1,4 @@
-import { inc, gauge } from './metrics'
+import { inc, gauge } from './metrics.js'
 
 type CacheEntry = { value: ArrayBuffer; expiresAt: number }
 

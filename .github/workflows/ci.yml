@@ -27,7 +27,20 @@ jobs:
         run: npm test -- --run tests/metrics-auth.test.ts
       - name: Webhook pen-tests
         run: npm test -- --run tests/webhook-pentest.test.ts
-      - name: PSP smoke (built JS)
-        env:
-          USE_DIST: "1"
-        run: node scripts/e2e-psp-smoke.js
+
+  smoke:
+    runs-on: ubuntu-24.04
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Test (full suite)
+        run: npm test
+      - name: PSP smoke (built dist)
+        run: npm run smoke

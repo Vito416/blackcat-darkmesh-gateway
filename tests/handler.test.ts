@@ -11,7 +11,7 @@ describe('handler cache and shadow modes', () => {
 
   it('requires token for /cache/forget', async () => {
     process.env.GATEWAY_FORGET_TOKEN = 'secret'
-    const { handleRequest } = await import('../src/handler')
+    const { handleRequest } = await import('../src/handler.js')
     // store value with subject
     const putReq = new Request('http://gateway/cache/foo', { method: 'PUT', body: 'abc', headers: { 'content-type': 'application/octet-stream', 'x-subject': 'subj1' } })
     await handleRequest(putReq)
@@ -28,7 +28,7 @@ describe('handler cache and shadow modes', () => {
   it('shadow mode returns 202 on invalid stripe sig', async () => {
     process.env.GATEWAY_WEBHOOK_SHADOW_INVALID = '1'
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test'
-    const { handleRequest } = await import('../src/handler')
+    const { handleRequest } = await import('../src/handler.js')
     const badSigReq = new Request('http://gateway/webhook/stripe', { method: 'POST', body: '{}', headers: { 'Stripe-Signature': 't=0,v1=badsig' } })
     const res = await handleRequest(badSigReq)
     expect(res.status).toBe(202)

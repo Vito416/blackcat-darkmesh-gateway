@@ -1,4 +1,4 @@
-import { inc, gauge } from './metrics'
+import { inc, gauge } from './metrics.js'
 
 const WINDOW_MS = parseInt(process.env.GATEWAY_RL_WINDOW_MS || '60000', 10)
 const MAX_REQ = parseInt(process.env.GATEWAY_RL_MAX || '120', 10)

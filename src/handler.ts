@@ -1,10 +1,10 @@
 import { Buffer } from 'buffer'
 import crypto from 'crypto'
-import { get, put, sweep, forgetSubject, dropKey } from './cache'
-import { inc, gauge, snapshot, toProm } from './metrics'
-import { check as rateCheck } from './ratelimit'
-import { verifyStripe, verifyPayPal, noteCert } from './webhooks'
-import { markAndCheck } from './replay'
+import { get, put, sweep, forgetSubject, dropKey } from './cache.js'
+import { inc, gauge, snapshot, toProm } from './metrics.js'
+import { check as rateCheck } from './ratelimit.js'
+import { verifyStripe, verifyPayPal, noteCert } from './webhooks.js'
+import { markAndCheck } from './replay.js'
 
 async function handleInbox(req: Request): Promise<Response> {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown'

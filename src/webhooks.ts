@@ -1,4 +1,4 @@
-import { inc, gauge } from './metrics'
+import { inc, gauge } from './metrics.js'
 import crypto from 'crypto'
 
 // Stripe webhook verification (t=timestamp,v1=signature)

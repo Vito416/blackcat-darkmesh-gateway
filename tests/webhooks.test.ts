@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { verifyStripe, verifyPayPal, noteCert } from '../src/webhooks'
+import { verifyStripe, verifyPayPal, noteCert } from '../src/webhooks.js'
 
 const stripeSecret = 'whsec_test'
 
@@ -10,7 +10,7 @@ function stripeSig(body: string, ts: number, secret: string) {
 }
 
 import crypto from 'crypto'
-import { markAndCheck } from '../src/replay'
+import { markAndCheck } from '../src/replay.js'
 
 describe('webhook verification', () => {
   it('verifies stripe signature', () => {
@@ -55,7 +55,7 @@ describe('webhook verification', () => {
   it('fails cert pin mismatch', async () => {
     process.env.GW_CERT_PIN_SHA256 = 'goodpin'
     vi.resetModules()
-    const { noteCert: nc } = await import('../src/webhooks')
+    const { noteCert: nc } = await import('../src/webhooks.js')
     const ok = nc('https://cert.example.com', 'badpin')
     expect(ok).toBe(false)
   })
