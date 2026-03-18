@@ -99,6 +99,36 @@
     summary: "Metrics endpoint rejecting scrapes"
     description: "Repeated 401s on /metrics. Check scrape credentials or probe activity."
 
+- alert: GatewayPSPBreakerOpenStripe
+  expr: write_psp_stripe_breaker_open > 0
+  for: 1m
+  labels:
+    severity: warning
+    provider: stripe
+  annotations:
+    summary: "Stripe breaker open (write layer)"
+    description: "Write-side Stripe circuit opened; Stripe API failures or configuration issues."
+
+- alert: GatewayPSPBreakerOpenPayPal
+  expr: write_psp_paypal_breaker_open > 0
+  for: 1m
+  labels:
+    severity: warning
+    provider: paypal
+  annotations:
+    summary: "PayPal breaker open (write layer)"
+    description: "Write-side PayPal circuit opened; check PayPal API/webhook status."
+
+- alert: GatewayPSPBreakerOpenGoPay
+  expr: write_psp_gopay_breaker_open > 0
+  for: 1m
+  labels:
+    severity: warning
+    provider: gopay
+  annotations:
+    summary: "GoPay breaker open (write layer)"
+    description: "Write-side GoPay circuit opened; investigate GoPay gateway health."
+
 - alert: WorkerNotifyBreakerOpen
   expr: increase(worker_notify_breaker_open_total[5m]) > 0
   for: 5m
