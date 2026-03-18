@@ -49,6 +49,18 @@ dashboard:
           legendFormat: paypal_breaker_open
         - expr: write_psp_gopay_breaker_open
           legendFormat: gopay_breaker_open
+        - expr: rate(worker_notify_breaker_open_total_stripe[5m])
+          legendFormat: worker_notify_stripe_open/s
+        - expr: rate(worker_notify_breaker_blocked_total_stripe[5m])
+          legendFormat: worker_notify_stripe_blocked/s
+        - expr: rate(worker_notify_breaker_open_total_paypal[5m])
+          legendFormat: worker_notify_paypal_open/s
+        - expr: rate(worker_notify_breaker_blocked_total_paypal[5m])
+          legendFormat: worker_notify_paypal_blocked/s
+        - expr: rate(worker_notify_breaker_open_total_gopay[5m])
+          legendFormat: worker_notify_gopay_open/s
+        - expr: rate(worker_notify_breaker_blocked_total_gopay[5m])
+          legendFormat: worker_notify_gopay_blocked/s
     - title: "Metrics auth blocks"
       type: timeseries
       datasource: Prometheus
