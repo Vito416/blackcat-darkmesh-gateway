@@ -5,7 +5,8 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsc -p tsconfig.build.json",
-    "smoke": "npm run build && node scripts/e2e-psp-smoke.js"
+    "smoke": "npm run build && node scripts/e2e-psp-smoke.js",
+    "chaos": "npm run build && node scripts/e2e-psp-chaos.js"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

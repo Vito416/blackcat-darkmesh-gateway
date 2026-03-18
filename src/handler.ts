@@ -6,6 +6,23 @@ import { check as rateCheck } from './ratelimit.js'
 import { verifyStripe, verifyPayPal, noteCert } from './webhooks.js'
 import { markAndCheck } from './replay.js'
 
+type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
+
+function recordWebhook5xx(provider: WebhookProvider) {
+  inc(`gateway_webhook_${provider}_5xx`)
+}
+
+async function wrapWebhook(provider: WebhookProvider, fn: () => Promise<Response> | Response): Promise<Response> {
+  try {
+    const res = await fn()
+    if (res.status >= 500) recordWebhook5xx(provider)
+    return res
+  } catch (_) {
+    recordWebhook5xx(provider)
+    return new Response('error', { status: 500 })
+  }
+}
+
 async function handleInbox(req: Request): Promise<Response> {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown'
   if (!rateCheck(`inbox:${ip}`)) {
@@ -87,32 +104,36 @@ export async function handleRequest(request: Request): Promise<Response> {
     return new Response(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } })
   }
   if (url.pathname === '/webhook/stripe') {
-    const body = await request.text()
-    const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), process.env.STRIPE_WEBHOOK_SECRET || '', parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE_MS || '300000', 10))
-    if (!ok) {
-      inc('gateway_webhook_stripe_verify_fail')
-      const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
-      return new Response('sig invalid', { status: shadow ? 202 : 401 })
-    }
-    const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
-    if (id && markAndCheck(`stripe:${id}`)) return new Response('replay', { status: 200 })
-    inc('gateway_webhook_stripe_ok')
-    return new Response('ok', { status: 200 })
+    return wrapWebhook('stripe', async () => {
+      const body = await request.text()
+      const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), process.env.STRIPE_WEBHOOK_SECRET || '', parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE_MS || '300000', 10))
+      if (!ok) {
+        inc('gateway_webhook_stripe_verify_fail')
+        const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
+        return new Response('sig invalid', { status: shadow ? 202 : 401 })
+      }
+      const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
+      if (id && markAndCheck(`stripe:${id}`)) return new Response('replay', { status: 200 })
+      inc('gateway_webhook_stripe_ok')
+      return new Response('ok', { status: 200 })
+    })
   }
   if (url.pathname === '/webhook/paypal') {
-    const body = await request.text()
-    const headers = request.headers
-    const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
-    const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
-    if (!ok || !certOk) {
-      inc('gateway_webhook_paypal_verify_fail')
-      const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
-      return new Response('sig invalid', { status: shadow ? 202 : 401 })
-    }
-    const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
-    if (replayKey && markAndCheck(`paypal:${replayKey}`)) return new Response('replay', { status: 200 })
-    inc('gateway_webhook_paypal_ok')
-    return new Response('ok', { status: 200 })
+    return wrapWebhook('paypal', async () => {
+      const body = await request.text()
+      const headers = request.headers
+      const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
+      const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
+      if (!ok || !certOk) {
+        inc('gateway_webhook_paypal_verify_fail')
+        const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
+        return new Response('sig invalid', { status: shadow ? 202 : 401 })
+      }
+      const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
+      if (replayKey && markAndCheck(`paypal:${replayKey}`)) return new Response('replay', { status: 200 })
+      inc('gateway_webhook_paypal_ok')
+      return new Response('ok', { status: 200 })
+    })
   }
 
   if (url.pathname === '/webhook/demo-forward') {

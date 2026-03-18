@@ -28,6 +28,9 @@ const help: Record<string, string> = {
   gateway_webhook_cert_cache_size: 'Cached webhook cert entries',
   gateway_webhook_cert_allow_fail_total: 'Webhook cert URL rejected by allowlist',
   gateway_webhook_cert_pin_fail_total: 'Webhook cert fingerprint failed pin',
+  gateway_webhook_stripe_5xx_total: 'Stripe webhook handler 5xx responses',
+  gateway_webhook_paypal_5xx_total: 'PayPal webhook handler 5xx responses',
+  gateway_webhook_gopay_5xx_total: 'GoPay webhook handler 5xx responses',
 }
 
 const types: Record<string, 'counter' | 'gauge'> = {}

@@ -54,6 +54,15 @@
     summary: "Webhook replay spike"
     description: "Sudden burst of webhook replays in the last minute; check upstream retry storms or clock skew."
 
+- alert: GatewayWebhook5xx
+  expr: increase(gateway_webhook_stripe_5xx_total[5m]) > 0 or increase(gateway_webhook_paypal_5xx_total[5m]) > 0 or increase(gateway_webhook_gopay_5xx_total[5m]) > 0
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "Gateway PSP handler returning 5xx"
+    description: "Stripe/PayPal/GoPay webhook handler is emitting 5xx responses. Check cert allowlist/pins, downstream notify worker, and provider status."
+
 - alert: GatewayCacheSizeHigh
   expr: gateway_cache_size > 5000
   for: 5m
