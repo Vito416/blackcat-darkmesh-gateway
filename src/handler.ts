@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer'
+import crypto from 'crypto'
 import { get, put, sweep, forgetSubject, dropKey } from './cache'
 import { inc, gauge, snapshot, toProm } from './metrics'
 import { check as rateCheck } from './ratelimit'
@@ -112,6 +113,24 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (replayKey && markAndCheck(`paypal:${replayKey}`)) return new Response('replay', { status: 200 })
     inc('gateway_webhook_paypal_ok')
     return new Response('ok', { status: 200 })
+  }
+
+  if (url.pathname === '/webhook/demo-forward') {
+    const target = process.env.WORKER_NOTIFY_URL || 'http://localhost:8787/notify'
+    const token = process.env.WORKER_NOTIFY_TOKEN || 'test-notify'
+    const hmacSecret = process.env.WORKER_NOTIFY_HMAC || ''
+    const body = await request.text()
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    }
+    if (hmacSecret) {
+      const sig = crypto.createHmac('sha256', hmacSecret).update(body).digest('hex')
+      headers['X-Signature'] = sig
+    }
+    const resp = await fetch(target, { method: 'POST', headers, body })
+    if (resp.ok) return new Response('forwarded', { status: 200 })
+    return new Response('notify_failed', { status: 502 })
   }
   // periodic sweep
   sweep()
