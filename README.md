@@ -43,10 +43,21 @@ Configuration (per site)
 - Email/notify routing (via Worker notify).
 - AO/Write endpoints + signing keys (if applicable).
 - Env knobs:
-  - `GATEWAY_CACHE_TTL_MS`, `GATEWAY_RL_WINDOW_MS`, `GATEWAY_RL_MAX`
-  - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
-  - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
-  - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
+- `GATEWAY_CACHE_TTL_MS`, `GATEWAY_RL_WINDOW_MS`, `GATEWAY_RL_MAX`
+- `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
+- `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
+- `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
+- Metrics scrape example (Prometheus):
+  ```
+  scrape_configs:
+    - job_name: gateway
+      static_configs:
+        - targets: ["gateway.local:8787"]
+      metrics_path: /metrics
+      basic_auth:
+        username: ${GATEWAY_METRICS_USER}
+        password: ${GATEWAY_METRICS_PASS}
+  ```
 
 Security
 - Never store plaintext PII; only encrypted blobs with TTL.
