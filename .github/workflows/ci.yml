@@ -21,9 +21,13 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
+      - name: Build
+        run: npm run build
       - name: Unit + metrics auth
         run: npm test -- --run tests/metrics-auth.test.ts
       - name: Webhook pen-tests
         run: npm test -- --run tests/webhook-pentest.test.ts
-      - name: PSP smoke (ts-node)
-        run: node --experimental-specifier-resolution=node --loader ts-node/esm scripts/e2e-psp-smoke.js
+      - name: PSP smoke (built JS)
+        env:
+          USE_DIST: "1"
+        run: node scripts/e2e-psp-smoke.js

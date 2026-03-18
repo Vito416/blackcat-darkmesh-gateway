@@ -1,5 +1,9 @@
 import crypto from 'crypto'
-import { toProm } from '../src/metrics.ts'
+const useDist = process.env.USE_DIST === '1'
+const metricsPath = useDist ? '../dist/metrics.js' : '../src/metrics.ts'
+const handlerPath = useDist ? '../dist/handler.js' : '../src/handler.ts'
+
+const { toProm } = await import(metricsPath)
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg)
@@ -26,7 +30,7 @@ async function main() {
   process.env.PAYPAL_WEBHOOK_SECRET = 'sec_test'
   process.env.PAYPAL_CERT_ALLOW_PREFIXES = 'https://trusted.paypal.com/'
   process.env.GW_CERT_PIN_SHA256 = 'deadbeef'
-  ;({ handleRequest } = await import('../src/handler.ts'))
+  ;({ handleRequest } = await import(handlerPath))
 
   // Stripe missing signature
   let res = await req('http://gateway/webhook/stripe', '{}')
