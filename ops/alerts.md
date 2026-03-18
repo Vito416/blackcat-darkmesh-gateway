@@ -45,6 +45,15 @@
     summary: "Webhook replay detected"
     description: "Repeated webhook replays; investigate duplicate deliveries."
 
+- alert: GatewayWebhookReplaySpike
+  expr: increase(gateway_webhook_replay_total[1m]) > 5
+  for: 1m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Webhook replay spike"
+    description: "Sudden burst of webhook replays in the last minute; check upstream retry storms or clock skew."
+
 - alert: GatewayCacheSizeHigh
   expr: gateway_cache_size > 5000
   for: 5m
