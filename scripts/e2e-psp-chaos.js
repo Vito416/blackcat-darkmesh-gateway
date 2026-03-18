@@ -56,6 +56,7 @@ async function chaosStripe() {
 
 async function chaosPayPal() {
   const secret = 'sec_test'
+  const pin = process.env.GW_CERT_PIN_SHA256 || 'deadbeef'
   for (let i = 0; i < 10; i++) {
     const body = JSON.stringify({ id: `pp_evt_${i}` })
     const bad = i % 2 === 0
@@ -64,7 +65,7 @@ async function chaosPayPal() {
     const res = await req('/webhook/paypal', body, {
       'PayPal-Transmission-Sig': sig,
       'PayPal-Cert-Url': certUrl,
-      'PayPal-Cert-Sha256': bad ? 'deadbeef' : 'good',
+      'PayPal-Cert-Sha256': bad ? 'deadbeef' : pin,
       'PayPal-Transmission-Id': `tid-${i}`,
     })
     assert([200, 401].includes(res.status), `paypal chaos status ${res.status}`)
@@ -76,7 +77,7 @@ async function chaosPayPal() {
     const res = await req('/webhook/paypal', body, {
       'PayPal-Transmission-Sig': sig,
       'PayPal-Cert-Url': 'https://trusted.paypal.com/cert.pem',
-      'PayPal-Cert-Sha256': 'good',
+      'PayPal-Cert-Sha256': pin,
       'PayPal-Transmission-Id': 'tid-replay',
     })
     assert([200].includes(res.status), `paypal replay status ${res.status}`)
