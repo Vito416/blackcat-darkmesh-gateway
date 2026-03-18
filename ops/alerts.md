@@ -117,24 +117,6 @@
     summary: "Notify dedupe spike"
     description: "High deduplication rate; possible duplicate events from upstream."
 
-- alert: WorkerNotifyBreakerOpen
-  expr: increase(worker_notify_breaker_open_total[5m]) > 0
-  for: 5m
-  labels:
-    severity: warning
-  annotations:
-    summary: "Worker notify breaker tripped"
-    description: "Worker notify circuit opened (webhook/SendGrid failures). Investigate downstream notify target."
-
-- alert: WorkerNotifyDedupedSpike
-  expr: increase(worker_notify_deduped_total[10m]) > 20
-  for: 5m
-  labels:
-    severity: info
-  annotations:
-    summary: "Notify dedupe spike"
-    description: "High deduplication rate; possible duplicate events from upstream."
-
 ## Scrape example
 ```
 scrape_configs:
