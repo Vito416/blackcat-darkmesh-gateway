@@ -5,6 +5,7 @@
   - Cache: `gateway_cache_hit_total`, `gateway_cache_miss_total`, `gateway_cache_expired_total`, `gateway_cache_size`.
   - Webhooks: `gateway_webhook_stripe_verify_fail_total`, `gateway_webhook_paypal_verify_fail_total`, `gateway_webhook_replay_total`, `gateway_webhook_cert_allow_fail_total`, `gateway_webhook_cert_pin_fail_total`, `gateway_webhook_cert_cache_size`.
   - Rate limit: `gateway_ratelimit_blocked_total`, `gateway_ratelimit_buckets`.
+- WAL/DLQ (from Write export): see Write dashboards for `write.webhook.dlq_size` and `write.wal.bytes` to spot downstream backlog.
 - Cache purge: `/cache/forget` (POST) with `GATEWAY_FORGET_TOKEN` bearer; body `{subject?, key?}`; returns `{removed}`.
 - AO hook: configure AO ForgetSubject to POST to `/cache/forget` with the same token to wipe subject-indexed blobs.
 - PSP certs: allowlist prefixes `PAYPAL_CERT_ALLOW_PREFIXES`, pins `GW_CERT_PIN_SHA256`, TTL `GW_CERT_CACHE_TTL_MS`; cert cache size exported.
@@ -35,4 +36,37 @@ targets:
     legendFormat: breaker_blocked
   - expr: increase(worker_notify_deduped_total[5m])
     legendFormat: deduped
+
+## Grafana panel: Gateway cache / webhooks / PSP
+```yaml
+title: "Gateway Cache/Webhooks"
+panels:
+  - type: timeseries
+    title: Cache hit/miss
+    targets:
+      - expr: rate(gateway_cache_hit_total[5m])
+        legendFormat: hit
+      - expr: rate(gateway_cache_miss_total[5m])
+        legendFormat: miss
+      - expr: rate(gateway_cache_expired_total[5m])
+        legendFormat: expired
+  - type: timeseries
+    title: Webhook verify failures
+    targets:
+      - expr: rate(gateway_webhook_stripe_verify_fail_total[5m])
+        legendFormat: stripe_fail
+      - expr: rate(gateway_webhook_paypal_verify_fail_total[5m])
+        legendFormat: paypal_fail
+      - expr: rate(gateway_webhook_replay_total[5m])
+        legendFormat: replay
+  - type: timeseries
+    title: PSP cert issues
+    targets:
+      - expr: rate(gateway_webhook_cert_allow_fail_total[5m])
+        legendFormat: cert_allow_fail
+      - expr: rate(gateway_webhook_cert_pin_fail_total[5m])
+        legendFormat: cert_pin_fail
+      - expr: gateway_webhook_cert_cache_size
+        legendFormat: cert_cache_size
+```
 ```
