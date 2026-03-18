@@ -1,0 +1,65 @@
+# Grafana dashboard (YAML) for gateway cache/webhook/PSP health
+apiVersion: 1
+providers:
+  - name: "gateway-metrics"
+    orgId: 1
+    folder: "Blackcat Mesh / Gateway"
+    type: file
+    options:
+      path: /etc/grafana/dashboards/gateway-metrics.json
+
+dashboard:
+  title: "Gateway Cache & PSP"
+  tags: ["blackcat", "gateway"]
+  timezone: browser
+  panels:
+    - title: "Cache hit/miss/expired"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(gateway_cache_hit_total[5m])
+          legendFormat: hit/s
+        - expr: rate(gateway_cache_miss_total[5m])
+          legendFormat: miss/s
+        - expr: rate(gateway_cache_expired_total[5m])
+          legendFormat: expired/s
+    - title: "Cache size"
+      type: stat
+      datasource: Prometheus
+      targets:
+        - expr: gateway_cache_size
+          legendFormat: cache_size
+    - title: "Webhook verify / replay"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(gateway_webhook_stripe_verify_fail_total[5m])
+          legendFormat: stripe_verify_fail/s
+        - expr: rate(gateway_webhook_paypal_verify_fail_total[5m])
+          legendFormat: paypal_verify_fail/s
+        - expr: rate(gateway_webhook_replay_total[5m])
+          legendFormat: replay/s
+    - title: "PSP breaker (write export)"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: write_psp_stripe_breaker_open
+          legendFormat: stripe_breaker_open
+        - expr: write_psp_paypal_breaker_open
+          legendFormat: paypal_breaker_open
+        - expr: write_psp_gopay_breaker_open
+          legendFormat: gopay_breaker_open
+    - title: "Metrics auth blocks"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(gateway_metrics_auth_blocked_total[5m])
+          legendFormat: metrics_401/s
+    - title: "Cert cache pins/allow failures"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(gateway_webhook_cert_pin_fail_total[10m])
+          legendFormat: pin_fail/s
+        - expr: rate(gateway_webhook_cert_allow_fail_total[10m])
+          legendFormat: allow_fail/s
