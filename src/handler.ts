@@ -120,12 +120,26 @@ export async function handleRequest(request: Request): Promise<Response> {
     const token = process.env.WORKER_NOTIFY_TOKEN || 'test-notify'
     const hmacSecret = process.env.WORKER_NOTIFY_HMAC || ''
     const body = await request.text()
+
+    // Pick breaker key by provider (env overrides per PSP), fallback to generic.
+    const breakerKey = (() => {
+      if (/stripe/i.test(url.pathname) && process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE) {
+        return process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE
+      }
+      if (/paypal/i.test(url.pathname) && process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL) {
+        return process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL
+      }
+      if (/gopay/i.test(url.pathname) && process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY) {
+        return process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY
+      }
+      return process.env.WORKER_NOTIFY_BREAKER_KEY || 'gateway'
+    })()
+
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       'content-type': 'application/json',
+      'x-breaker-key': breakerKey,
     }
-    const breakerKey = process.env.WORKER_NOTIFY_BREAKER_KEY || 'gateway'
-    headers['x-breaker-key'] = breakerKey
     if (hmacSecret) {
       const sig = crypto.createHmac('sha256', hmacSecret).update(body).digest('hex')
       headers['X-Signature'] = sig
