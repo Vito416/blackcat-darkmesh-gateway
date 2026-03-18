@@ -49,7 +49,7 @@ Configuration (per site)
 - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
 - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_NOTIFY_TOKEN`, `WORKER_NOTIFY_HMAC`
-  - `WORKER_NOTIFY_BREAKER_KEY` (doporučeno per provider: `stripe`, `paypal`, `gopay`…), propadne do hlavičky `x-breaker-key` pro izolaci breaker stavu.
+  - `WORKER_NOTIFY_BREAKER_KEY` (default), nebo specificky `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; propadne do hlavičky `x-breaker-key` pro izolaci breaker stavu per provider.
 - Metrics scrape example (Prometheus):
   ```
   scrape_configs:
