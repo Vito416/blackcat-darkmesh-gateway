@@ -116,6 +116,12 @@ Open items to design/implement
 - Load: cache hit/miss ratios under concurrency; PSP breaker thresholds.
 - Security: CSP/SRI enforcement tests; replay attacks for webhooks; envelope tamper tests.
 
+### Quick test commands
+- Unit + integration: `npm test`
+- Metrics auth smoke: `npm test -- --run tests/metrics-auth.test.ts`
+- Webhook pen-tests: `npm test -- --run tests/webhook-pentest.test.ts`
+- Bez lokálního Node: `docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm test -- --run tests/webhook-pentest.test.ts"`
+
 ## Releases
 - Release drafts are created from main; see the latest draft and published tags in [Releases](https://github.com/Vito416/blackcat-darkmesh-gateway/releases).
 Open items to design/implement
