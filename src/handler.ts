@@ -124,6 +124,8 @@ export async function handleRequest(request: Request): Promise<Response> {
       Authorization: `Bearer ${token}`,
       'content-type': 'application/json',
     }
+    const breakerKey = process.env.WORKER_NOTIFY_BREAKER_KEY || 'gateway'
+    headers['x-breaker-key'] = breakerKey
     if (hmacSecret) {
       const sig = crypto.createHmac('sha256', hmacSecret).update(body).digest('hex')
       headers['X-Signature'] = sig
