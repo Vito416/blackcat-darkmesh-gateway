@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { toProm } from '../src/metrics'
+import { toProm } from '../src/metrics.ts'
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg)
@@ -26,14 +26,14 @@ async function main() {
   process.env.PAYPAL_WEBHOOK_SECRET = 'sec_test'
   process.env.PAYPAL_CERT_ALLOW_PREFIXES = 'https://trusted.paypal.com/'
   process.env.GW_CERT_PIN_SHA256 = 'deadbeef'
-  ;({ handleRequest } = await import('../src/handler'))
+  ;({ handleRequest } = await import('../src/handler.ts'))
 
   // Stripe missing signature
   let res = await req('http://gateway/webhook/stripe', '{}')
   assert(res.status === 401, `stripe missing sig expected 401 got ${res.status}`)
 
   // Stripe old timestamp (replay window)
-  const tsOld = Math.floor(Date.now() / 1000) - 120
+  const tsOld = Math.floor(Date.now() / 1000) - 600 // older than default tolerance (5m)
   const body = '{"id":"evt_old"}'
   const sigOld = stripeSignature('sec_test', tsOld, body)
   res = await req('http://gateway/webhook/stripe', body, { 'Stripe-Signature': `t=${tsOld},v1=${sigOld}` })
