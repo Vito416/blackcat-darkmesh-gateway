@@ -131,3 +131,7 @@ Open items to design/implement
 - Exact endpoint contract with browser (cart/checkout/session).
 - Metrics/alerts defaults (thresholds).
 - Deployment topology (per-merchant vs multi-tenant isolation).
+
+## Umbrella licensing note
+
+This repository is intended to be one official component of the Blackcat `Covered System`, not a separately monetized silo. Under the planned BFNL bundle, official Blackcat repositories and future mandatory internal components are treated as one integrated licensing surface for ordinary deployment classes. Repository separation exists for maintenance, safety, and delivery, not to trigger a separate founder fee or future steward/development fee for each repository. The current draft licensing bundle lives in the `blackcat-darkmesh-ao` repository under `docs/`.
