@@ -1,0 +1,83 @@
+Blackcat Covered System Transitional License Notice
+Version 1.0 - March 2026
+
+Licensor: Black Cat Academy s. r. o.
+Repository: blackcat-darkmesh-gateway
+Contact: blackcatacademy@protonmail.com
+
+This repository is an official component of the Blackcat Covered System.
+
+This transitional license notice is intended to provide a single covered-system interpretation until a final founder-fee umbrella license is formally adopted.
+
+1. Covered System Status
+
+This repository is intended to be interpreted as one official component of the Blackcat Covered System, together with other official Blackcat repositories, packages, services, schemas, manifests, gateways, contracts, and future mandatory internal components designated in the official licensing materials.
+
+Repository separation exists primarily for maintenance, safety, delivery, auditability, and architectural clarity. It should not be interpreted by default as creating a separate unavoidable founder fee, steward fee, or other duplicative payment event for the same ordinary covered deployment class.
+
+2. Current Rights Granted
+
+Subject to compliance with this notice, you may:
+
+- read, inspect, clone, and audit the source code;
+- compile, run, and modify the repository for internal evaluation, testing, security review, interoperability work, and other non-production use;
+- create internal forks and local proof-of-concept builds for non-production use;
+- and publish commentary, audit findings, benchmarks, or interoperability notes, provided you do not misrepresent official status or disclose protected secrets.
+
+3. No Production, Network, or Commercial Right by Default
+
+This transitional notice does not by itself grant any production-use, network-use, hosted-service, or other commercial operating right.
+
+Unless separately authorized in writing by the Licensor, or unless a final covered-system founder-fee license is later formally adopted by signed public notice, you may not:
+
+- operate this repository or software derived from it in production for a live website, e-shop, gateway, hosted environment, or other public or commercial service;
+- offer it as a managed service, SaaS, shared hosting component, or customer-facing network service;
+- or commercially exploit the repository, derivative works based on it, or official Blackcat branding.
+
+4. Relation to the Planned BFNL Bundle
+
+The current planned founder-fee and covered-system licensing bundle is documented in the `blackcat-darkmesh-ao/docs/` directory, including the draft BFNL text, fee policy, system-scope policy, anti-circumvention policy, notice framework, contributor terms, trademark terms, and registry terms.
+
+Those documents describe the intended future umbrella model and should be treated as interpretive guidance for:
+
+- covered-system scope;
+- no per-repository fee multiplication;
+- accessibility and anti-capture intent;
+- notice authenticity and succession logic;
+- and the planned future founder-fee and steward-fee structure.
+
+However, unless and until a final umbrella license is formally adopted by signed public notice, those draft documents do not by themselves grant broader operating rights than this transitional notice.
+
+5. No Per-Repository Fee Multiplication by Default
+
+If the founder-fee or steward-fee model is formally adopted for the Covered System, the default intended interpretation for ordinary deployment classes is one integrated licensing surface across the official repositories needed for that covered deployment, not a separate unavoidable fee for each repository.
+
+6. Trademark and Registry Separation
+
+No trademark, trade name, verified listing, certification mark, or official support right is granted by this notice.
+
+Use of official Blackcat branding, verified labels, registry status, or other trust signals remains subject to separate trademark, registry, or support terms.
+
+7. Supersession
+
+This transitional notice may be superseded by a later final umbrella license, including a final BFNL or successor covered-system license, if and when the Licensor publishes that superseding instrument through an authorized public notice channel.
+
+Until such supersession, this notice governs this repository together with any explicit separate written authorization granted by the Licensor.
+
+8. Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, OR NON-INFRINGEMENT.
+
+9. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE LICENSOR SHALL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, PUNITIVE, OR CONSEQUENTIAL DAMAGES, OR FOR LOST PROFITS, REVENUE, DATA, OR BUSINESS INTERRUPTION.
+
+10. Governing Law
+
+This notice shall be governed by the laws of the Slovak Republic, excluding conflict-of-law rules, unless a later final umbrella license states otherwise.
+
+11. Contact
+
+Licensing and permission inquiries:
+
+- blackcatacademy@protonmail.com
