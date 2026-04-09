@@ -40,6 +40,28 @@ const integrityRuntime: IntegrityRuntimeCache = {
   snapshot: null,
 }
 
+function updateIntegrityAuditGauges(snapshot: IntegritySnapshot | null) {
+  if (!snapshot) {
+    gauge('gateway_integrity_audit_seq_from', 0)
+    gauge('gateway_integrity_audit_seq_to', 0)
+    gauge('gateway_integrity_audit_lag_seconds', 0)
+    gauge('gateway_integrity_checkpoint_age_seconds', 0)
+    return
+  }
+
+  gauge('gateway_integrity_audit_seq_from', snapshot.audit.seqFrom)
+  gauge('gateway_integrity_audit_seq_to', snapshot.audit.seqTo)
+  const acceptedAtMs = Date.parse(snapshot.audit.acceptedAt)
+  if (!Number.isFinite(acceptedAtMs)) {
+    gauge('gateway_integrity_audit_lag_seconds', 0)
+    gauge('gateway_integrity_checkpoint_age_seconds', 0)
+    return
+  }
+  const ageSec = Math.max(0, Math.floor((Date.now() - acceptedAtMs) / 1000))
+  gauge('gateway_integrity_audit_lag_seconds', ageSec)
+  gauge('gateway_integrity_checkpoint_age_seconds', ageSec)
+}
+
 function readEnvIntegrityPolicyState(): IntegrityPolicyState {
   const fallbackPaused = process.env.GATEWAY_INTEGRITY_POLICY_PAUSED === '1'
   const raw = process.env.GATEWAY_INTEGRITY_POLICY_JSON?.trim()
@@ -92,6 +114,7 @@ async function resolveIntegrityPolicyState(): Promise<IntegrityPolicyState> {
   integrityRuntime.snapshot = snapshot
   integrityRuntime.expiresAt = now + readIntegrityCacheTtlMs()
   gauge('gateway_integrity_policy_paused', resolved.paused ? 1 : 0)
+  updateIntegrityAuditGauges(snapshot)
   return resolved
 }
 

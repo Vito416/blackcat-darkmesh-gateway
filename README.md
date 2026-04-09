@@ -166,6 +166,10 @@ When `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1`, cache PUT requests must inclu
   - `gateway_integrity_incident_notify_fail_total`
   - `gateway_integrity_state_read_total`
   - `gateway_integrity_state_auth_blocked_total`
+  - `gateway_integrity_audit_seq_from`
+  - `gateway_integrity_audit_seq_to`
+  - `gateway_integrity_audit_lag_seconds`
+  - `gateway_integrity_checkpoint_age_seconds`
 
 ## Testing plan
 - Unit: manifest verification, cache TTL/wipe, PSP signature verify.

@@ -11,7 +11,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - [~] P0.3 Policy pause + degraded mode (runtime gate landed; checkpoint restore/fallback coverage expanded)
 - [x] P0.4 Migration parity tests
 - [~] P1.1 Authority separation and rotation workflow (gateway role-aware signature-ref gate + runbook landed; AO-side final authority lifecycle remains)
-- [ ] P1.2 Audit commitments stream
+- [~] P1.2 Audit commitments stream (gateway audit seq/lag metrics landed; AO-side commitment sequencing integration still pending)
 - [ ] P1.3 Signed local checkpoint (gateway)
 - [~] P1.4 Incident/reporting hooks (incident/state endpoints + metrics + tests landed; operator automation/runbook hardening remains)
 - [ ] P2.1 Verification scheduling optimizations
@@ -79,6 +79,13 @@ Progress notes:
 ### P1.2 Audit commitments stream
 - Implement AO audit commitment entries (`seqFrom/seqTo/merkleRoot/metaHash`).
 - Correlate gateway events with AO commitment sequences.
+
+Progress notes:
+- Gateway now exports audit sequence and lag gauges from integrity snapshots:
+  - `gateway_integrity_audit_seq_from`
+  - `gateway_integrity_audit_seq_to`
+  - `gateway_integrity_audit_lag_seconds`
+  - `gateway_integrity_checkpoint_age_seconds`
 
 ### P1.3 Signed local checkpoint (gateway)
 - Persist last valid integrity snapshot with signature/hash.

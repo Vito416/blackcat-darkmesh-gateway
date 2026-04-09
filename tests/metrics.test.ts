@@ -24,6 +24,12 @@ describe('metrics exporter', () => {
 
   it('includes integrity incident/state metric descriptors', () => {
     const prom = toProm()
+    expect(prom).toContain(
+      '# HELP gateway_integrity_checkpoint_age_seconds Age of the last integrity checkpoint/snapshot audit in seconds',
+    )
+    expect(prom).toContain(
+      '# HELP gateway_integrity_audit_seq_to Latest integrity audit sequence end observed by gateway',
+    )
     expect(prom).toContain('# HELP gateway_integrity_incident_total Integrity incidents accepted by gateway')
     expect(prom).toContain(
       '# HELP gateway_integrity_incident_role_blocked_total Integrity incident requests blocked by signature-ref role policy',

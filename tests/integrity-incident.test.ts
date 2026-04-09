@@ -120,6 +120,10 @@ describe('integrity incident and state endpoints', () => {
     expect(body.release.version).toBe('1.4.0')
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const metrics = snapshot()
+    expect(metrics.gauges.gateway_integrity_audit_seq_from).toBe(10)
+    expect(metrics.gauges.gateway_integrity_audit_seq_to).toBe(11)
+    expect(metrics.gauges.gateway_integrity_checkpoint_age_seconds).toBeGreaterThanOrEqual(0)
   })
 
   it('enforces signature-ref role policy for incident actions when enabled', async () => {

@@ -117,6 +117,24 @@
     summary: "Metrics endpoint rejecting scrapes"
     description: "Repeated 401s on /metrics. Check scrape credentials or probe activity."
 
+- alert: GatewayIntegrityIncidentRoleBlocked
+  expr: increase(gateway_integrity_incident_role_blocked_total[10m]) > 0
+  for: 2m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Integrity incident blocked by role policy"
+    description: "Gateway refused incident action due to unauthorized or missing signatureRef."
+
+- alert: GatewayIntegrityAuditLagHigh
+  expr: gateway_integrity_audit_lag_seconds > 3600
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Integrity audit lag is high"
+    description: "Gateway integrity snapshot/audit appears stale for over one hour."
+
 - alert: GatewayPSPBreakerOpenStripe
   expr: write_psp_stripe_breaker_open > 0
   for: 1m
