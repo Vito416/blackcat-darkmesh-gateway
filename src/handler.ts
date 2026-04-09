@@ -5,6 +5,7 @@ import { inc, gauge, snapshot, toProm } from './metrics.js'
 import { check as rateCheck } from './ratelimit.js'
 import { verifyStripe, verifyPayPal, noteCert } from './webhooks.js'
 import { markAndCheck } from './replay.js'
+import { proxyTemplateCall } from './templateApi.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
 
@@ -49,6 +50,60 @@ async function handleCache(req: Request, key: string): Promise<Response> {
   return new Response('method', { status: 405 })
 }
 
+async function handleTemplateCall(req: Request): Promise<Response> {
+  inc('gateway_template_call')
+  if (req.method !== 'POST') return new Response('method', { status: 405 })
+
+  const requiredToken = process.env.GATEWAY_TEMPLATE_TOKEN
+  if (requiredToken) {
+    const presented = (req.headers.get('x-template-token') || '').trim()
+    if (presented !== requiredToken) {
+      inc('gateway_template_call_blocked')
+      return new Response(JSON.stringify({ error: 'unauthorized' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+  }
+
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== 'object') {
+    inc('gateway_template_call_blocked')
+    return new Response(JSON.stringify({ error: 'invalid_json' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  const action = String((body as any).action || '').trim()
+  const payload = (body as any).payload
+  if (!action) {
+    inc('gateway_template_call_blocked')
+    return new Response(JSON.stringify({ error: 'action_required' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  const res = await proxyTemplateCall({
+    action,
+    payload,
+    requestId: typeof (body as any).requestId === 'string' ? (body as any).requestId : undefined,
+    siteId: typeof (body as any).siteId === 'string' ? (body as any).siteId : undefined,
+    actor: typeof (body as any).actor === 'string' ? (body as any).actor : undefined,
+  })
+
+  if (res.status >= 200 && res.status < 300) {
+    inc('gateway_template_call_ok')
+  } else if (res.status >= 500) {
+    inc('gateway_template_call_backend_fail')
+  } else {
+    inc('gateway_template_call_blocked')
+  }
+
+  return res
+}
+
 export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
   if (url.pathname.startsWith('/cache/forget')) {
@@ -73,6 +128,9 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
   if (url.pathname === '/inbox') {
     return handleInbox(request)
+  }
+  if (url.pathname === '/template/call') {
+    return handleTemplateCall(request)
   }
   if (url.pathname === '/metrics') {
     const needBasic = !!(process.env.METRICS_BASIC_USER && process.env.METRICS_BASIC_PASS)

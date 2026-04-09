@@ -31,6 +31,10 @@ const help: Record<string, string> = {
   gateway_webhook_stripe_5xx_total: 'Stripe webhook handler 5xx responses',
   gateway_webhook_paypal_5xx_total: 'PayPal webhook handler 5xx responses',
   gateway_webhook_gopay_5xx_total: 'GoPay webhook handler 5xx responses',
+  gateway_template_call_total: 'Template API calls received',
+  gateway_template_call_ok_total: 'Template API calls forwarded successfully',
+  gateway_template_call_blocked_total: 'Template API calls blocked by policy/auth/validation',
+  gateway_template_call_backend_fail_total: 'Template API calls failed at backend',
 }
 
 const types: Record<string, 'counter' | 'gauge'> = {}

@@ -52,6 +52,11 @@ Configuration (per site)
 - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
 - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
 - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
+- Template custom-backend guardrails:
+  - `GATEWAY_TEMPLATE_TOKEN` (optional shared token required on `/template/call`)
+  - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1` (default is read-only; write actions blocked unless enabled)
+  - `AO_PUBLIC_API_URL` / `AO_READ_URL` and `WRITE_API_URL` (upstream targets)
+  - `GATEWAY_TEMPLATE_HMAC_SECRET` (optional HMAC signature header for forwarded template calls)
 - Notify → Worker:
 - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
 - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.
@@ -109,6 +114,7 @@ Open items to design/implement
 - `/api/cart/*`, `/api/checkout/*`, `/api/session/*` → proxied to Write AO.
 - `/api/public/*` → served from AO read state (cached).
 - `/webhook/:psp` → PSP bridge ingress.
+- `/template/call` → constrained template backend API (allowlisted actions only, schema-validated, optional token + HMAC).
 - `/metrics` → Prom/OpenMetrics (protected, text format; set `GATEWAY_REQUIRE_METRICS_AUTH=1` + bearer/basic creds).
 - `/cache/forget` → internal, called by AO ForgetSubject (token-protected).
 
