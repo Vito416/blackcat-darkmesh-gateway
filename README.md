@@ -12,6 +12,7 @@ Purpose
 Consolidation status
 - Gateway is the active integration target for legacy backend modules.
 - Imported migration snapshots live in `libs/legacy/` (see `libs/legacy/README.md` and `libs/legacy/MANIFEST.md`).
+- Crypto manifest policy snapshot lives in `security/crypto-manifests/` (see `security/crypto-manifests/SNAPSHOT.md`).
 - Template code remains intentionally separate in `blackcat-templates`; gateway enforces controlled backend access for deployed templates.
 
 Key responsibilities

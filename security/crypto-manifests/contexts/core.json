@@ -1,0 +1,17 @@
+{
+  "slots": {
+    "core.crypto.default": {"type": "aead", "key": "crypto_key", "length": 32},
+    "core.crypto.legacy": {"type": "aead", "key": "crypto_key", "length": 32},
+    "core.vault": {"type": "aead", "key": "filevault_key", "length": 32},
+    "core.hmac.csrf": {"type": "hmac", "key": "csrf_key", "length": 64},
+    "core.hmac.session": {"type": "hmac", "key": "session_token_key", "length": 64},
+    "core.hmac.email": {"type": "hmac", "key": "email_hash_key", "length": 64},
+    "payments.card": {"type": "aead", "key": "card_aead", "length": 32},
+    "payments.card.token": {"type": "hmac", "key": "card_token_key", "length": 64}
+  },
+  "rotation": {
+    "core.crypto.default": {"maxAgeSeconds": 2592000, "maxWraps": 4},
+    "core.vault": {"maxAgeSeconds": 7776000, "maxWraps": 6},
+    "payments.card": {"maxAgeSeconds": 15552000, "maxWraps": 8}
+  }
+}

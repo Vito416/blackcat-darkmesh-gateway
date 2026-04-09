@@ -1,0 +1,31 @@
+#!/usr/bin/env php
+<?php
+$contextsDir = $argv[1] ?? __DIR__ . '/../contexts';
+if (!is_dir($contextsDir)) {
+    fwrite(STDERR, "Contexts directory not found: {$contextsDir}\n");
+    exit(1);
+}
+$errors = [];
+$files = glob(rtrim($contextsDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*.json') ?: [];
+foreach ($files as $file) {
+    $json = json_decode((string)file_get_contents($file), true);
+    if (!is_array($json)) {
+        $errors[] = "{$file}: invalid JSON";
+        continue;
+    }
+    if (!isset($json['slots']) || !is_array($json['slots'])) {
+        $errors[] = "{$file}: missing slots";
+    }
+    if (!isset($json['rotation']) || !is_array($json['rotation'])) {
+        $errors[] = "{$file}: missing rotation";
+    }
+}
+if ($errors) {
+    foreach ($errors as $error) {
+        fwrite(STDERR, $error . "\n");
+    }
+    exit(1);
+}
+if (PHP_SAPI === 'cli') {
+    echo "All manifests valid (" . count($files) . " files).\n";
+}
