@@ -184,6 +184,15 @@ Treat these as early warnings, not hard caps; the matching budget ceilings live 
     summary: "Integrity audit lag is high"
     description: "Gateway integrity snapshot/audit appears stale; compare against the profile matrix and AO commit cadence."
 
+- alert: GatewayIntegrityAuditStreamAnomaly
+  expr: increase(gateway_integrity_audit_stream_anomaly_total[15m]) > 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Integrity audit stream anomaly detected"
+    description: "AO audit sequence regressed or arrived out of order. Correlate with audit lag and checkpoint staleness before widening thresholds."
+
 - alert: GatewayPSPBreakerOpenStripe
   expr: write_psp_stripe_breaker_open > 0
   for: 1m

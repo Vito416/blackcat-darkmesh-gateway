@@ -18,6 +18,7 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 | `increase(gateway_webhook_replay_pruned_total[10m])` | `> 60` | `> 160` | `> 40` |
 | `gateway_integrity_checkpoint_age_seconds` stale | `> 32400` | `> 64800` | `> 21600` |
 | `gateway_integrity_audit_lag_seconds` high | `> 1800` | `> 3600` | `> 1200` |
+| `increase(gateway_integrity_audit_stream_anomaly_total[15m])` | `> 0` | `> 0` | `> 0` |
 
 ## Notes
 
@@ -30,4 +31,5 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 - Checkpoint age must stay well below `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS`; stale checkpoints are treated as absent, so the alert should fire before the hard cutoff.
 - For diskless mode, checkpoint age usually tracks AO snapshot age (file checkpoint is disabled), so keep stale thresholds conservative and favor AO refresh over local retention.
 - Audit lag should stay comfortably below the alert threshold; if it climbs, check AO fetch cadence, checkpoint restore freshness, and queue backpressure.
+- Audit stream anomalies should page on the first regression, but tune them together with audit lag and checkpoint staleness: if all three move together, treat it as fetch/cadence drift; if anomaly fires alone, inspect stream ordering or a bad seq transition before widening the window.
 - If your traffic is bursty, increase `for:` windows before increasing numeric thresholds.

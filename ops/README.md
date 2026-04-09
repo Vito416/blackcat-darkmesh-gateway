@@ -11,7 +11,7 @@
   - Rate limit: `gateway_ratelimit_blocked_total`, `gateway_ratelimit_pruned_total`, `gateway_ratelimit_buckets`.
   - Replay detector: `gateway_webhook_replay_pruned_total`, `gateway_webhook_replay_ttl_ms`, `gateway_webhook_replay_max_keys`.
   - Integrity incidents/state: `gateway_integrity_incident_total`, `gateway_integrity_incident_auth_blocked_total`, `gateway_integrity_incident_role_blocked_total`, `gateway_integrity_incident_notify_fail_total`, `gateway_integrity_state_read_total`.
-  - Integrity audit tracking: `gateway_integrity_audit_seq_from`, `gateway_integrity_audit_seq_to`, `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`.
+  - Integrity audit tracking: `gateway_integrity_audit_seq_from`, `gateway_integrity_audit_seq_to`, `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `gateway_integrity_audit_stream_anomaly_total`.
 - WAL/DLQ (from Write export): see Write dashboards for `write.webhook.dlq_size` and `write.wal.bytes` to spot downstream backlog.
 - Cache purge: `/cache/forget` (POST) with `GATEWAY_FORGET_TOKEN` bearer; body `{subject?, key?}`; returns `{removed}`.
 - AO hook: configure AO ForgetSubject to POST to `/cache/forget` with the same token to wipe subject-indexed blobs.
@@ -24,6 +24,7 @@
 - Rate limit: keep `gateway_ratelimit_buckets` cardinality flat; if it climbs, reduce key granularity before raising limits.
 - Replay: keep `gateway_webhook_replay_total` limited to provider retry windows; a rising replay rate usually means duplicate deliveries or clock skew.
 - Checkpoints: prefer tmpfs or no-path operation on small hosts, and only restore signed checkpoints that are still fresh.
+- Integrity trio: if audit lag, checkpoint staleness, and stream anomalies all rise together, treat AO fetch cadence as the first suspect before widening thresholds.
 - When an alert is profile-specific, keep the threshold below the corresponding budget ceiling and tune `for:` windows before raising the numeric trigger.
 
 ## Prom scrape example

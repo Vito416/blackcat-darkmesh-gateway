@@ -27,15 +27,48 @@ If ref is missing or not authorized, gateway returns:
 
 Use overlap windows to rotate refs without downtime:
 
-1. Add new ref to AO authority set (preferred) and publish integrity snapshot update.
-2. During propagation, set local overlay env vars with both old/new refs:
-   - `GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS=ref-old,ref-new`
-   - (same for `ROOT/REPORTER/UPGRADE` when needed)
-3. Verify new ref can perform target action (`/integrity/incident`).
-4. Remove old ref from AO authority.
-5. Remove old ref from local overlay env vars.
+### Roles
 
-If AO snapshot is temporarily unavailable, local `GATEWAY_INTEGRITY_ROLE_*_REFS` keeps the control plane operable.
+- `root` - emergency override and last-resort recovery.
+- `upgrade` - release/rollback authority for integrity state changes.
+- `emergency` - pause/resume and incident controls.
+- `reporter` - read-only reporting, triage, and audit signaling.
+
+### Overlap window
+
+Rotate one role at a time. Keep old and new refs live until all of the following are true:
+
+1. AO authority snapshot includes the new ref.
+2. Gateway local overlay includes both refs for the role.
+3. The new ref passes 2 consecutive successful auth checks for the target action.
+4. One full AO snapshot refresh has completed after the new ref became visible.
+
+Suggested overlay pattern:
+
+```bash
+GATEWAY_INTEGRITY_ROLE_ROOT_REFS=old-root,new-root
+GATEWAY_INTEGRITY_ROLE_UPGRADE_REFS=old-upgrade,new-upgrade
+GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS=old-emergency,new-emergency
+GATEWAY_INTEGRITY_ROLE_REPORTER_REFS=old-reporter,new-reporter
+```
+
+### Rollback
+
+Rollback immediately if any of the following happens during overlap:
+
+- the new ref is rejected for the intended action,
+- the new ref is accepted for the wrong role,
+- incident commands start returning `403 forbidden_signature_ref`,
+- AO snapshot and local overlay disagree on the active role set.
+
+Rollback steps:
+
+1. Restore the previous ref as the active ref in AO.
+2. Keep the old ref in the local overlay until the next successful snapshot refresh.
+3. Remove the new ref from the overlay only after 2 successful checks with the old ref restored.
+4. Record the failure reason before the next rotation attempt.
+
+If AO snapshot is temporarily unavailable, local `GATEWAY_INTEGRITY_ROLE_*_REFS` keeps the control plane operable, but the overlap window still applies.
 
 ## 4) Incident commands (examples)
 
@@ -91,7 +124,39 @@ Token handling guidance:
 - avoid placing raw tokens directly in shell history or CI logs
 - if you need a one-off override, pass `--token-env NAME` instead of `--token VALUE`
 
-## 5) Metrics and alerting
+## 5) Outage recovery for AO fetch failures
+
+Use this when integrity snapshots stop arriving or checkpoint reads lag behind the active policy.
+
+### Trigger
+
+Treat AO fetch as degraded if any of the following holds:
+
+- 3 consecutive AO fetch attempts fail,
+- snapshot age exceeds 2 refresh intervals,
+- checkpoint hash or sequence stops advancing for 2 consecutive checks,
+- integrity client reports stale or missing policy data.
+
+### Fallback
+
+1. Switch to checkpoint fallback only; do not unpause mutable traffic.
+2. Keep the last known-good policy snapshot pinned locally.
+3. Continue fetch attempts on the normal cadence with backoff.
+4. Keep incident reporting enabled so operators can see the outage path.
+
+### Resume criteria
+
+Resume live AO fetch only when all of the following are true:
+
+- 3 consecutive AO fetches succeed,
+- the fetched snapshot matches the last known policy root or a newer approved root,
+- checkpoint sequence advances again,
+- no integrity auth/role blocks appear for the active refs,
+- the gateway has observed one complete healthy cycle after fallback.
+
+Only after those checks pass may the gateway leave fallback mode and resume normal mutable processing.
+
+## 6) Metrics and alerting
 
 Watch:
 - `gateway_integrity_incident_total`
@@ -106,3 +171,4 @@ Operational interpretation:
 - auth blocked spike -> token mismatch or probing.
 - role blocked spike -> stale signer refs, wrong role, or attack traffic.
 - notify fail spike -> incident relay downstream unavailable.
+- fetch failure spike -> AO dependency outage or network path regression.
