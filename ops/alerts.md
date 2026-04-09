@@ -54,6 +54,15 @@
     summary: "Webhook replay spike"
     description: "Sudden burst of webhook replays in the last minute; check upstream retry storms or clock skew."
 
+- alert: GatewayReplayStorePruned
+  expr: increase(gateway_webhook_replay_pruned_total[10m]) > 100
+  for: 10m
+  labels:
+    severity: info
+  annotations:
+    summary: "Replay store pruning is elevated"
+    description: "Replay detector key budget is under pressure; validate replay TTL and max-key limits."
+
 - alert: GatewayWebhook5xx
   expr: increase(gateway_webhook_stripe_5xx_total[5m]) > 0 or increase(gateway_webhook_paypal_5xx_total[5m]) > 0 or increase(gateway_webhook_gopay_5xx_total[5m]) > 0
   for: 5m
@@ -89,6 +98,15 @@
   annotations:
     summary: "Rate-limit bucket cardinality is high"
     description: "Bucket count is approaching memory budget; reduce key cardinality or raise the host budget."
+
+- alert: GatewayRatelimitPrunedSpike
+  expr: increase(gateway_ratelimit_pruned_total[10m]) > 100
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Rate-limit buckets are being aggressively pruned"
+    description: "High prune volume suggests bucket-cap pressure; review key cardinality and RL bucket budget."
 
 - alert: GatewayCacheTTLMisconfigured
   expr: gateway_cache_ttl_ms > 900000 or gateway_cache_ttl_ms < 60000

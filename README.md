@@ -168,6 +168,10 @@ When cache admission limits are exceeded, cache PUT returns:
   - refs come from AO snapshot authority plus local rotation overlays in `GATEWAY_INTEGRITY_ROLE_*_REFS`.
 - Metrics to watch:
   - `gateway_cache_store_reject_total`
+  - `gateway_cache_store_reject_size_total`
+  - `gateway_cache_store_reject_capacity_total`
+  - `gateway_ratelimit_pruned_total`
+  - `gateway_webhook_replay_pruned_total`
   - `gateway_integrity_incident_total`
   - `gateway_integrity_incident_auth_blocked_total`
   - `gateway_integrity_incident_role_blocked_total`

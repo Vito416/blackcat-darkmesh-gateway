@@ -27,6 +27,8 @@ const MAX_ENTRIES = readPositiveEnvInt(
 )
 
 gauge('gateway_cache_ttl_ms', TTL_MS)
+gauge('gateway_cache_max_entry_bytes', MAX_ENTRY_BYTES)
+gauge('gateway_cache_max_entries', MAX_ENTRIES)
 
 function readPositiveEnvInt(names: string[], fallback: number): number {
   for (const name of names) {
@@ -53,8 +55,16 @@ export function put(key: string, value: ArrayBuffer, subjectOrOptions?: string |
 
   // Reclaim expired entries before admission so stale items do not hold budget.
   sweep()
-  if (value.byteLength > MAX_ENTRY_BYTES) return false
-  if (!store.has(key) && store.size >= MAX_ENTRIES) return false
+  if (value.byteLength > MAX_ENTRY_BYTES) {
+    inc('gateway_cache_store_reject')
+    inc('gateway_cache_store_reject_size')
+    return false
+  }
+  if (!store.has(key) && store.size >= MAX_ENTRIES) {
+    inc('gateway_cache_store_reject')
+    inc('gateway_cache_store_reject_capacity')
+    return false
+  }
 
   store.set(key, { value, expiresAt: Date.now() + TTL_MS, integrity: opts.integrity })
   if (opts.subject) {

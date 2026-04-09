@@ -44,15 +44,19 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 
 ## Cache budget
 - Watch `gateway_cache_size` as the hard memory budget signal for encrypted envelopes and cached artifacts.
+- Watch reject counters to distinguish pressure source:
+  - `gateway_cache_store_reject_size_total`
+  - `gateway_cache_store_reject_capacity_total`
 - If cache growth trends upward, shorten `GATEWAY_CACHE_TTL_MS` or tighten admission before scaling host memory.
 - Prefer a smaller stable cache over a large, bursty one on edge-class hosts.
 
 ## Rate-limit budget
 - Watch `gateway_ratelimit_buckets` for cardinality drift.
+- Watch `gateway_ratelimit_pruned_total`; sustained growth indicates cap pressure or high key-cardinality churn.
 - Keep bucket keys coarse: route plus tenant/session/IP class, not per-request uniqueness.
 - If bucket count rises with traffic, collapse keys or reduce tenant fan-out before increasing the limit.
 
 ## Replay budget
 - Keep replay tracking aligned to provider retry horizons only; the default replay window is 10m.
-- Use `gateway_webhook_replay_total` and replay spikes to detect duplicate delivery storms, not as a long-lived state store.
+- Use `gateway_webhook_replay_total` and `gateway_webhook_replay_pruned_total` to detect duplicate delivery storms vs budget churn.
 - Do not extend replay retention on small or diskless hosts unless the provider retry window really requires it.

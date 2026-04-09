@@ -314,7 +314,6 @@ async function handleCache(
         },
       })
       if (!stored) {
-        inc('gateway_cache_store_reject')
         return new Response(JSON.stringify({ error: 'cache_budget_exceeded' }), {
           status: 507,
           headers: { 'content-type': 'application/json' },
@@ -323,7 +322,6 @@ async function handleCache(
     } else {
       const stored = put(key, buf, subject)
       if (!stored) {
-        inc('gateway_cache_store_reject')
         return new Response(JSON.stringify({ error: 'cache_budget_exceeded' }), {
           status: 507,
           headers: { 'content-type': 'application/json' },

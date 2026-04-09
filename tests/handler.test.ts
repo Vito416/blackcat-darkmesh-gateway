@@ -36,6 +36,8 @@ describe('handler cache and shadow modes', () => {
 
   it('returns 507 when cache admission limits reject PUT', async () => {
     process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '2'
+    const metrics = await import('../src/metrics.js')
+    metrics.reset()
     const { handleRequest } = await import('../src/handler.js')
     const putReq = new Request('http://gateway/cache/too-large', {
       method: 'PUT',
@@ -45,5 +47,8 @@ describe('handler cache and shadow modes', () => {
     const res = await handleRequest(putReq)
     expect(res.status).toBe(507)
     await expect(res.json()).resolves.toEqual({ error: 'cache_budget_exceeded' })
+    const state = metrics.snapshot()
+    expect(state.counters.gateway_cache_store_reject).toBe(1)
+    expect(state.counters.gateway_cache_store_reject_size).toBe(1)
   })
 })

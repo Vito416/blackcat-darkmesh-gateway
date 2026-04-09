@@ -25,6 +25,12 @@ describe('metrics exporter', () => {
   it('includes integrity incident/state metric descriptors', () => {
     const prom = toProm()
     expect(prom).toContain('# HELP gateway_cache_store_reject_total Cache entries rejected by admission limits')
+    expect(prom).toContain('# HELP gateway_cache_store_reject_size_total Cache entries rejected for exceeding max entry bytes')
+    expect(prom).toContain('# HELP gateway_cache_store_reject_capacity_total Cache entries rejected because cache is at max entries')
+    expect(prom).toContain('# HELP gateway_ratelimit_pruned_total Rate-limit buckets pruned by expiry/cap')
+    expect(prom).toContain('# HELP gateway_webhook_replay_pruned_total Replay detector keys pruned by expiry/cap')
+    expect(prom).toContain('# HELP gateway_ratelimit_max_buckets Configured max rate-limit bucket count')
+    expect(prom).toContain('# HELP gateway_webhook_replay_max_keys Configured replay detector max key count')
     expect(prom).toContain(
       '# HELP gateway_integrity_checkpoint_age_seconds Age of the last integrity checkpoint/snapshot audit in seconds',
     )

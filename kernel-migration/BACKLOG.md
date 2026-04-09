@@ -15,7 +15,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - [x] P1.3 Signed local checkpoint (gateway)
 - [~] P1.4 Incident/reporting hooks (incident/state endpoints + metrics + tests landed; operator automation/runbook hardening remains)
 - [~] P2.1 Verification scheduling optimizations (integrity fetch timeout/retry controls landed; startup/cache-fill cadence tuning remains)
-- [~] P2.2 Resource budgets and limits (cache/ratelimit/replay bounds + stress tests landed; final production thresholds remain)
+- [x] P2.2 Resource budgets and limits
 - [x] P2.3 Optional diskless mode
 
 ## P0 - Mandatory before kernel repo retirement
@@ -131,6 +131,10 @@ Progress notes:
 - Focused stress/hardening tests added:
   - `tests/rate-replay-limits.test.ts`
   - `tests/resource-hardening.test.ts`
+- Budget observability completed:
+  - cache reject reason counters
+  - ratelimit/replay prune counters and config gauges
+- Production presets documented in `ops/resource-budgets.md` and `config/example.env`.
 
 ### P2.3 Optional diskless mode
 - Ensure gateway works even without local checkpoint writes.

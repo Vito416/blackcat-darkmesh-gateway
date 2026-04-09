@@ -11,16 +11,26 @@ const MAX_BUCKETS = positiveInt(process.env.GATEWAY_RL_MAX_BUCKETS, 10000)
 
 const buckets = new Map<string, { count: number; reset: number }>()
 
-function prune(now: number) {
+gauge('gateway_ratelimit_max', MAX_REQ)
+gauge('gateway_ratelimit_max_buckets', MAX_BUCKETS)
+
+function prune(now: number): number {
+  let removed = 0
   for (const [key, bucket] of buckets) {
-    if (bucket.reset <= now) buckets.delete(key)
+    if (bucket.reset <= now) {
+      buckets.delete(key)
+      removed++
+    }
   }
 
   while (buckets.size > MAX_BUCKETS) {
     const oldest = buckets.keys().next().value
     if (oldest === undefined) break
     buckets.delete(oldest)
+    removed++
   }
+  if (removed > 0) inc('gateway_ratelimit_pruned', removed)
+  return removed
 }
 
 export function check(key: string): boolean {
