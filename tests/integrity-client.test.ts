@@ -9,6 +9,7 @@ describe('integrity snapshot client', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     process.env = { ...originalEnv }
     vi.restoreAllMocks()
   })
@@ -62,6 +63,79 @@ describe('integrity snapshot client', () => {
     expect(snapshot.policy.activeRoot).toBe('root-abc')
     expect(snapshot.release.componentId).toBe('gateway')
     expect(snapshot.authority.signatureRefs).toEqual(['sig-root', 'sig-upgrade'])
+  })
+
+  it('times out slow fetches using the configured timeout', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    process.env.AO_INTEGRITY_FETCH_TIMEOUT_MS = '20'
+    vi.useFakeTimers()
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
+      return new Promise((_resolve, reject) => {
+        const signal = init?.signal
+        signal?.addEventListener(
+          'abort',
+          () => {
+            const error = new Error('The operation was aborted.')
+            error.name = 'AbortError'
+            reject(error)
+          },
+          { once: true },
+        )
+      })
+    })
+
+    const pending = fetchIntegritySnapshot({
+      retryAttempts: 1,
+    })
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: 'integrity_fetch_failed',
+    })
+
+    await vi.advanceTimersByTimeAsync(20)
+
+    await rejected
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries once after a transient fetch failure and then succeeds', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new Error('ECONNRESET'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(validSnapshot()), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+
+    const snapshot = await fetchIntegritySnapshot({
+      timeoutMs: 1000,
+      retryAttempts: 2,
+      retryBackoffMs: 0,
+    })
+
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(snapshot.release.componentId).toBe('gateway')
+    expect(snapshot.policy.activeRoot).toBe('root-abc')
+  })
+
+  it('stops retrying after transient failures are exhausted', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    const spy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('ECONNRESET'))
+
+    await expect(
+      fetchIntegritySnapshot({
+        timeoutMs: 1000,
+        retryAttempts: 3,
+        retryBackoffMs: 0,
+      }),
+    ).rejects.toMatchObject({
+      code: 'integrity_fetch_failed',
+    })
+
+    expect(spy).toHaveBeenCalledTimes(3)
   })
 
   it('accepts AO codec envelope responses and unwraps payload', async () => {
@@ -183,7 +257,7 @@ describe('integrity snapshot client', () => {
 
   it('rejects malformed JSON payloads', async () => {
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('not-json', {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -193,6 +267,7 @@ describe('integrity snapshot client', () => {
     await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
       code: 'integrity_invalid_snapshot',
     })
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('rejects non-object payloads', async () => {

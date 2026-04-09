@@ -13,6 +13,7 @@ const help: Record<string, string> = {
   gateway_cache_miss_total: 'Cache misses',
   gateway_cache_expired_total: 'Cache entries expired',
   gateway_cache_swept_total: 'Cache entries removed by sweep',
+  gateway_cache_store_reject_total: 'Cache entries rejected by admission limits',
   gateway_cache_size: 'Cache entries currently stored',
   gateway_cache_ttl_ms: 'Configured cache TTL (ms)',
   gateway_inbox_accept_total: 'Inbox requests accepted',

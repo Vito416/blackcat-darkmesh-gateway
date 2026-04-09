@@ -304,7 +304,7 @@ async function handleCache(
       }
 
       inc('gateway_integrity_verify_ok')
-      put(key, buf, {
+      const stored = put(key, buf, {
         subject,
         integrity: {
           verified: true,
@@ -313,8 +313,22 @@ async function handleCache(
           verifiedAt: Date.now(),
         },
       })
+      if (!stored) {
+        inc('gateway_cache_store_reject')
+        return new Response(JSON.stringify({ error: 'cache_budget_exceeded' }), {
+          status: 507,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
     } else {
-      put(key, buf, subject)
+      const stored = put(key, buf, subject)
+      if (!stored) {
+        inc('gateway_cache_store_reject')
+        return new Response(JSON.stringify({ error: 'cache_budget_exceeded' }), {
+          status: 507,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
     }
     return new Response('stored', { status: 201 })
   }

@@ -16,14 +16,45 @@ export type CacheFetchResult =
 
 const store = new Map<string, CacheEntry>()
 const subjects = new Map<string, Set<string>>()
-const TTL_MS = parseInt(process.env.GATEWAY_CACHE_TTL_MS || '300000', 10) || 300000
+const TTL_MS = readPositiveEnvInt(['GATEWAY_CACHE_TTL_MS'], 300000)
+const MAX_ENTRY_BYTES = readPositiveEnvInt(
+  ['GATEWAY_CACHE_MAX_ENTRY_BYTES', 'GATEWAY_CACHE_ENTRY_MAX_BYTES'],
+  256 * 1024,
+)
+const MAX_ENTRIES = readPositiveEnvInt(
+  ['GATEWAY_CACHE_MAX_ENTRIES', 'GATEWAY_CACHE_MAX_COUNT', 'GATEWAY_CACHE_ENTRY_LIMIT'],
+  256,
+)
+
 gauge('gateway_cache_ttl_ms', TTL_MS)
 
-export function put(key: string, value: ArrayBuffer, subjectOrOptions?: string | PutOptions) {
+function readPositiveEnvInt(names: string[], fallback: number): number {
+  for (const name of names) {
+    const raw = process.env[name]
+    if (!raw) continue
+    const parsed = Number.parseInt(raw, 10)
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
+  return fallback
+}
+
+function detachKeyFromSubjects(key: string) {
+  for (const [subj, set] of subjects.entries()) {
+    set.delete(key)
+    if (set.size === 0) subjects.delete(subj)
+  }
+}
+
+export function put(key: string, value: ArrayBuffer, subjectOrOptions?: string | PutOptions): boolean {
   const opts: PutOptions =
     typeof subjectOrOptions === 'string'
       ? { subject: subjectOrOptions }
       : subjectOrOptions || {}
+
+  // Reclaim expired entries before admission so stale items do not hold budget.
+  sweep()
+  if (value.byteLength > MAX_ENTRY_BYTES) return false
+  if (!store.has(key) && store.size >= MAX_ENTRIES) return false
 
   store.set(key, { value, expiresAt: Date.now() + TTL_MS, integrity: opts.integrity })
   if (opts.subject) {
@@ -32,6 +63,7 @@ export function put(key: string, value: ArrayBuffer, subjectOrOptions?: string |
     subjects.set(opts.subject, set)
   }
   gauge('gateway_cache_size', store.size)
+  return true
 }
 
 export function fetchEntry(key: string, options: FetchOptions = {}): CacheFetchResult {
@@ -66,10 +98,7 @@ export function sweep() {
   for (const [k, v] of store.entries()) {
     if (v.expiresAt <= now) {
       store.delete(k)
-      for (const [subj, set] of subjects.entries()) {
-        set.delete(k)
-        if (set.size === 0) subjects.delete(subj)
-      }
+      detachKeyFromSubjects(k)
       removed++
     }
   }
@@ -94,10 +123,7 @@ export function forgetSubject(subject: string): number {
 export function dropKey(key: string): boolean {
   const ok = store.delete(key)
   if (ok) {
-    for (const [subj, set] of subjects.entries()) {
-      set.delete(key)
-      if (set.size === 0) subjects.delete(subj)
-    }
+    detachKeyFromSubjects(key)
     gauge('gateway_cache_size', store.size)
   }
   return ok

@@ -49,33 +49,36 @@ Configuration (per site)
 - Email/notify routing (via Worker notify).
 - AO/Write endpoints + signing keys (if applicable).
 - Env knobs:
-- `GATEWAY_CACHE_TTL_MS`, `GATEWAY_RL_WINDOW_MS`, `GATEWAY_RL_MAX`
-- `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
-- `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
-- `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
+    - `GATEWAY_CACHE_TTL_MS`, `GATEWAY_CACHE_MAX_ENTRY_BYTES`, `GATEWAY_CACHE_MAX_ENTRIES`
+    - `GATEWAY_RL_WINDOW_MS`, `GATEWAY_RL_MAX`, `GATEWAY_RL_MAX_BUCKETS`
+    - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_REPLAY_MAX_KEYS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
+    - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
+    - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
 - Integrity policy and snapshot:
-  - `AO_INTEGRITY_URL` (AO endpoint for integrity snapshot)
-  - `GATEWAY_INTEGRITY_CACHE_TTL_MS` (snapshot cache TTL in ms, default 10000)
-  - `GATEWAY_INTEGRITY_POLICY_PAUSED=1` (env fallback pause switch)
-  - `GATEWAY_INTEGRITY_POLICY_JSON` (optional JSON override, e.g. `{\"paused\":true}`)
-  - `GATEWAY_INTEGRITY_CHECKPOINT_PATH` + `GATEWAY_INTEGRITY_CHECKPOINT_SECRET` (signed local checkpoint fallback)
-  - `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1` (fail closed unless cache entries are integrity-verified)
-  - `GATEWAY_INTEGRITY_STATE_TOKEN` (optional auth token for `GET /integrity/state`; accepts Bearer or `x-integrity-token`)
-  - `GATEWAY_INTEGRITY_INCIDENT_TOKEN` (required auth token for `POST /integrity/incident`; accepts Bearer or `x-incident-token`)
-  - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_URL` (optional incident forward target)
-  - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_TOKEN` (optional Bearer token for incident forwarding)
-  - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_HMAC` (optional HMAC secret; sent as `x-signature`)
-  - `GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF=1` (optional secondary auth gate based on authority signature refs)
-  - `GATEWAY_INTEGRITY_INCIDENT_REF_HEADER` (default `x-signature-ref`; can carry signer ref in header)
-  - `GATEWAY_INTEGRITY_ROLE_ROOT_REFS` / `GATEWAY_INTEGRITY_ROLE_UPGRADE_REFS` / `GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS` / `GATEWAY_INTEGRITY_ROLE_REPORTER_REFS` (comma lists for rotation windows and AO bootstrap fallback)
+    - `AO_INTEGRITY_URL` (AO endpoint for integrity snapshot)
+    - `GATEWAY_INTEGRITY_CACHE_TTL_MS` (snapshot cache TTL in ms, default 10000)
+    - `GATEWAY_INTEGRITY_POLICY_PAUSED=1` (env fallback pause switch)
+    - `GATEWAY_INTEGRITY_POLICY_JSON` (optional JSON override, e.g. `{\"paused\":true}`)
+    - `GATEWAY_INTEGRITY_CHECKPOINT_PATH` + `GATEWAY_INTEGRITY_CHECKPOINT_SECRET` (signed local checkpoint fallback)
+    - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS` (ignore older checkpoints; stale files are treated as absent)
+    - `AO_INTEGRITY_FETCH_TIMEOUT_MS`, `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS`, `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS` (AO/integrity fetch timeout + retry budget)
+    - `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1` (fail closed unless cache entries are integrity-verified)
+    - `GATEWAY_INTEGRITY_STATE_TOKEN` (optional auth token for `GET /integrity/state`; accepts Bearer or `x-integrity-token`)
+    - `GATEWAY_INTEGRITY_INCIDENT_TOKEN` (required auth token for `POST /integrity/incident`; accepts Bearer or `x-incident-token`)
+    - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_URL` (optional incident forward target)
+    - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_TOKEN` (optional Bearer token for incident forwarding)
+    - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_HMAC` (optional HMAC secret; sent as `x-signature`)
+    - `GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF=1` (optional secondary auth gate based on authority signature refs)
+    - `GATEWAY_INTEGRITY_INCIDENT_REF_HEADER` (default `x-signature-ref`; can carry signer ref in header)
+    - `GATEWAY_INTEGRITY_ROLE_ROOT_REFS` / `GATEWAY_INTEGRITY_ROLE_UPGRADE_REFS` / `GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS` / `GATEWAY_INTEGRITY_ROLE_REPORTER_REFS` (comma lists for rotation windows and AO bootstrap fallback)
 - Template custom-backend guardrails:
   - `GATEWAY_TEMPLATE_TOKEN` (optional shared token required on `/template/call`)
   - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1` (default is read-only; write actions blocked unless enabled)
   - `AO_PUBLIC_API_URL` / `AO_READ_URL` and `WRITE_API_URL` (upstream targets)
   - `GATEWAY_TEMPLATE_HMAC_SECRET` (optional HMAC signature header for forwarded template calls)
 - Notify → Worker:
-- `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
-- `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.
+  - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
+  - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.
 - Metrics scrape example (Prometheus):
   ```
   scrape_configs:
@@ -159,6 +162,7 @@ When `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1`, cache PUT requests must inclu
     - `ack`/`report`: `reporter`, `emergency`, or `root`
   - refs come from AO snapshot authority plus local rotation overlays in `GATEWAY_INTEGRITY_ROLE_*_REFS`.
 - Metrics to watch:
+  - `gateway_cache_store_reject_total`
   - `gateway_integrity_incident_total`
   - `gateway_integrity_incident_auth_blocked_total`
   - `gateway_integrity_incident_role_blocked_total`
@@ -170,6 +174,12 @@ When `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1`, cache PUT requests must inclu
   - `gateway_integrity_audit_seq_to`
   - `gateway_integrity_audit_lag_seconds`
   - `gateway_integrity_checkpoint_age_seconds`
+
+## Integrity checkpoint policy
+- Only restore a checkpoint when it verifies and its age is within `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS`.
+- Treat stale or unverifiable checkpoints as missing; fall back to AO fetch, then env state.
+- For diskless or limited-hosting deployments, leave `GATEWAY_INTEGRITY_CHECKPOINT_PATH` unset or point it at tmpfs and keep the host read-only aside from runtime scratch.
+- Keep `AO_INTEGRITY_FETCH_TIMEOUT_MS` and retry settings tight enough to fail fast on unhealthy AO/integrity endpoints, but not so tight that routine leader changes flap the control plane.
 
 ## Testing plan
 - Unit: manifest verification, cache TTL/wipe, PSP signature verify.

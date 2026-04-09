@@ -1,28 +1,70 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-describe('cache TTL and rate-limit', () => {
+const originalEnv = { ...process.env }
+
+function bufferOf(size: number): ArrayBuffer {
+  return new Uint8Array(size).buffer
+}
+
+async function loadCache() {
+  return import('../src/cache.js')
+}
+
+describe('cache TTL, budgets, and rate-limit', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    vi.resetModules()
+    process.env = { ...originalEnv }
   })
   afterEach(() => {
     vi.useRealTimers()
+    process.env = { ...originalEnv }
   })
 
   it('evicts entries after TTL', async () => {
     process.env.GATEWAY_CACHE_TTL_MS = '100'
-    vi.resetModules()
-    const { put, get } = await import('../src/cache.js')
+    const { put, get } = await loadCache()
     const key = 'k1'
-    put(key, new TextEncoder().encode('v1').buffer)
+    expect(put(key, bufferOf(2))).toBe(true)
     expect(get(key)).not.toBeNull()
     vi.advanceTimersByTime(150)
     expect(get(key)).toBeNull()
   })
 
+  it('rejects payloads that exceed the entry size budget', async () => {
+    process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '4'
+    process.env.GATEWAY_CACHE_MAX_ENTRIES = '8'
+    const { put, get } = await loadCache()
+
+    expect(put('too-big', bufferOf(5))).toBe(false)
+    expect(get('too-big')).toBeNull()
+  })
+
+  it('rejects new entries once the cache count budget is exhausted', async () => {
+    process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '32'
+    process.env.GATEWAY_CACHE_MAX_ENTRIES = '1'
+    const { put, get } = await loadCache()
+
+    expect(put('k1', bufferOf(2))).toBe(true)
+    expect(put('k2', bufferOf(2))).toBe(false)
+    expect(get('k1')).not.toBeNull()
+    expect(get('k2')).toBeNull()
+  })
+
+  it('stores normal entries and still supports subject forget', async () => {
+    process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '32'
+    process.env.GATEWAY_CACHE_MAX_ENTRIES = '4'
+    const { put, get, forgetSubject } = await loadCache()
+
+    expect(put('k1', bufferOf(3), { subject: 'subject-a' })).toBe(true)
+    expect(get('k1')).not.toBeNull()
+    expect(forgetSubject('subject-a')).toBe(1)
+    expect(get('k1')).toBeNull()
+  })
+
   it('rate-limit blocks after max', async () => {
     process.env.GATEWAY_RL_MAX = '2'
     process.env.GATEWAY_RL_WINDOW_MS = '1000'
-    vi.resetModules()
     const rl = await import('../src/ratelimit.js')
     rl._reset()
     expect(rl.check('ip')).toBe(true)

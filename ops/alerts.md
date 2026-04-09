@@ -70,7 +70,25 @@
     severity: warning
   annotations:
     summary: "Gateway cache growing large"
-    description: "Encrypted envelope cache above 5k entries; verify TTL and ForgetSubject hooks."
+    description: "Encrypted envelope cache above the default budget; verify TTL, admission, and ForgetSubject hooks."
+
+- alert: GatewayCacheAdmissionRejects
+  expr: increase(gateway_cache_store_reject_total[10m]) > 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Gateway cache admission rejects observed"
+    description: "Cache writes are being rejected by size/count limits; inspect traffic patterns and tune budget envs."
+
+- alert: GatewayRatelimitBucketsHigh
+  expr: gateway_ratelimit_buckets > 1000
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Rate-limit bucket cardinality is high"
+    description: "Bucket count is approaching memory budget; reduce key cardinality or raise the host budget."
 
 - alert: GatewayCacheTTLMisconfigured
   expr: gateway_cache_ttl_ms > 900000 or gateway_cache_ttl_ms < 60000
@@ -80,6 +98,15 @@
   annotations:
     summary: "Gateway cache TTL outside expected range"
     description: "TTL too high (>15m) or too low (<1m). Align with Worker inbox TTL and data retention policy."
+
+- alert: GatewayIntegrityCheckpointStale
+  expr: gateway_integrity_checkpoint_age_seconds > 86400
+  for: 15m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Integrity checkpoint is stale"
+    description: "Signed checkpoint age exceeds the max-age policy; treat it as absent and refresh from AO."
 
 - alert: GatewayCertSeen
   expr: increase(gateway_webhook_cert_seen_total[1h]) > 100

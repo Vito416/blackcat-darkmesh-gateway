@@ -12,10 +12,10 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - [x] P0.4 Migration parity tests
 - [~] P1.1 Authority separation and rotation workflow (gateway role-aware signature-ref gate + runbook landed; AO-side final authority lifecycle remains)
 - [~] P1.2 Audit commitments stream (gateway audit seq/lag metrics landed; AO-side commitment sequencing integration still pending)
-- [ ] P1.3 Signed local checkpoint (gateway)
+- [~] P1.3 Signed local checkpoint (gateway) (signed envelope metadata + max-age fail-closed restore landed; diskless production profiling remains)
 - [~] P1.4 Incident/reporting hooks (incident/state endpoints + metrics + tests landed; operator automation/runbook hardening remains)
-- [ ] P2.1 Verification scheduling optimizations
-- [ ] P2.2 Resource budgets and limits
+- [~] P2.1 Verification scheduling optimizations (integrity fetch timeout/retry controls landed; startup/cache-fill cadence tuning remains)
+- [~] P2.2 Resource budgets and limits (cache/ratelimit/replay bounds + stress tests landed; final production thresholds remain)
 - [ ] P2.3 Optional diskless mode
 
 ## P0 - Mandatory before kernel repo retirement
@@ -89,7 +89,13 @@ Progress notes:
 
 ### P1.3 Signed local checkpoint (gateway)
 - Persist last valid integrity snapshot with signature/hash.
-- On restart, restore only if checkpoint verifies.
+- Restore only if the checkpoint verifies and is younger than the max-age policy.
+- Treat stale checkpoints as absent so AO fetch remains the source of truth.
+
+Progress notes:
+- Checkpoint envelope now includes signed metadata (`writtenAt`, optional `expiresAt`).
+- Max-age policy via `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS` fails closed on stale/invalid checkpoint data.
+- Legacy checkpoint envelope compatibility is preserved when max-age enforcement is not configured.
 
 ### P1.4 Incident/reporting hooks
 - Add incident action path and metrics pipeline.
@@ -107,14 +113,29 @@ Progress notes:
 - Verify on startup/cache-fill/state-change only.
 - Add bounded refresh strategy for hot artifacts.
 
+Progress notes:
+- Integrity fetch client now supports bounded timeout + retry/backoff controls:
+  - `AO_INTEGRITY_FETCH_TIMEOUT_MS`
+  - `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS`
+  - `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS`
+- Validation errors still fail closed immediately (no retry on invalid snapshot payloads).
+
 ### P2.2 Resource budgets and limits
 - Cap verifier CPU/timeouts.
-- Bound cache sizes and checkpoint history length.
-- Add stress tests for constrained memory.
+- Bound cache size, ratelimit bucket cardinality, replay-window growth, and checkpoint history length.
+- Add stress tests for constrained memory and limited-hosting profiles.
+
+Progress notes:
+- Cache admission bounds implemented (`GATEWAY_CACHE_MAX_ENTRY_BYTES`, `GATEWAY_CACHE_MAX_ENTRIES`).
+- Ratelimit/replay map growth bounds implemented (`GATEWAY_RL_MAX_BUCKETS`, `GATEWAY_WEBHOOK_REPLAY_MAX_KEYS`).
+- Focused stress/hardening tests added:
+  - `tests/rate-replay-limits.test.ts`
+  - `tests/resource-hardening.test.ts`
 
 ### P2.3 Optional diskless mode
 - Ensure gateway works even without local checkpoint writes.
 - Keep correctness through AO fetch + memory-only verification.
+- Prefer tmpfs or no checkpoint path over fragile persistent storage on small hosts.
 
 ## P3 - Nice-to-have / ecosystem scale
 

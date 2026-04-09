@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "test:hardening": "vitest run tests/integrity-verifier.test.ts tests/resource-hardening.test.ts",
     "build": "tsc -p tsconfig.build.json",
     "smoke": "npm run build && node scripts/e2e-psp-smoke.js",
     "chaos": "npm run build && node scripts/e2e-psp-chaos.js"

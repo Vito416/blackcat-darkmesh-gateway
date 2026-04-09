@@ -5,6 +5,15 @@ import type {
   IntegrityReleaseRecord,
   IntegritySnapshot,
 } from './types.js'
+import {
+  fetchWithTimeout,
+  getIntegrityRetryDelayMs,
+  isAbortError,
+  isTransientIntegrityFetchStatus,
+  resolveIntegrityFetchControl,
+  sleep,
+  type IntegrityFetchLike,
+} from './fetch-control.js'
 
 export type IntegrityErrorCode =
   | 'integrity_invalid_snapshot'
@@ -23,7 +32,10 @@ export class IntegritySnapshotError extends Error {
 
 export type FetchIntegritySnapshotOptions = {
   url?: string
-  fetchImpl?: typeof fetch
+  fetchImpl?: IntegrityFetchLike
+  timeoutMs?: number
+  retryAttempts?: number
+  retryBackoffMs?: number
 }
 
 type SnapshotInput = Record<string, unknown>
@@ -200,25 +212,45 @@ export async function fetchIntegritySnapshot(opts: FetchIntegritySnapshotOptions
     throw new IntegritySnapshotError('integrity_fetch_failed', 'fetch is not available')
   }
 
-  let response: Response
-  try {
-    response = await fetchImpl(url)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'request failed'
-    throw new IntegritySnapshotError('integrity_fetch_failed', message)
-  }
+  const fetchControl = resolveIntegrityFetchControl({
+    timeoutMs: opts.timeoutMs,
+    retryAttempts: opts.retryAttempts,
+    retryBackoffMs: opts.retryBackoffMs,
+  })
 
-  if (!response.ok) {
-    throw new IntegritySnapshotError('integrity_fetch_failed', `upstream returned ${response.status}`)
-  }
+  for (let attempt = 1; attempt <= fetchControl.retryAttempts; attempt++) {
+    try {
+      const response = await fetchWithTimeout(fetchImpl, url, fetchControl.timeoutMs)
 
-  let raw: unknown
-  try {
-    raw = await response.json()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'invalid json'
-    throw new IntegritySnapshotError('integrity_invalid_snapshot', message)
-  }
+      if (!response.ok) {
+        if (isTransientIntegrityFetchStatus(response.status) && attempt < fetchControl.retryAttempts) {
+          await sleep(getIntegrityRetryDelayMs(fetchControl.retryBackoffMs, attempt))
+          continue
+        }
+        throw new IntegritySnapshotError('integrity_fetch_failed', `upstream returned ${response.status}`)
+      }
 
-  return parseSnapshot(raw as SnapshotInput)
+      let raw: unknown
+      try {
+        raw = await response.json()
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'invalid json'
+        throw new IntegritySnapshotError('integrity_invalid_snapshot', message)
+      }
+
+      return parseSnapshot(raw as SnapshotInput)
+    } catch (error) {
+      if (error instanceof IntegritySnapshotError) {
+        throw error
+      }
+
+      if ((isAbortError(error) || error instanceof Error) && attempt < fetchControl.retryAttempts) {
+        await sleep(getIntegrityRetryDelayMs(fetchControl.retryBackoffMs, attempt))
+        continue
+      }
+
+      const message = error instanceof Error ? error.message : 'request failed'
+      throw new IntegritySnapshotError('integrity_fetch_failed', message)
+    }
+  }
 }
