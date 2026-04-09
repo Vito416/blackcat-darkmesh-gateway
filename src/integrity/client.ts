@@ -17,6 +17,7 @@ import {
 
 export type IntegrityErrorCode =
   | 'integrity_invalid_snapshot'
+  | 'integrity_release_root_mismatch'
   | 'missing_trusted_root'
   | 'integrity_fetch_failed'
 
@@ -152,6 +153,40 @@ function parseAudit(raw: unknown): IntegrityAuditRecord {
   }
 }
 
+function normalizeTrustedRoot(value: string): string {
+  return value.trim()
+}
+
+function assertReleaseRootParity(release: IntegrityReleaseRecord, policy: IntegrityPolicyRecord): void {
+  const releaseRoot = normalizeTrustedRoot(release.root)
+  const activeRoot = normalizeTrustedRoot(policy.activeRoot)
+
+  if (releaseRoot !== activeRoot) {
+    throw new IntegritySnapshotError(
+      'integrity_release_root_mismatch',
+      'policy.activeRoot must match release.root',
+    )
+  }
+
+  if (release.revokedAt !== undefined) {
+    throw new IntegritySnapshotError(
+      'integrity_release_root_mismatch',
+      'release.revokedAt is not allowed on the active snapshot',
+    )
+  }
+
+  const compatibilityStateRoot = policy.compatibilityState?.root
+  if (typeof compatibilityStateRoot === 'string' && compatibilityStateRoot.trim()) {
+    const normalizedCompatibilityRoot = normalizeTrustedRoot(compatibilityStateRoot)
+    if (normalizedCompatibilityRoot !== releaseRoot && normalizedCompatibilityRoot !== activeRoot) {
+      throw new IntegritySnapshotError(
+        'integrity_release_root_mismatch',
+        'policy.compatibilityState.root must match release.root or policy.activeRoot',
+      )
+    }
+  }
+}
+
 function extractCodecPayload(raw: Record<string, unknown>): unknown | undefined {
   if (!('status' in raw)) return undefined
   const status = typeof raw.status === 'string' ? raw.status : ''
@@ -198,6 +233,7 @@ function parseSnapshot(raw: unknown): IntegritySnapshot {
   const policy = parsePolicy(raw.policy)
   const authority = parseAuthority(raw.authority)
   const audit = parseAudit(raw.audit)
+  assertReleaseRootParity(release, policy)
   return { release, policy, authority, audit }
 }
 

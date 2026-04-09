@@ -8,6 +8,12 @@ import { writeIntegrityCheckpoint } from '../src/integrity/checkpoint.js'
 
 describe('integrity policy gate', () => {
   const originalEnv = { ...process.env }
+  const pausedPayload = {
+    error: 'policy_paused',
+    reason: 'integrity_policy_paused',
+    paused: true,
+    retryable: false,
+  }
 
   beforeEach(() => {
     vi.resetModules()
@@ -81,6 +87,13 @@ describe('integrity policy gate', () => {
     }
   }
 
+  async function expectPausedResponse(res: Response) {
+    expect(res.status).toBe(503)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    await expect(res.json()).resolves.toEqual(pausedPayload)
+  }
+
   it('blocks mutating paths when the policy is paused and keeps read-only paths available', async () => {
     process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '1'
     process.env.METRICS_BEARER_TOKEN = 'metrics-secret'
@@ -111,8 +124,7 @@ describe('integrity policy gate', () => {
     expect(templateReadRes.status).toBe(200)
 
     const templateWriteRes = await handleRequest(makeTemplateWriteRequest())
-    expect(templateWriteRes.status).toBe(503)
-    await expect(templateWriteRes.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(templateWriteRes)
 
     const cachePutRes = await handleRequest(
       new Request('http://gateway/cache/foo', {
@@ -121,8 +133,7 @@ describe('integrity policy gate', () => {
         headers: { 'content-type': 'application/octet-stream' },
       }),
     )
-    expect(cachePutRes.status).toBe(503)
-    await expect(cachePutRes.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(cachePutRes)
 
     const inboxRes = await handleRequest(
       new Request('http://gateway/inbox', {
@@ -131,7 +142,7 @@ describe('integrity policy gate', () => {
         headers: { 'content-type': 'application/json' },
       }),
     )
-    expect(inboxRes.status).toBe(503)
+    await expectPausedResponse(inboxRes)
 
     const demoForwardRes = await handleRequest(
       new Request('http://gateway/webhook/demo-forward', {
@@ -140,7 +151,7 @@ describe('integrity policy gate', () => {
         headers: { 'content-type': 'application/json' },
       }),
     )
-    expect(demoForwardRes.status).toBe(503)
+    await expectPausedResponse(demoForwardRes)
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const state = snapshot()
@@ -178,8 +189,7 @@ describe('integrity policy gate', () => {
         headers: { 'content-type': 'application/octet-stream' },
       }),
     )
-    expect(res.status).toBe(503)
-    await expect(res.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(res)
     expect(snapshot().gauges.gateway_integrity_policy_paused).toBe(1)
   })
 
@@ -203,8 +213,7 @@ describe('integrity policy gate', () => {
     const { handleRequest } = await loadHandler()
     const res = await handleRequest(makeTemplateWriteRequest())
 
-    expect(res.status).toBe(503)
-    await expect(res.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(res)
     expect(fetchSpy).toHaveBeenCalled()
     const state = snapshot()
     expect(state.gauges.gateway_integrity_policy_paused).toBe(1)
@@ -256,8 +265,7 @@ describe('integrity policy gate', () => {
     const { handleRequest } = await loadHandler()
     const res = await handleRequest(makeTemplateWriteRequest())
 
-    expect(res.status).toBe(503)
-    await expect(res.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(res)
     expect(fetchSpy).toHaveBeenCalled()
     const state = snapshot()
     expect(state.gauges.gateway_integrity_policy_paused).toBe(1)

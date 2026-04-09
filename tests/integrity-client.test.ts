@@ -65,6 +65,83 @@ describe('integrity snapshot client', () => {
     expect(snapshot.authority.signatureRefs).toEqual(['sig-root', 'sig-upgrade'])
   })
 
+  it('accepts release-root parity when active and compatibility roots align', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    const snapshotData = validSnapshot()
+    snapshotData.policy.compatibilityState = {
+      root: 'root-abc',
+      hash: 'compat-123',
+      until: '2026-04-09T01:00:00Z',
+    }
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(snapshotData), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const snapshot = await fetchIntegritySnapshot()
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(snapshot.policy.compatibilityState?.root).toBe('root-abc')
+    expect(snapshot.release.root).toBe(snapshot.policy.activeRoot)
+  })
+
+  it('fails closed when active root diverges from the release root', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    const broken = validSnapshot()
+    broken.policy.activeRoot = 'root-def'
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(broken), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
+      code: 'integrity_release_root_mismatch',
+    })
+  })
+
+  it('fails closed when an active snapshot is marked revoked', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    const broken = validSnapshot()
+    broken.release.revokedAt = '2026-04-09T01:00:00Z'
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(broken), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
+      code: 'integrity_release_root_mismatch',
+    })
+  })
+
+  it('fails closed when compatibility state points at an unrelated root', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    const broken = validSnapshot()
+    broken.policy.compatibilityState = {
+      root: 'root-other',
+      hash: 'compat-123',
+      until: '2026-04-09T01:00:00Z',
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(broken), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
+      code: 'integrity_release_root_mismatch',
+    })
+  })
+
   it('times out slow fetches using the configured timeout', async () => {
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.AO_INTEGRITY_FETCH_TIMEOUT_MS = '20'

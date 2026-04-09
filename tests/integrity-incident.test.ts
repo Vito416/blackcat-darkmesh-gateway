@@ -226,7 +226,12 @@ describe('integrity incident and state endpoints', () => {
 
     const blockedWrite = await handleRequest(makeTemplateWriteRequest())
     expect(blockedWrite.status).toBe(503)
-    await expect(blockedWrite.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expect(blockedWrite.json()).resolves.toEqual({
+      error: 'policy_paused',
+      reason: 'integrity_policy_paused',
+      paused: true,
+      retryable: false,
+    })
 
     const resume = await handleRequest(
       makeIncidentRequest(

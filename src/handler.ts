@@ -144,9 +144,18 @@ function integrityErrorStatus(code: string): number {
 
 function policyPausedResponse(): Response {
   inc('gateway_integrity_unverified_block')
-  return new Response(JSON.stringify({ error: 'policy_paused' }), {
+  const payload = {
+    error: 'policy_paused',
+    reason: 'integrity_policy_paused',
+    paused: true,
+    retryable: false,
+  }
+  return new Response(JSON.stringify(payload), {
     status: 503,
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    },
   })
 }
 
