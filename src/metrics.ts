@@ -8,6 +8,15 @@ const globalState: MetricState = (globalThis as any).__gatewayMetrics || { count
 const counters: CounterMap = globalState.counters
 const gauges: GaugeMap = globalState.gauges
 
+type IntegrityAuditStreamState = {
+  lastSeqTo?: number
+  seqFrom?: number
+}
+
+const auditStreamState: IntegrityAuditStreamState =
+  (globalThis as any).__gatewayAuditStreamState || {}
+;(globalThis as any).__gatewayAuditStreamState = auditStreamState
+
 const help: Record<string, string> = {
   gateway_cache_hit_total: 'Cache hits',
   gateway_cache_miss_total: 'Cache misses',
@@ -57,6 +66,8 @@ const help: Record<string, string> = {
   gateway_integrity_audit_seq_from: 'Latest integrity audit sequence start observed by gateway',
   gateway_integrity_audit_seq_to: 'Latest integrity audit sequence end observed by gateway',
   gateway_integrity_audit_lag_seconds: 'Lag in seconds between now and integrity audit acceptance timestamp',
+  gateway_integrity_audit_stream_anomaly_total:
+    'AO integrity audit stream anomalies detected (sequence regression or invalid ordering)',
   gateway_integrity_incident_total: 'Integrity incidents accepted by gateway',
   gateway_integrity_incident_auth_blocked_total: 'Integrity incident requests blocked by auth',
   gateway_integrity_incident_role_blocked_total: 'Integrity incident requests blocked by signature-ref role policy',
@@ -73,13 +84,38 @@ function norm(name: string): string {
   return name.replace(/[^A-Za-z0-9_]/g, '_')
 }
 
+function noteIntegrityAuditSequenceMetric(name: string, value: number) {
+  if (name === 'gateway_integrity_audit_seq_from') {
+    auditStreamState.seqFrom = value
+    return
+  }
+
+  if (name !== 'gateway_integrity_audit_seq_to') {
+    return
+  }
+
+  const seqFrom = auditStreamState.seqFrom
+  const lastSeqTo = auditStreamState.lastSeqTo
+  const anomalyDetected =
+    (typeof seqFrom === 'number' && value < seqFrom) ||
+    (typeof lastSeqTo === 'number' && value < lastSeqTo)
+
+  if (anomalyDetected) {
+    inc('gateway_integrity_audit_stream_anomaly')
+  }
+
+  auditStreamState.lastSeqTo = value
+}
+
 export function inc(name: string, value = 1) {
   const k = norm(name)
   counters[k] = (counters[k] || 0) + value
 }
 
 export function gauge(name: string, value: number) {
-  gauges[norm(name)] = value
+  const k = norm(name)
+  gauges[k] = value
+  noteIntegrityAuditSequenceMetric(k, value)
 }
 
 export function snapshot() {
@@ -106,4 +142,6 @@ export function toProm(): string {
 export function reset() {
   Object.keys(counters).forEach((k) => delete counters[k])
   Object.keys(gauges).forEach((k) => delete gauges[k])
+  delete auditStreamState.seqFrom
+  delete auditStreamState.lastSeqTo
 }

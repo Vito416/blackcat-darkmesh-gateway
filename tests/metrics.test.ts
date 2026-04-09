@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { inc, gauge, toProm, reset } from '../src/metrics.js'
+import { inc, gauge, toProm, reset, snapshot } from '../src/metrics.js'
 
 beforeEach(() => {
   reset()
@@ -37,11 +37,28 @@ describe('metrics exporter', () => {
     expect(prom).toContain(
       '# HELP gateway_integrity_audit_seq_to Latest integrity audit sequence end observed by gateway',
     )
+    expect(prom).toContain(
+      '# HELP gateway_integrity_audit_stream_anomaly_total AO integrity audit stream anomalies detected (sequence regression or invalid ordering)',
+    )
     expect(prom).toContain('# HELP gateway_integrity_incident_total Integrity incidents accepted by gateway')
     expect(prom).toContain(
       '# HELP gateway_integrity_incident_role_blocked_total Integrity incident requests blocked by signature-ref role policy',
     )
     expect(prom).toContain('# HELP gateway_integrity_state_read_total Integrity state read requests served')
     expect(prom).toContain('# HELP gateway_integrity_state_auth_blocked_total Integrity state requests blocked by auth')
+  })
+
+  it('increments integrity audit stream anomaly counter on regression or invalid ordering', () => {
+    gauge('gateway_integrity_audit_seq_from', 10)
+    gauge('gateway_integrity_audit_seq_to', 12)
+    expect(toProm()).not.toContain('gateway_integrity_audit_stream_anomaly_total 1')
+
+    gauge('gateway_integrity_audit_seq_from', 11)
+    gauge('gateway_integrity_audit_seq_to', 9)
+
+    const state = snapshot()
+    expect(state.counters.gateway_integrity_audit_stream_anomaly).toBe(1)
+    expect(toProm()).toContain('# HELP gateway_integrity_audit_stream_anomaly_total AO integrity audit stream anomalies detected (sequence regression or invalid ordering)')
+    expect(toProm()).toMatch(/gateway_integrity_audit_stream_anomaly_total 1/)
   })
 })
