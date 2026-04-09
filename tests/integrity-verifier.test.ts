@@ -10,9 +10,11 @@ describe('integrity verifier', () => {
   })
 
   it('recognizes trusted roots', () => {
-    expect(isTrustedRoot('root-a', ['root-a', 'root-b'])).toBe(true)
+    expect(isTrustedRoot(' 0xROOT-A ', ['root-a', 'root-b'])).toBe(true)
+    expect(isTrustedRoot('SHA256:ROOT-B', ['root-a', 'root-b'])).toBe(true)
     expect(isTrustedRoot('root-c', ['root-a', 'root-b'])).toBe(false)
     expect(isTrustedRoot('', ['root-a'])).toBe(false)
+    expect(isTrustedRoot('sha256:', ['root-a'])).toBe(false)
   })
 
   it('accepts a manifest entry when root and hash match', () => {
@@ -47,5 +49,21 @@ describe('integrity verifier', () => {
       { activeRoot: 'root-a', expectedHash: 'hash-b' },
     )
     expect(result).toEqual({ ok: false, code: 'integrity_mismatch' })
+  })
+
+  it('accepts prefixed roots and hashes after normalization', () => {
+    const result = verifyManifestEntry(
+      { root: '  SHA256:0xROOT-A  ', uriHash: ' 0xHASH-A ' },
+      { activeRoot: 'root-a', trustedRoots: ['SHA256:ROOT-A'], expectedHash: 'sha256:hash-a' },
+    )
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('rejects malformed prefixed manifest values', () => {
+    const result = verifyManifestEntry(
+      { root: 'sha256:', hash: 'sha256:' },
+      { activeRoot: 'root-a', expectedHash: 'hash-a' },
+    )
+    expect(result).toEqual({ ok: false, code: 'missing_trusted_root' })
   })
 })

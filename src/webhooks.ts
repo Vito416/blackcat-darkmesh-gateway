@@ -1,58 +1,83 @@
 import { inc, gauge } from './metrics.js'
 import crypto from 'crypto'
 
+function timingSafeCompare(left: string, right: string): boolean {
+  if (left.length !== right.length) return false
+  return crypto.timingSafeEqual(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'))
+}
+
+function parseStripeSignatureHeader(sigHeader: string): { timestamp: string | null; signatures: string[] } {
+  const buckets: Record<string, string[]> = {}
+  for (const rawPart of sigHeader.split(',')) {
+    const part = rawPart.trim()
+    if (!part) continue
+    const eq = part.indexOf('=')
+    if (eq <= 0) continue
+    const key = part.slice(0, eq).trim()
+    const value = part.slice(eq + 1).trim()
+    if (!key || !value) continue
+    if (!buckets[key]) buckets[key] = []
+    buckets[key].push(value)
+  }
+  const ts = buckets.t && buckets.t.length > 0 ? buckets.t[buckets.t.length - 1] : null
+  return { timestamp: ts, signatures: buckets.v1 || [] }
+}
+
 // Stripe webhook verification (t=timestamp,v1=signature)
 export function verifyStripe(body: string, sigHeader: string | null, secret: string, toleranceMs: number): boolean {
   if (!body || !sigHeader || !secret) return false
-  const parts: Record<string, string> = {}
-  sigHeader.split(',').forEach((p) => {
-    const [k, v] = p.split('='); if (k && v) parts[k.trim()] = v.trim()
-  })
-  if (!parts.t || !parts.v1) return false
-  const signedPayload = `${parts.t}.${body}`
+  const parsed = parseStripeSignatureHeader(sigHeader)
+  if (!parsed.timestamp || parsed.signatures.length === 0) return false
+  const ts = Number.parseInt(parsed.timestamp, 10)
+  if (!Number.isFinite(ts)) return false
+  const tol = Number.isFinite(toleranceMs) ? toleranceMs : 300000
+  if (Math.abs(Date.now() - (ts * 1000)) > tol) return false
+  const signedPayload = `${parsed.timestamp}.${body}`
   const expected = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex')
-  if (expected !== parts.v1) return false
-  const tol = isNaN(toleranceMs) ? 300000 : toleranceMs
-  const ts = parseInt(parts.t, 10) * 1000
-  if (isFinite(ts) && Math.abs(Date.now() - ts) > tol) return false
-  return true
+  return parsed.signatures.some((candidate) => timingSafeCompare(expected, candidate))
 }
 
 // PayPal webhook verification (HMAC fallback + RSA remote)
 export async function verifyPayPal(body: string, headers: Headers, secret?: string): Promise<boolean> {
   if (!body) return false
+  const parsedBody = parsePayPalBody(body)
+  if (!parsedBody) return false
   // HMAC short-path if secret provided
   if (secret) {
     const sig = headers.get('PayPal-Transmission-Sig') || headers.get('PP-Signature')
     if (!sig) return false
     const expected = crypto.createHmac('sha256', secret).update(body).digest('hex')
-    if (expected === sig) return true
+    if (timingSafeCompare(expected, sig.trim())) return true
   }
   // Remote verify (requires PAYPAL_WEBHOOK_ID and client creds via env)
   const webhookId = process.env.PAYPAL_WEBHOOK_ID
   if (!webhookId) return false
   const token = await paypalToken()
   if (!token) return false
-  const payload = {
-    auth_algo: headers.get('PayPal-Auth-Algo'),
-    cert_url: headers.get('PayPal-Cert-Url'),
-    transmission_id: headers.get('PayPal-Transmission-Id'),
-    transmission_sig: headers.get('PayPal-Transmission-Sig') || headers.get('PayPal-Transmission-Signature'),
-    transmission_time: headers.get('PayPal-Transmission-Time'),
-    webhook_id: webhookId,
-    webhook_event: JSON.parse(body),
+  try {
+    const payload = {
+      auth_algo: headers.get('PayPal-Auth-Algo'),
+      cert_url: headers.get('PayPal-Cert-Url'),
+      transmission_id: headers.get('PayPal-Transmission-Id'),
+      transmission_sig: headers.get('PayPal-Transmission-Sig') || headers.get('PayPal-Transmission-Signature'),
+      transmission_time: headers.get('PayPal-Transmission-Time'),
+      webhook_id: webhookId,
+      webhook_event: parsedBody,
+    }
+    const resp = await fetch(`${paypalBase()}/v1/notifications/verify-webhook-signature`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!resp.ok) return false
+    const data = await resp.json()
+    return Boolean(data && data.verification_status === 'SUCCESS')
+  } catch {
+    return false
   }
-  const resp = await fetch(`${paypalBase()}/v1/notifications/verify-webhook-signature`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  })
-  if (!resp.ok) return false
-  const data = await resp.json()
-  return data && data.verification_status === 'SUCCESS'
 }
 
 async function paypalToken(): Promise<string | null> {
@@ -77,6 +102,7 @@ function paypalBase() {
 // Simple cert cache placeholder (for future pinning)
 const certCache = new Map<string, number>()
 const CERT_TTL = parseInt(process.env.GW_CERT_CACHE_TTL_MS || '21600000', 10) // 6h
+const CERT_CACHE_MAX = Math.max(parseInt(process.env.GW_CERT_CACHE_MAX_SIZE || '256', 10) || 256, 1)
 const CERT_ALLOW_PREFIXES = (process.env.PAYPAL_CERT_ALLOW_PREFIXES || '')
   .split(',')
   .map((s) => s.trim())
@@ -94,6 +120,14 @@ function sweepCerts(now: number) {
   if (removed > 0) gauge('gateway_webhook_cert_cache_size', certCache.size)
 }
 
+function trimCertCache() {
+  while (certCache.size >= CERT_CACHE_MAX) {
+    const oldest = certCache.keys().next()
+    if (oldest.done) break
+    certCache.delete(oldest.value)
+  }
+}
+
 function certAllowed(url: string): boolean {
   if (CERT_ALLOW_PREFIXES.length === 0) return true
   return CERT_ALLOW_PREFIXES.some((p) => url.startsWith(p))
@@ -107,7 +141,8 @@ function certPinnedOk(fingerprint?: string): boolean {
 
 export function noteCert(url?: string, fingerprint?: string): boolean {
   if (!url) return true
-  sweepCerts(Date.now())
+  const now = Date.now()
+  sweepCerts(now)
   if (!certAllowed(url)) {
     inc('gateway_webhook_cert_allow_fail')
     return false
@@ -116,8 +151,20 @@ export function noteCert(url?: string, fingerprint?: string): boolean {
     inc('gateway_webhook_cert_pin_fail')
     return false
   }
-  certCache.set(url, Date.now() + CERT_TTL)
+  if (certCache.has(url)) certCache.delete(url)
+  trimCertCache()
+  certCache.set(url, now + CERT_TTL)
   inc('gateway_webhook_cert_seen')
   gauge('gateway_webhook_cert_cache_size', certCache.size)
   return true
+}
+
+function parsePayPalBody(body: string): object | null {
+  try {
+    const parsed = JSON.parse(body)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return parsed
+  } catch {
+    return null
+  }
 }
