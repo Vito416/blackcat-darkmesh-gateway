@@ -14,7 +14,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - [~] P1.2 Audit commitments stream (gateway audit seq/lag metrics landed; AO-side commitment sequencing integration still pending)
 - [x] P1.3 Signed local checkpoint (gateway)
 - [~] P1.4 Incident/reporting hooks (incident/state endpoints + metrics + tests landed; operator automation/runbook hardening remains)
-- [~] P2.1 Verification scheduling optimizations (integrity fetch timeout/retry controls landed; startup/cache-fill cadence tuning remains)
+- [x] P2.1 Verification scheduling optimizations
 - [x] P2.2 Resource budgets and limits
 - [x] P2.3 Optional diskless mode
 
@@ -118,6 +118,9 @@ Progress notes:
   - `AO_INTEGRITY_FETCH_TIMEOUT_MS`
   - `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS`
   - `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS`
+- Profiled cadence defaults are now available via `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskless`.
+- Precedence is explicit: call override > `AO_INTEGRITY_FETCH_*` env > `GATEWAY_RESOURCE_PROFILE` > medium fallback.
+- Alert guidance is now calibrated per profile in `ops/alerts-profiles.md`.
 - Validation errors still fail closed immediately (no retry on invalid snapshot payloads).
 
 ### P2.2 Resource budgets and limits

@@ -6,6 +6,7 @@ const envKeys = [
   'GATEWAY_RL_MAX_BUCKETS',
   'GATEWAY_WEBHOOK_REPLAY_TTL_MS',
   'GATEWAY_WEBHOOK_REPLAY_MAX_KEYS',
+  'GATEWAY_RESOURCE_PROFILE',
 ]
 
 function clearEnv() {
@@ -55,6 +56,7 @@ describe.sequential('bounded rate-limit and replay limits', () => {
   })
 
   it('evicts the oldest replay entry when the map cap is exceeded', async () => {
+    process.env.GATEWAY_RESOURCE_PROFILE = 'diskless'
     process.env.GATEWAY_WEBHOOK_REPLAY_TTL_MS = '1000'
     process.env.GATEWAY_WEBHOOK_REPLAY_MAX_KEYS = '2'
     vi.resetModules()

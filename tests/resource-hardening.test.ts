@@ -34,7 +34,26 @@ describe('resource hardening edge cases', () => {
     expect(cache.dropKey('cache-0')).toBe(false)
   })
 
+  it('reclaims expired cache capacity before admitting a fresh entry in diskless mode', async () => {
+    process.env.GATEWAY_RESOURCE_PROFILE = 'diskless'
+    process.env.GATEWAY_CACHE_TTL_MS = '1'
+    process.env.GATEWAY_CACHE_MAX_ENTRIES = '2'
+    const cache = await import('../src/cache.js')
+    const value = new TextEncoder().encode('template-payload').buffer
+
+    expect(cache.put('cache-a', value.slice(0), 'subject-a')).toBe(true)
+    expect(cache.put('cache-b', value.slice(0), 'subject-a')).toBe(true)
+    vi.advanceTimersByTime(2)
+
+    expect(cache.put('cache-c', value.slice(0), 'subject-b')).toBe(true)
+    expect(cache.get('cache-a')).toBeNull()
+    expect(cache.get('cache-b')).toBeNull()
+    expect(cache.get('cache-c')).not.toBeNull()
+    expect(cache.forgetSubject('subject-a')).toBe(0)
+  })
+
   it('keeps the rate-limit bucket blocked on the reset boundary and releases it after the boundary', async () => {
+    process.env.GATEWAY_RESOURCE_PROFILE = 'wedos_small'
     process.env.GATEWAY_RL_WINDOW_MS = '1000'
     process.env.GATEWAY_RL_MAX = '1'
     const rateLimit = await import('../src/ratelimit.js')

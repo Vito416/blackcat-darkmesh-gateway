@@ -63,7 +63,9 @@ Configuration (per site)
     - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS` (ignore older checkpoints; stale files are treated as absent)
     - `GATEWAY_INTEGRITY_DISKLESS=1` (force memory-only mode; disable checkpoint file reads/writes)
     - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless|disabled|memory-only` (equivalent explicit checkpoint disable mode)
+    - `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskless` (profiled defaults for integrity fetch/retry cadence)
     - `AO_INTEGRITY_FETCH_TIMEOUT_MS`, `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS`, `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS` (AO/integrity fetch timeout + retry budget)
+      - precedence: explicit fetch options > `AO_INTEGRITY_FETCH_*` env vars > `GATEWAY_RESOURCE_PROFILE` defaults
     - `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1` (fail closed unless cache entries are integrity-verified)
     - `GATEWAY_INTEGRITY_STATE_TOKEN` (optional auth token for `GET /integrity/state`; accepts Bearer or `x-integrity-token`)
     - `GATEWAY_INTEGRITY_INCIDENT_TOKEN` (required auth token for `POST /integrity/incident`; accepts Bearer or `x-incident-token`)
@@ -230,7 +232,7 @@ When cache admission limits are exceeded, cache PUT returns:
 - Release drafts are created from main; see the latest draft and published tags in [Releases](https://github.com/Vito416/blackcat-darkmesh-gateway/releases).
 Open items to design/implement
 - Exact endpoint contract with browser (cart/checkout/session).
-- Metrics/alerts defaults (thresholds).
+- Dashboard layout and escalation policy across environments.
 - Deployment topology (per-merchant vs multi-tenant isolation).
 
 

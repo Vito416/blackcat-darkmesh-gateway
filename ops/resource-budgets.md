@@ -5,6 +5,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 ## Recommended profiles
 
 ### Profile A: WEDOS small (conservative)
+- `GATEWAY_RESOURCE_PROFILE=wedos_small`
 - `GATEWAY_CACHE_TTL_MS=180000`
 - `GATEWAY_CACHE_MAX_ENTRY_BYTES=131072`
 - `GATEWAY_CACHE_MAX_ENTRIES=128`
@@ -19,6 +20,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS=43200`
 
 ### Profile B: WEDOS medium (balanced default)
+- `GATEWAY_RESOURCE_PROFILE=wedos_medium`
 - `GATEWAY_CACHE_TTL_MS=300000`
 - `GATEWAY_CACHE_MAX_ENTRY_BYTES=262144`
 - `GATEWAY_CACHE_MAX_ENTRIES=256`
@@ -33,9 +35,18 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS=86400`
 
 ### Profile C: Diskless/ephemeral host
+- `GATEWAY_RESOURCE_PROFILE=diskless`
 - `GATEWAY_INTEGRITY_DISKLESS=1`
 - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`
 - Keep the rest aligned to Profile A or B.
+
+## Fetch/retry precedence
+- Integrity fetch cadence is resolved in this order:
+  1. explicit call overrides (`fetchIntegritySnapshot({ timeoutMs, retryAttempts, retryBackoffMs })`)
+  2. env vars (`AO_INTEGRITY_FETCH_*`)
+  3. profile defaults from `GATEWAY_RESOURCE_PROFILE`
+  4. fallback default profile (`wedos_medium`)
+- Use `AO_INTEGRITY_FETCH_*` only when you need a profile-specific exception without changing the whole deployment profile.
 
 ## Checkpoint policy
 - Restore a signed checkpoint only when it verifies and is within `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS`.

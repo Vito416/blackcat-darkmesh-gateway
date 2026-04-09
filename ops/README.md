@@ -3,6 +3,8 @@
 - Endpoint: `/metrics` (Prom text). Protect with `METRICS_BASIC_USER`/`METRICS_BASIC_PASS` or `METRICS_BEARER_TOKEN`; responds 401 if missing when set.
 - Integrity operations runbook: `ops/integrity-runbook.md`.
 - Resource budgets and limited-hosting guidance: `ops/resource-budgets.md`.
+- Default alert thresholds: `ops/alerts.md` (targets `wedos_medium`).
+- Profile-specific alert thresholds and tuning notes: `ops/alerts-profiles.md`.
 - Key metrics:
   - Cache: `gateway_cache_hit_total`, `gateway_cache_miss_total`, `gateway_cache_expired_total`, `gateway_cache_store_reject_total`, `gateway_cache_store_reject_size_total`, `gateway_cache_store_reject_capacity_total`, `gateway_cache_size`.
   - Webhooks: `gateway_webhook_stripe_verify_fail_total`, `gateway_webhook_paypal_verify_fail_total`, `gateway_webhook_replay_total`, `gateway_webhook_cert_allow_fail_total`, `gateway_webhook_cert_pin_fail_total`, `gateway_webhook_cert_cache_size`.
@@ -22,6 +24,7 @@
 - Rate limit: keep `gateway_ratelimit_buckets` cardinality flat; if it climbs, reduce key granularity before raising limits.
 - Replay: keep `gateway_webhook_replay_total` limited to provider retry windows; a rising replay rate usually means duplicate deliveries or clock skew.
 - Checkpoints: prefer tmpfs or no-path operation on small hosts, and only restore signed checkpoints that are still fresh.
+- When an alert is profile-specific, keep the threshold below the corresponding budget ceiling and tune `for:` windows before raising the numeric trigger.
 
 ## Prom scrape example
 ```yaml
