@@ -6,34 +6,77 @@ import { check as rateCheck } from './ratelimit.js'
 import { verifyStripe, verifyPayPal, noteCert } from './webhooks.js'
 import { markAndCheck } from './replay.js'
 import { proxyTemplateCall } from './templateApi.js'
+import { fetchIntegritySnapshot } from './integrity/client.js'
+import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
-type IntegrityPolicyState = { paused: boolean }
+type IntegrityPolicyState = { paused: boolean; source: 'env' | 'ao' | 'checkpoint' }
 
 const templateReadActions = new Set(['public.resolve-route', 'public.get-page'])
 const templateWriteActions = new Set(['checkout.create-order', 'checkout.create-payment-intent'])
+const INTEGRITY_CACHE_DEFAULT_TTL_MS = 10_000
 
-function readIntegrityPolicyState(): IntegrityPolicyState {
+type IntegrityRuntimeCache = {
+  expiresAt: number
+  state: IntegrityPolicyState
+}
+
+const integrityRuntime: IntegrityRuntimeCache = {
+  expiresAt: 0,
+  state: { paused: false, source: 'env' },
+}
+
+function readEnvIntegrityPolicyState(): IntegrityPolicyState {
   const fallbackPaused = process.env.GATEWAY_INTEGRITY_POLICY_PAUSED === '1'
   const raw = process.env.GATEWAY_INTEGRITY_POLICY_JSON?.trim()
-  if (!raw) return { paused: fallbackPaused }
+  if (!raw) return { paused: fallbackPaused, source: 'env' }
 
   try {
     const parsed = JSON.parse(raw)
     if (parsed && typeof parsed === 'object' && typeof parsed.paused === 'boolean') {
-      return { paused: parsed.paused }
+      return { paused: parsed.paused, source: 'env' }
     }
   } catch (_) {
     // Ignore malformed policy JSON and fall back to the env flag.
   }
 
-  return { paused: fallbackPaused }
+  return { paused: fallbackPaused, source: 'env' }
 }
 
-function integrityPolicyPaused(): boolean {
-  const { paused } = readIntegrityPolicyState()
-  gauge('gateway_integrity_policy_paused', paused ? 1 : 0)
-  return paused
+function readIntegrityCacheTtlMs(): number {
+  const raw = process.env.GATEWAY_INTEGRITY_CACHE_TTL_MS
+  const parsed = raw ? Number.parseInt(raw, 10) : INTEGRITY_CACHE_DEFAULT_TTL_MS
+  if (!Number.isFinite(parsed) || parsed <= 0) return INTEGRITY_CACHE_DEFAULT_TTL_MS
+  return parsed
+}
+
+async function resolveIntegrityPolicyState(): Promise<IntegrityPolicyState> {
+  const now = Date.now()
+  if (integrityRuntime.expiresAt > now) {
+    gauge('gateway_integrity_policy_paused', integrityRuntime.state.paused ? 1 : 0)
+    return integrityRuntime.state
+  }
+
+  const fallback = readEnvIntegrityPolicyState()
+  let resolved: IntegrityPolicyState = fallback
+
+  try {
+    const snapshot = await fetchIntegritySnapshot()
+    resolved = { paused: !!snapshot.policy.paused, source: 'ao' }
+    await writeIntegrityCheckpoint(snapshot).catch(() => null)
+  } catch (_) {
+    inc('gateway_integrity_snapshot_fetch_fail')
+    const checkpoint = await readIntegrityCheckpoint().catch(() => null)
+    if (checkpoint) {
+      resolved = { paused: !!checkpoint.policy.paused, source: 'checkpoint' }
+      inc('gateway_integrity_checkpoint_restore')
+    }
+  }
+
+  integrityRuntime.state = resolved
+  integrityRuntime.expiresAt = now + readIntegrityCacheTtlMs()
+  gauge('gateway_integrity_policy_paused', resolved.paused ? 1 : 0)
+  return resolved
 }
 
 function policyPausedResponse(): Response {
@@ -155,7 +198,8 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
 
 export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
-  const integrityPaused = integrityPolicyPaused()
+  const integrityState = await resolveIntegrityPolicyState()
+  const integrityPaused = integrityState.paused
 
   if (url.pathname.startsWith('/cache/forget')) {
     if (request.method !== 'POST') return new Response('method', { status: 405 })

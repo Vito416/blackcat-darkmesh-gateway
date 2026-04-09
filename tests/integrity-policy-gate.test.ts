@@ -42,6 +42,40 @@ describe('integrity policy gate', () => {
     })
   }
 
+  function makeIntegritySnapshot(paused: boolean) {
+    return {
+      release: {
+        componentId: 'gateway',
+        version: '1.2.0',
+        root: 'root-abc',
+        uriHash: 'uri-123',
+        metaHash: 'meta-456',
+        publishedAt: '2026-04-09T00:00:00Z',
+      },
+      policy: {
+        activeRoot: 'root-abc',
+        activePolicyHash: 'policy-789',
+        paused,
+        maxCheckInAgeSec: 3600,
+      },
+      authority: {
+        root: 'sig-root',
+        upgrade: 'sig-upgrade',
+        emergency: 'sig-emergency',
+        reporter: 'sig-reporter',
+        signatureRefs: ['sig-root'],
+      },
+      audit: {
+        seqFrom: 1,
+        seqTo: 1,
+        merkleRoot: 'merkle-xyz',
+        metaHash: 'audit-meta',
+        reporterRef: 'sig-reporter',
+        acceptedAt: '2026-04-09T00:00:00Z',
+      },
+    }
+  }
+
   it('blocks mutating paths when the policy is paused and keeps read-only paths available', async () => {
     process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '1'
     process.env.METRICS_BEARER_TOKEN = 'metrics-secret'
@@ -142,5 +176,32 @@ describe('integrity policy gate', () => {
     expect(res.status).toBe(503)
     await expect(res.json()).resolves.toEqual({ error: 'policy_paused' })
     expect(snapshot().gauges.gateway_integrity_policy_paused).toBe(1)
+  })
+
+  it('uses AO integrity snapshot pause state when AO endpoint is configured', async () => {
+    process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '0'
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    process.env.GATEWAY_INTEGRITY_CACHE_TTL_MS = '1'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.WRITE_API_URL = 'https://write.example'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url === process.env.AO_INTEGRITY_URL) {
+        return new Response(JSON.stringify(makeIntegritySnapshot(true)), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('ok', { status: 200 })
+    })
+
+    const { handleRequest } = await loadHandler()
+    const res = await handleRequest(makeTemplateWriteRequest())
+
+    expect(res.status).toBe(503)
+    await expect(res.json()).resolves.toEqual({ error: 'policy_paused' })
+    expect(fetchSpy).toHaveBeenCalled()
+    const state = snapshot()
+    expect(state.gauges.gateway_integrity_policy_paused).toBe(1)
   })
 })

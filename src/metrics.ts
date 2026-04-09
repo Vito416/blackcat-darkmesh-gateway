@@ -38,6 +38,8 @@ const help: Record<string, string> = {
   gateway_integrity_policy_paused: 'Gateway integrity policy paused (1 when paused, 0 otherwise)',
   gateway_integrity_fallback_readonly_total: 'Read-only requests served while integrity policy paused',
   gateway_integrity_unverified_block_total: 'Requests blocked by integrity gate',
+  gateway_integrity_snapshot_fetch_fail_total: 'AO integrity snapshot fetch/validation failures',
+  gateway_integrity_checkpoint_restore_total: 'Integrity state restored from signed local checkpoint',
 }
 
 const types: Record<string, 'counter' | 'gauge'> = {}
