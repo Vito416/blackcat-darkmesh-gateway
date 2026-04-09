@@ -1,4 +1,46 @@
-# Scripts (placeholder)
+# Scripts
+
+Operator and test helpers live here. Keep them dependency-light and safe to run from a shell.
+
+## Integrity incident helper
+
+`scripts/integrity-incident.js` sends signed operator requests to the integrity endpoints:
+
+- `pause`
+- `resume`
+- `ack`
+- `report`
+- `state`
+
+It validates the action, URL, token source, and incident payload before calling `curl`, and prints the full response headers/body plus `HTTP_STATUS`.
+
+Usage:
+```bash
+node scripts/integrity-incident.js pause --url http://localhost:8787
+node scripts/integrity-incident.js report --url https://gateway.example.com --severity high --event integrity-spike
+node scripts/integrity-incident.js state --url https://gateway.example.com
+```
+
+Auth token handling:
+- incident actions default to `GATEWAY_INTEGRITY_INCIDENT_TOKEN`
+- `state` defaults to `GATEWAY_INTEGRITY_STATE_TOKEN`
+- override with `--token-env NAME` or `--token VALUE`
+- prefer environment variables in staging/prod; avoid putting secrets directly on the shell line
+
+Examples:
+```bash
+GATEWAY_INTEGRITY_INCIDENT_TOKEN=dev-secret \
+  node scripts/integrity-incident.js pause --url http://localhost:8787
+
+GATEWAY_INTEGRITY_INCIDENT_TOKEN=prod-secret \
+  node scripts/integrity-incident.js ack --url https://gateway.example.com \
+    --signature-ref sig-emergency-v2 --incident-id inc-2026-04-09
+
+GATEWAY_INTEGRITY_STATE_TOKEN=state-secret \
+  node scripts/integrity-incident.js state --url https://gateway.example.com
+```
+
+## Other helpers
 
 - `fetch-template.ts` — pull Arweave template, verify manifest signature.
 - `psp-webhook-replay.ts` — replay stored webhook fixtures against local gateway.
