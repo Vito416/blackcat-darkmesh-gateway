@@ -1,0 +1,34 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use BlackCat\Core\Database;
+use BlackCat\Database\Packages\Notifications\Repository\NotificationRepository;
+use BlackCat\Mailing\Config\MailingConfig;
+use BlackCat\Mailing\Worker\NotificationWorker;
+
+$env = $_ENV + $_SERVER;
+
+$dsn = (string)($env['BLACKCAT_DB_DSN'] ?? ($env['BLACKCAT_AUTH_DB_DSN'] ?? ''));
+if ($dsn === '') {
+    fwrite(STDERR, "Missing BLACKCAT_DB_DSN\n");
+    exit(2);
+}
+
+Database::init([
+    'dsn' => $dsn,
+    'user' => $env['BLACKCAT_DB_USER'] ?? ($env['BLACKCAT_AUTH_DB_USER'] ?? null),
+    'pass' => $env['BLACKCAT_DB_PASS'] ?? ($env['BLACKCAT_AUTH_DB_PASS'] ?? null),
+    'appName' => $env['BLACKCAT_DB_APPNAME'] ?? 'blackcat-mailing-worker',
+]);
+
+$db = Database::getInstance();
+$config = MailingConfig::fromEnv($env);
+$repo = new NotificationRepository($db);
+
+$worker = new NotificationWorker($db, $repo, $config);
+$report = $worker->runOnce();
+
+fwrite(STDOUT, json_encode($report, JSON_UNESCAPED_SLASHES) . "\n");

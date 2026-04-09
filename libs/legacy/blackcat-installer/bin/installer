@@ -1,0 +1,82 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use BlackCat\Installer\Installer;
+use Psr\Log\AbstractLogger;
+
+final class CliLogger extends AbstractLogger
+{
+    public function log($level, $message, array $context = []): void
+    {
+        echo strtoupper((string) $level) . ' ' . $message . ' ' . json_encode($context) . PHP_EOL;
+    }
+}
+
+$installer = new Installer(null, new CliLogger());
+
+$argv = $_SERVER['argv'] ?? [];
+$command = $argv[1] ?? 'help';
+$args = array_slice($argv, 2);
+
+switch ($command) {
+    case 'list':
+        echo json_encode($installer->available(), JSON_PRETTY_PRINT) . PHP_EOL;
+        break;
+    case 'install':
+        [$mods, $envOut, $runBootstrap, $includeFeatureViews] = parseInstallArgs($args);
+        if ($mods === []) {
+            fwrite(STDERR, "Usage: installer install --modules=auth-core,observability\n");
+            exit(1);
+        }
+        $extraEnv = $includeFeatureViews ? ['BC_INCLUDE_FEATURE_VIEWS' => '1'] : [];
+        if ($includeFeatureViews) {
+            $_ENV['BC_INCLUDE_FEATURE_VIEWS'] = '1';
+            if (function_exists('putenv')) {
+                putenv('BC_INCLUDE_FEATURE_VIEWS=1');
+            } else {
+                fwrite(STDERR, "Warning: putenv() is disabled; bootstrap commands may not see BC_INCLUDE_FEATURE_VIEWS.\n");
+            }
+        }
+        $installer->install($mods, $envOut, $runBootstrap, $extraEnv);
+        break;
+    case 'help':
+    default:
+        echo <<<TXT
+BlackCat Installer CLI
+
+Usage:
+  installer list
+  installer install --modules=auth-core,observability
+TXT;
+        exit($command === 'help' ? 0 : 1);
+}
+
+function parseInstallArgs(array $args): array
+{
+    $modules = [];
+    $envOut = '.blackcat/env.generated';
+    $runBootstrap = true;
+    $includeFeatureViews = false;
+    foreach ($args as $index => $arg) {
+        if (str_starts_with($arg, '--modules=')) {
+            $modules = explode(',', substr($arg, 10));
+        } elseif ($arg === '--modules' && isset($args[$index + 1])) {
+            $modules = explode(',', $args[$index + 1]);
+        } elseif (str_starts_with($arg, '--env-out=')) {
+            $envOut = substr($arg, 10);
+        } elseif ($arg === '--env-out' && isset($args[$index + 1])) {
+            $envOut = $args[$index + 1];
+        } elseif ($arg === '--no-env') {
+            $envOut = null;
+        } elseif ($arg === '--no-bootstrap') {
+            $runBootstrap = false;
+        } elseif ($arg === '--include-feature-views') {
+            $includeFeatureViews = true;
+        }
+    }
+    $modules = array_values(array_filter(array_map('trim', $modules)));
+    return [$modules, $envOut, $runBootstrap, $includeFeatureViews];
+}

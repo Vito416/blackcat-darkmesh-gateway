@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schemas.blackcat.dev/crypto-js-config.json",
+  "configProfile": {
+    "file": "../blackcat-config/config/profiles.php",
+    "environment": "development"
+  },
+  "envelope": {
+    "defaultContext": "pii",
+    "allowedContexts": ["pii", "secrets", "session"],
+    "metadata": {
+      "owner": "dev",
+      "region": "local"
+    }
+  },
+  "keys": {
+    "encryptionKeyFile": "${file:../blackcat-secrets/dev/crypto/encryption.key|../blackcat-crypto/var/secrets/dev.aead}",
+    "hmacSlots": {
+      "api": "${env:BLACKCAT_API_HMAC|api-dev-secret}",
+      "session": "${env:BLACKCAT_SESSION_HMAC|session-dev-secret}",
+      "email": "${file:../blackcat-secrets/dev/crypto/email.hmac|../blackcat-crypto/var/secrets/email.hmac}"
+    }
+  },
+  "telemetry": {
+    "eventsFile": "../var/log/crypto-js.ndjson",
+    "metricsFile": "../var/metrics/crypto-js.prom",
+    "observabilityBridge": "../blackcat-observability/var/crypto-js.ndjson",
+    "tailLimit": 25
+  },
+  "integrations": {
+    "blackcat-crypto": "../blackcat-crypto/bin/crypto",
+    "blackcat-cli": "../blackcat-cli/bin/blackcat",
+    "blackcat-auth": "../blackcat-auth/bin/auth",
+    "blackcat-database": "../blackcat-cli/bin/dbctl",
+    "blackcat-orchestrator": "../blackcat-orchestrator/bin/orchestrator"
+  },
+  "workflows": [
+    {
+      "id": "encrypt-pii",
+      "type": "encryption",
+      "context": "pii",
+      "payload": "ssn=123-45-6789"
+    },
+    {
+      "id": "sign-api-request",
+      "type": "signature",
+      "slot": "api",
+      "payload": "POST:/api/v1/tenants"
+    }
+  ],
+  "security": {
+    "requireTls": true,
+    "requiredIntegrations": ["blackcat-crypto", "blackcat-cli"],
+    "requireContexts": ["pii"]
+  }
+}

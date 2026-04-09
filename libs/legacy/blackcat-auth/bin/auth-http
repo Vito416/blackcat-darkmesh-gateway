@@ -1,0 +1,354 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use BlackCat\Auth\Config\AuthConfig;
+use BlackCat\Auth\DeviceCode\DatabaseDeviceCodeStore;
+use BlackCat\Auth\DeviceCode\DeviceCodeService;
+use BlackCat\Auth\Http\HttpServer;
+use BlackCat\Auth\Foundation\AuthRuntime;
+use BlackCat\Auth\Foundation\UserStoreFactory;
+use BlackCat\Auth\Identity\PlainEmailHasher;
+use BlackCat\Auth\MagicLink\DatabaseMagicLinkStore;
+use BlackCat\Auth\MagicLink\MagicLinkService;
+use BlackCat\Auth\MagicLink\MailingMagicLinkDelivery;
+use BlackCat\Auth\PasswordReset\MailingPasswordResetDelivery;
+use BlackCat\Auth\PasswordReset\PasswordResetService;
+use BlackCat\Auth\Registration\EmailVerificationService;
+use BlackCat\Auth\Registration\MailingEmailVerificationDelivery;
+use BlackCat\Auth\Registration\RegistrationService;
+use BlackCat\Auth\Session\InMemorySessionStore;
+use BlackCat\Auth\Session\SessionService;
+use BlackCat\Auth\Session\SessionStoreFactory;
+use BlackCat\Auth\Telemetry\AuthTelemetry;
+use BlackCat\Auth\WebAuthn\DatabaseWebAuthnStore;
+use BlackCat\Auth\WebAuthn\WebAuthnService;
+use BlackCat\Database\Packages\AuthEvents\AuthEventsModule;
+use BlackCat\Database\Packages\DeviceCodes\DeviceCodesModule;
+use BlackCat\Database\Packages\DeviceCodes\Repository\DeviceCodeRepository;
+use BlackCat\Database\Packages\EmailVerifications\EmailVerificationsModule;
+use BlackCat\Database\Packages\EmailVerifications\Repository\EmailVerificationRepository;
+use BlackCat\Database\Packages\LoginAttempts\LoginAttemptsModule;
+use BlackCat\Database\Packages\MagicLinks\MagicLinksModule;
+use BlackCat\Database\Packages\MagicLinks\Repository\MagicLinkRepository;
+use BlackCat\Database\Packages\Notifications\NotificationsModule;
+use BlackCat\Database\Packages\Notifications\Repository\NotificationRepository;
+use BlackCat\Database\Packages\PasswordResets\PasswordResetsModule;
+use BlackCat\Database\Packages\PasswordResets\Repository\PasswordResetRepository;
+use BlackCat\Database\Packages\RegisterEvents\RegisterEventsModule;
+use BlackCat\Database\Packages\RateLimitCounters\RateLimitCountersModule;
+use BlackCat\Database\Packages\Sessions\SessionsModule;
+use BlackCat\Database\Packages\Tenants\Repository\TenantRepository;
+use BlackCat\Database\Packages\Tenants\TenantsModule;
+use BlackCat\Database\Packages\Users\Repository\UserRepository;
+use BlackCat\Database\Packages\Users\UsersModule;
+use BlackCat\Database\Packages\VerifyEvents\Repository\VerifyEventRepository;
+use BlackCat\Database\Packages\VerifyEvents\VerifyEventsModule;
+use BlackCat\Database\Packages\WebauthnChallenges\Repository\WebauthnChallengeRepository;
+use BlackCat\Database\Packages\WebauthnChallenges\WebauthnChallengesModule;
+use BlackCat\Database\Packages\WebauthnCredentials\Repository\WebauthnCredentialRepository;
+use BlackCat\Database\Packages\WebauthnCredentials\WebauthnCredentialsModule;
+use BlackCat\Mailing\Queue\FixedTenantResolver;
+use BlackCat\Mailing\Queue\NotificationEnqueuer;
+use BlackCat\Mailing\Queue\SlugTenantResolver;
+use Psr\Log\NullLogger;
+
+$env = $_ENV + $_SERVER;
+$options = getopt('', ['port::', 'config::', 'env']);
+$envMode = array_key_exists('env', $options);
+$configPath = $options['config'] ?? $argv[1] ?? $env['BLACKCAT_AUTH_CONFIG'] ?? null;
+if (!$envMode) {
+    $configPath = $configPath ?: (__DIR__ . '/../config/example.auth.php');
+}
+
+$registration = null;
+$emailVerifications = null;
+$emailDelivery = null;
+$passwordResets = null;
+$passwordResetDelivery = null;
+$sessionService = null;
+$deviceCodeService = null;
+$magicLinkService = null;
+$webauthnService = null;
+$magicLinkDelivery = null;
+
+if (!$envMode) {
+    if (!$configPath || !is_file($configPath)) {
+        fwrite(STDERR, "Auth config file not found: " . ($configPath ?: '(null)') . "\n");
+        fwrite(STDERR, "Provide --config=... (recommended) or use --env for env-only bootstrap (dev/testing only).\n");
+        exit(1);
+    }
+
+    $runtime = AuthRuntime::fromFile($configPath, new NullLogger());
+    $config = $runtime->authConfig();
+    $provider = $runtime->userStore()->provider();
+    $telemetry = $runtime->telemetry();
+    $sessionService = $runtime->sessionService();
+    $registration = $runtime->registrationService();
+    $emailVerifications = $runtime->emailVerificationService();
+    $emailDelivery = $runtime->emailVerificationDelivery();
+    $passwordResets = $runtime->passwordResetService();
+    $passwordResetDelivery = $runtime->passwordResetDelivery();
+    $deviceCodeService = $runtime->deviceCodeService();
+    $magicLinkService = $runtime->magicLinkService();
+    $webauthnService = $runtime->webauthnService();
+    $magicLinkDelivery = $runtime->magicLinkDelivery();
+} else {
+    fwrite(STDERR, "WARNING: --env bootstrap is intended for development/testing only.\n");
+    $config = AuthConfig::fromEnv($env);
+    $telemetry = new AuthTelemetry($env['BLACKCAT_AUTH_TELEMETRY_FILE'] ?? null);
+
+    if (!empty($env['BLACKCAT_AUTH_DB_DSN'])) {
+        $foundation = [
+            'driver' => 'database',
+            'dsn' => $env['BLACKCAT_AUTH_DB_DSN'],
+            'user' => $env['BLACKCAT_AUTH_DB_USER'] ?? null,
+            'pass' => $env['BLACKCAT_AUTH_DB_PASS'] ?? null,
+            'pepper_env' => $env['BLACKCAT_AUTH_PEPPER_ENV'] ?? 'BLACKCAT_AUTH_PEPPER',
+            'ingress' => [
+                'keys_dir' => $env['BLACKCAT_KEYS_DIR'] ?? ($env['APP_KEYS_DIR'] ?? null),
+            ],
+        ];
+
+        $store = UserStoreFactory::create($foundation);
+        $provider = $store->provider();
+
+        $db = $store->db();
+        $hasher = $store->hasher();
+        if ($db && $hasher) {
+            $dialect = $db->dialect();
+            (new UsersModule())->install($db, $dialect);
+            $storeType = strtolower((string)($config->sessionStoreConfig()['type'] ?? 'memory'));
+            if ($config->sessionTtl() && in_array($storeType, ['database', 'db'], true)) {
+                (new SessionsModule())->install($db, $dialect);
+                $storeConfig = $config->sessionStoreConfig();
+                $sessionStore = $storeConfig !== []
+                    ? SessionStoreFactory::fromConfig($storeConfig, $db)
+                    : new InMemorySessionStore();
+                $sessionService = new SessionService($sessionStore, $config->sessionTtl());
+            }
+            (new TenantsModule())->install($db, $dialect);
+            (new NotificationsModule())->install($db, $dialect);
+            (new AuthEventsModule())->install($db, $dialect);
+            (new RateLimitCountersModule())->install($db, $dialect);
+            (new LoginAttemptsModule())->install($db, $dialect);
+            (new RegisterEventsModule())->install($db, $dialect);
+            (new EmailVerificationsModule())->install($db, $dialect);
+            (new VerifyEventsModule())->install($db, $dialect);
+            (new PasswordResetsModule())->install($db, $dialect);
+            (new DeviceCodesModule())->install($db, $dialect);
+
+            $emailVerifications = new EmailVerificationService(
+                $db,
+                new EmailVerificationRepository($db),
+                new UserRepository($db),
+                new VerifyEventRepository($db),
+                $config->emailVerificationTtl(),
+            );
+            $registration = new RegistrationService(
+                $db,
+                new UserRepository($db),
+                $hasher,
+                new PlainEmailHasher(),
+                $emailVerifications,
+                $config->requireEmailVerification(),
+                $config->passwordMinLength(),
+            );
+
+            $passwordResets = new PasswordResetService(
+                $db,
+                new PasswordResetRepository($db),
+                new UserRepository($db),
+                $hasher,
+                new PlainEmailHasher(),
+                $config->passwordResetTtl(),
+                $config->passwordMinLength(),
+            );
+
+            // Mailing is optional; if configured, we enqueue notifications and the worker sends them via SMTP.
+            $tenantId = isset($env['BLACKCAT_AUTH_MAILING_TENANT_ID']) ? (int)$env['BLACKCAT_AUTH_MAILING_TENANT_ID'] : 0;
+            $tenantSlug = trim((string)($env['BLACKCAT_AUTH_MAILING_TENANT_SLUG'] ?? 'default'));
+            $tenantName = trim((string)($env['BLACKCAT_AUTH_MAILING_TENANT_NAME'] ?? 'Default tenant'));
+            $autoRaw = strtolower(trim((string)($env['BLACKCAT_AUTH_MAILING_TENANT_AUTO_CREATE'] ?? '1')));
+            $autoCreate = !in_array($autoRaw, ['0', 'false', 'no', 'off'], true);
+
+            $tenantResolver = $tenantId > 0
+                ? new FixedTenantResolver($tenantId)
+                : new SlugTenantResolver(new TenantRepository($db), $tenantSlug !== '' ? $tenantSlug : 'default', $tenantName !== '' ? $tenantName : 'Default tenant', $autoCreate);
+
+            $queue = new NotificationEnqueuer($db, new NotificationRepository($db), $tenantResolver);
+            $passwordResetDelivery = new MailingPasswordResetDelivery($queue, 'reset_password', 10, $config->issuer());
+
+            if ($config->requireEmailVerification()) {
+                $tenantId = isset($env['BLACKCAT_AUTH_MAILING_TENANT_ID']) ? (int)$env['BLACKCAT_AUTH_MAILING_TENANT_ID'] : 0;
+                $tenantSlug = trim((string)($env['BLACKCAT_AUTH_MAILING_TENANT_SLUG'] ?? 'default'));
+                $tenantName = trim((string)($env['BLACKCAT_AUTH_MAILING_TENANT_NAME'] ?? 'Default tenant'));
+                $autoRaw = strtolower(trim((string)($env['BLACKCAT_AUTH_MAILING_TENANT_AUTO_CREATE'] ?? '1')));
+                $autoCreate = !in_array($autoRaw, ['0', 'false', 'no', 'off'], true);
+
+                $tenantResolver = $tenantId > 0
+                    ? new FixedTenantResolver($tenantId)
+                    : new SlugTenantResolver(new TenantRepository($db), $tenantSlug !== '' ? $tenantSlug : 'default', $tenantName !== '' ? $tenantName : 'Default tenant', $autoCreate);
+
+                $queue = new NotificationEnqueuer($db, new NotificationRepository($db), $tenantResolver);
+                $emailDelivery = new MailingEmailVerificationDelivery($queue, 'verify_email', 10, $config->issuer());
+            }
+
+            // Stage 3: DB-backed device codes / magic-links / webauthn
+            $deviceCodeService = new DeviceCodeService(
+                new DatabaseDeviceCodeStore($db, new DeviceCodeRepository($db)),
+                rtrim($config->publicBaseUrl(), '/') . '/device/activate',
+            );
+
+            if ($config->magicLinkTtl()) {
+                (new MagicLinksModule())->install($db, $dialect);
+                $magicLinkService = new MagicLinkService(
+                    new DatabaseMagicLinkStore($db, new MagicLinkRepository($db)),
+                    $config->magicLinkTtl(),
+                    $config->magicLinkUrl(),
+                    $config->signingKey()
+                );
+            }
+
+            if ($config->webauthnRpId()) {
+                (new WebauthnCredentialsModule())->install($db, $dialect);
+                (new WebauthnChallengesModule())->install($db, $dialect);
+                $webauthnStore = new DatabaseWebAuthnStore(
+                    $db,
+                    $config->webauthnRpId(),
+                    new WebauthnCredentialRepository($db),
+                    new WebauthnChallengeRepository($db),
+                    $config->webauthnChallengeTtlSec(),
+                );
+                $webauthnService = new WebAuthnService(
+                    $webauthnStore,
+                    $config->webauthnRpId(),
+                    $config->webauthnRpName() ?? 'BlackCat Auth'
+                );
+            }
+
+            if ($config->magicLinkTtl()) {
+                $tenantId = isset($env['BLACKCAT_AUTH_MAILING_TENANT_ID']) ? (int)$env['BLACKCAT_AUTH_MAILING_TENANT_ID'] : 0;
+                $tenantSlug = trim((string)($env['BLACKCAT_AUTH_MAILING_TENANT_SLUG'] ?? 'default'));
+                $tenantName = trim((string)($env['BLACKCAT_AUTH_MAILING_TENANT_NAME'] ?? 'Default tenant'));
+                $autoRaw = strtolower(trim((string)($env['BLACKCAT_AUTH_MAILING_TENANT_AUTO_CREATE'] ?? '1')));
+                $autoCreate = !in_array($autoRaw, ['0', 'false', 'no', 'off'], true);
+
+                $tenantResolver = $tenantId > 0
+                    ? new FixedTenantResolver($tenantId)
+                    : new SlugTenantResolver(new TenantRepository($db), $tenantSlug !== '' ? $tenantSlug : 'default', $tenantName !== '' ? $tenantName : 'Default tenant', $autoCreate);
+
+                $queue = new NotificationEnqueuer($db, new NotificationRepository($db), $tenantResolver);
+                $magicLinkDelivery = new MailingMagicLinkDelivery($queue, 'magic_link', 10, $config->issuer());
+            }
+        }
+    } else {
+        $provider = bootstrapProvider($env);
+    }
+}
+
+$server = HttpServer::bootstrap(
+    $config,
+    $provider,
+    new NullLogger(),
+    sessionService: $sessionService,
+    deviceCodeService: $deviceCodeService,
+    magicLinkService: $magicLinkService,
+    webauthnService: $webauthnService,
+    magicLinkDelivery: $magicLinkDelivery,
+    telemetry: $telemetry,
+    registrationService: $registration,
+    emailVerificationService: $emailVerifications,
+    emailVerificationDelivery: $emailDelivery,
+    passwordResetService: $passwordResets,
+    passwordResetDelivery: $passwordResetDelivery,
+);
+
+$port = isset($options['port']) ? (int)$options['port'] : (int)($env['BLACKCAT_AUTH_HTTP_PORT'] ?? 8082);
+$socket = stream_socket_server('tcp://0.0.0.0:' . $port, $errno, $errstr);
+if (!$socket) {
+    fwrite(STDERR, "Unable to bind port {$port}: {$errstr}\n");
+    exit(1);
+}
+fwrite(STDOUT, "BlackCat Auth HTTP listening on :{$port}\n");
+while ($conn = @stream_socket_accept($socket)) {
+    $peer = @stream_socket_get_name($conn, true);
+    if (is_string($peer) && $peer !== '' && preg_match('~^(.*):([0-9]+)$~', $peer, $m) === 1) {
+        $ip = trim((string)$m[1], '[]');
+        if ($ip !== '') {
+            $_SERVER['REMOTE_ADDR'] = $ip;
+        }
+    }
+    $request = stream_get_contents($conn) ?: '';
+    $response = $server->handle(parseRequest($request));
+    $body = json_encode($response['body'], JSON_UNESCAPED_SLASHES);
+    $status = $response['status'] ?? 200;
+    $statusText = $status === 200 ? 'OK' : ($status === 401 ? 'Unauthorized' : 'Error');
+    $headers = array_merge([
+        "HTTP/1.1 {$status} {$statusText}",
+        'Content-Type: application/json',
+        'Content-Length: ' . strlen($body),
+        'Connection: close',
+    ], $response['headers'] ?? []);
+    fwrite($conn, implode("\r\n", $headers) . "\r\n\r\n" . $body);
+    fclose($conn);
+}
+
+function bootstrapProvider(array $env): \BlackCat\Auth\Identity\IdentityProviderInterface
+{
+    if (!empty($env['BLACKCAT_AUTH_DB_DSN'])) {
+        $foundation = [
+            'driver' => 'database',
+            'dsn' => $env['BLACKCAT_AUTH_DB_DSN'],
+            'user' => $env['BLACKCAT_AUTH_DB_USER'] ?? null,
+            'pass' => $env['BLACKCAT_AUTH_DB_PASS'] ?? null,
+            'pepper_env' => $env['BLACKCAT_AUTH_PEPPER_ENV'] ?? 'BLACKCAT_AUTH_PEPPER',
+            'ingress' => [
+                'keys_dir' => $env['BLACKCAT_KEYS_DIR'] ?? ($env['APP_KEYS_DIR'] ?? null),
+            ],
+        ];
+        return UserStoreFactory::create($foundation)->provider();
+    }
+    $users = json_decode($env['BLACKCAT_AUTH_USERS'] ?? '[]', true) ?: [
+        ['id' => 'demo', 'email' => 'admin@example.com', 'password' => 'secret', 'roles' => ['admin']],
+    ];
+    return new \BlackCat\Auth\Identity\ArrayUserProvider($users);
+}
+
+/**
+ * @return array{method:string,path:string,query:array<string,string>,headers:array<string,string>,body:array<string,mixed>}
+ */
+function parseRequest(string $raw): array
+{
+    $segments = explode("\r\n\r\n", $raw, 2);
+    $head = $segments[0] ?? '';
+    $bodyRaw = $segments[1] ?? '';
+    $lines = explode("\r\n", $head);
+    $requestLine = array_shift($lines);
+    [$method, $target] = array_pad(explode(' ', (string)$requestLine), 2, '');
+    $parsedUrl = parse_url($target ?? '/');
+    $path = $parsedUrl['path'] ?? '/';
+    $query = [];
+    if (!empty($parsedUrl['query'])) {
+        parse_str($parsedUrl['query'], $query);
+    }
+    $headers = [];
+    foreach ($lines as $line) {
+        if (strpos($line, ':') === false) {
+            continue;
+        }
+        [$name, $value] = explode(':', $line, 2);
+        $headers[trim($name)] = trim($value);
+    }
+    $body = json_decode($bodyRaw, true) ?: [];
+    $method = strtoupper($method ?: 'GET');
+    return [
+        'method' => strtoupper($method ?: 'GET'),
+        'path' => $path,
+        'query' => $query,
+        'headers' => $headers,
+        'body' => $body,
+    ];
+}

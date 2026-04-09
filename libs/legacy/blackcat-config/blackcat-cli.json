@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "component": {
+    "id": "blackcat-config",
+    "name": "BlackCat Config",
+    "description": "Secure configuration hub/layer for the BlackCat ecosystem (profiles, hardening checks, compatible config sources).",
+    "homepage": "https://github.com/blackcatacademy/blackcat-config",
+    "composer_package": "blackcatacademy/blackcat-config"
+  },
+  "cli": {
+    "entrypoints": [
+      {
+        "id": "config",
+        "command": "config",
+        "summary": "Runtime config, profiles, and hardening tools.",
+        "type": "builtin"
+      }
+    ]
+  }
+}

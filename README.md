@@ -9,6 +9,11 @@ Purpose
 - Holds only time‑bounded encrypted envelopes needed to deliver emails/webhooks; never stores long‑term PII.
 - Webhook ingress (Stripe/PayPal) with signature verification, optional HMAC secret, and metrics.
 
+Consolidation status
+- Gateway is the active integration target for legacy backend modules.
+- Imported migration snapshots live in `libs/legacy/` (see `libs/legacy/README.md` and `libs/legacy/MANIFEST.md`).
+- Template code remains intentionally separate in `blackcat-templates`; gateway enforces controlled backend access for deployed templates.
+
 Key responsibilities
 - Fetch + cache site front-end from Arweave (verified via manifest of trusted templates).
 - API surface to browser: cart/checkout/session endpoints that forward to Write AO.
@@ -133,6 +138,10 @@ Open items to design/implement
   - `BACKLOG.md`
   - `DECOMMISSION_CHECKLIST.md`
 - Temporary upstream references are stored in `kernel-migration/upstream/` to avoid losing design/security context during the port.
+
+## Template security model
+- Guardrails for the custom backend model are documented in `libs/legacy/TEMPLATE_BACKEND_GUARDRAILS.md`.
+- High-level rule: templates can call only declared gateway APIs; they do not get direct data-store or secret access.
 
 ## Releases
 - Release drafts are created from main; see the latest draft and published tags in [Releases](https://github.com/Vito416/blackcat-darkmesh-gateway/releases).
