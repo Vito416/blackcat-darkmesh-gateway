@@ -264,4 +264,35 @@ describe('integrity policy gate', () => {
     expect(state.counters.gateway_integrity_snapshot_fetch_fail).toBeGreaterThanOrEqual(1)
     expect(state.counters.gateway_integrity_checkpoint_restore).toBeGreaterThanOrEqual(1)
   })
+
+  it('ignores checkpoint files when explicit diskless mode is enabled', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'gateway-integrity-checkpoint-'))
+    const checkpointPath = join(dir, 'checkpoint.json')
+    await writeIntegrityCheckpoint(makeIntegritySnapshot(true), checkpointPath, 'checkpoint-secret')
+
+    process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '0'
+    process.env.GATEWAY_INTEGRITY_DISKLESS = '1'
+    process.env.GATEWAY_INTEGRITY_CHECKPOINT_PATH = checkpointPath
+    process.env.GATEWAY_INTEGRITY_CHECKPOINT_SECRET = 'checkpoint-secret'
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.WRITE_API_URL = 'https://write.example'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url === process.env.AO_INTEGRITY_URL) {
+        throw new Error('ao unavailable')
+      }
+      return new Response('ok', { status: 200 })
+    })
+
+    const { handleRequest } = await loadHandler()
+    const res = await handleRequest(makeTemplateWriteRequest())
+
+    expect(res.status).toBe(200)
+    expect(fetchSpy).toHaveBeenCalled()
+    const state = snapshot()
+    expect(state.gauges.gateway_integrity_policy_paused).toBe(0)
+    expect(state.counters.gateway_integrity_snapshot_fetch_fail).toBeGreaterThanOrEqual(1)
+    expect(state.counters.gateway_integrity_checkpoint_restore || 0).toBe(0)
+  })
 })

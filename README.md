@@ -145,6 +145,9 @@ When `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1`, cache PUT requests must inclu
 - `x-integrity-root` (trusted root reference)
 - `x-integrity-hash` (sha256 hex of the uploaded body)
 
+When cache admission limits are exceeded, cache PUT returns:
+- `507 {"error":"cache_budget_exceeded"}`
+
 ## Security hardening (to implement)
 - Strict CSP/COOP for served templates; SRI for all static assets.
 - HMAC on browser→gateway API calls (optional) to deter tampering between CDN hops.
@@ -191,6 +194,7 @@ When `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1`, cache PUT requests must inclu
 
 ### Quick test commands
 - Unit + integration: `npm test`
+- Resource hardening lane: `npm run test:hardening`
 - Metrics auth smoke: `npm test -- --run tests/metrics-auth.test.ts`
 - Webhook pen-tests: `npm test -- --run tests/webhook-pentest.test.ts`
 - Bez lokálního Node: `docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm test -- --run tests/webhook-pentest.test.ts"`

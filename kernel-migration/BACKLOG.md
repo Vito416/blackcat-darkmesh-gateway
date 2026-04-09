@@ -12,11 +12,11 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - [x] P0.4 Migration parity tests
 - [~] P1.1 Authority separation and rotation workflow (gateway role-aware signature-ref gate + runbook landed; AO-side final authority lifecycle remains)
 - [~] P1.2 Audit commitments stream (gateway audit seq/lag metrics landed; AO-side commitment sequencing integration still pending)
-- [~] P1.3 Signed local checkpoint (gateway) (signed envelope metadata + max-age fail-closed restore landed; diskless production profiling remains)
+- [x] P1.3 Signed local checkpoint (gateway)
 - [~] P1.4 Incident/reporting hooks (incident/state endpoints + metrics + tests landed; operator automation/runbook hardening remains)
 - [~] P2.1 Verification scheduling optimizations (integrity fetch timeout/retry controls landed; startup/cache-fill cadence tuning remains)
 - [~] P2.2 Resource budgets and limits (cache/ratelimit/replay bounds + stress tests landed; final production thresholds remain)
-- [~] P2.3 Optional diskless mode (memory-only checkpoint mode landed; constrained-host profile validation remains)
+- [x] P2.3 Optional diskless mode
 
 ## P0 - Mandatory before kernel repo retirement
 
@@ -142,6 +142,7 @@ Progress notes:
   - `GATEWAY_INTEGRITY_DISKLESS=1`, or
   - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless|disabled|memory-only`
 - In memory-only mode checkpoint read/write paths no-op safely (AO + env fallback remain active).
+- Integration coverage includes diskless mode behavior when AO is unavailable (`tests/integrity-policy-gate.test.ts`).
 
 ## P3 - Nice-to-have / ecosystem scale
 
