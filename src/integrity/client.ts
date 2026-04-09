@@ -140,7 +140,26 @@ function parseAudit(raw: unknown): IntegrityAuditRecord {
   }
 }
 
+function unwrapSnapshot(raw: unknown): unknown {
+  if (!isObject(raw)) return raw
+
+  const status = typeof raw.status === 'string' ? raw.status : ''
+  if (!status) return raw
+
+  if (status === 'OK') {
+    if (!('payload' in raw)) return raw
+    return raw.payload
+  }
+  if (status === 'ERROR') {
+    const code = typeof raw.code === 'string' ? raw.code : 'upstream_error'
+    const message = typeof raw.message === 'string' ? raw.message : 'upstream returned error envelope'
+    throw new IntegritySnapshotError('integrity_fetch_failed', `${code}:${message}`)
+  }
+  return raw
+}
+
 function parseSnapshot(raw: unknown): IntegritySnapshot {
+  raw = unwrapSnapshot(raw)
   if (!isObject(raw)) {
     throw new IntegritySnapshotError('integrity_invalid_snapshot', 'snapshot must be a JSON object')
   }
@@ -184,4 +203,3 @@ export async function fetchIntegritySnapshot(opts: FetchIntegritySnapshotOptions
 
   return parseSnapshot(raw as SnapshotInput)
 }
-

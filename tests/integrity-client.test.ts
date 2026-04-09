@@ -64,6 +64,47 @@ describe('integrity snapshot client', () => {
     expect(snapshot.authority.signatureRefs).toEqual(['sig-root', 'sig-upgrade'])
   })
 
+  it('accepts AO codec envelope responses and unwraps payload', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 'OK',
+          payload: validSnapshot(),
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+    )
+
+    const snapshot = await fetchIntegritySnapshot()
+    expect(snapshot.release.root).toBe('root-abc')
+    expect(snapshot.policy.activePolicyHash).toBe('policy-789')
+  })
+
+  it('fails on AO codec error envelopes', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 'ERROR',
+          code: 'NOT_FOUND',
+          message: 'Active trusted release is not set',
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+    )
+
+    await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
+      code: 'integrity_fetch_failed',
+    })
+  })
+
   it('fails closed when active root is missing', async () => {
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     const broken = validSnapshot()
@@ -131,4 +172,3 @@ describe('integrity snapshot client', () => {
     }
   })
 })
-
