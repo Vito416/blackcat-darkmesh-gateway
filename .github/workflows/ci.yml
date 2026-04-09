@@ -23,16 +23,10 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
-      - name: Build
-        run: npm run build
-      - name: Integrity/resource hardening
-        run: npm run test:hardening
-      - name: Integrity parity
-        run: npm test -- --run tests/integrity-*.test.ts
+      - name: Integrity gate
+        run: npm run test:integrity-gate
       - name: Unit + metrics auth
         run: npm test -- --run tests/metrics-auth.test.ts
-      - name: Webhook pen-tests
-        run: npm test -- --run tests/webhook-pentest.test.ts
 
   smoke:
     runs-on: ubuntu-24.04
@@ -48,8 +42,8 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
-      - name: Integrity parity
-        run: npm test -- --run tests/integrity-*.test.ts
+      - name: Integrity gate
+        run: npm run test:integrity-gate
       - name: Test (full suite)
         run: npm test
       - name: PSP smoke (built dist)
