@@ -122,6 +122,59 @@ describe('integrity incident and state endpoints', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('enforces signature-ref role policy for incident actions when enabled', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF = '1'
+    process.env.GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS = 'sig-emergency-v1,sig-emergency-v2'
+
+    const { handleRequest } = await loadHandler()
+
+    const denied = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-freeze', action: 'pause', severity: 'critical' },
+        { 'x-incident-token': 'incident-secret', 'x-signature-ref': 'sig-reporter-v1' },
+      ),
+    )
+    expect(denied.status).toBe(403)
+    await expect(denied.json()).resolves.toEqual({ error: 'forbidden_signature_ref' })
+
+    const allowed = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-freeze', action: 'pause', severity: 'critical' },
+        { 'x-incident-token': 'incident-secret', 'x-signature-ref': 'sig-emergency-v2' },
+      ),
+    )
+    expect(allowed.status).toBe(200)
+    await expect(allowed.json()).resolves.toMatchObject({ ok: true, action: 'pause' })
+
+    const metrics = snapshot()
+    expect(metrics.counters.gateway_integrity_incident_role_blocked).toBe(1)
+  })
+
+  it('allows snapshot authority refs for role-gated incident actions', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF = '1'
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    process.env.GATEWAY_INTEGRITY_CACHE_TTL_MS = '60000'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(makeIntegritySnapshot(false)), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const { handleRequest } = await loadHandler()
+    const res = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-freeze', action: 'pause', severity: 'critical' },
+        { 'x-incident-token': 'incident-secret', 'x-signature-ref': 'sig-emergency' },
+      ),
+    )
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toMatchObject({ ok: true, action: 'pause' })
+  })
+
   it('requires incident auth token and validates incident payload', async () => {
     const { handleRequest } = await loadHandler()
 
@@ -235,5 +288,21 @@ describe('integrity incident and state endpoints', () => {
     expect(res.status).toBe(502)
     await expect(res.json()).resolves.toEqual({ error: 'incident_notify_failed', status: 503 })
     expect(snapshot().counters.gateway_integrity_incident_notify_fail).toBe(1)
+  })
+
+  it('returns 500 when signature-ref enforcement is enabled but no refs are configured', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF = '1'
+
+    const { handleRequest } = await loadHandler()
+    const res = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-freeze', action: 'pause', severity: 'critical' },
+        { 'x-incident-token': 'incident-secret', 'x-signature-ref': 'sig-any' },
+      ),
+    )
+
+    expect(res.status).toBe(500)
+    await expect(res.json()).resolves.toEqual({ error: 'incident_ref_policy_not_configured' })
   })
 })

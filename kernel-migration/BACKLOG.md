@@ -10,7 +10,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - [~] P0.2 Gateway artifact verifier (core verifier + cache enforcement landed; AO release-root parity still pending)
 - [~] P0.3 Policy pause + degraded mode (runtime gate landed; checkpoint restore/fallback coverage expanded)
 - [x] P0.4 Migration parity tests
-- [ ] P1.1 Authority separation and rotation workflow
+- [~] P1.1 Authority separation and rotation workflow (gateway role-aware signature-ref gate + runbook landed; AO-side final authority lifecycle remains)
 - [ ] P1.2 Audit commitments stream
 - [ ] P1.3 Signed local checkpoint (gateway)
 - [~] P1.4 Incident/reporting hooks (incident/state endpoints + metrics + tests landed; operator automation/runbook hardening remains)
@@ -70,6 +70,11 @@ Acceptance:
 - Model `root/upgrade/emergency/reporter` authority set in AO state.
 - Add rotatable signer references and migration-safe key update flow.
 - Add explicit key-rotation runbook and tests.
+
+Progress notes:
+- Gateway incident actions can enforce role-aware `signatureRef` (`pause/resume` -> emergency/root; `ack/report` -> reporter/emergency/root).
+- Authorization refs are sourced from AO snapshot authority and can be safely overlapped via `GATEWAY_INTEGRITY_ROLE_*_REFS` during rotation windows.
+- Operator runbook added: `ops/integrity-runbook.md`.
 
 ### P1.2 Audit commitments stream
 - Implement AO audit commitment entries (`seqFrom/seqTo/merkleRoot/metaHash`).

@@ -25,6 +25,9 @@ describe('metrics exporter', () => {
   it('includes integrity incident/state metric descriptors', () => {
     const prom = toProm()
     expect(prom).toContain('# HELP gateway_integrity_incident_total Integrity incidents accepted by gateway')
+    expect(prom).toContain(
+      '# HELP gateway_integrity_incident_role_blocked_total Integrity incident requests blocked by signature-ref role policy',
+    )
     expect(prom).toContain('# HELP gateway_integrity_state_read_total Integrity state read requests served')
     expect(prom).toContain('# HELP gateway_integrity_state_auth_blocked_total Integrity state requests blocked by auth')
   })

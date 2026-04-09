@@ -15,11 +15,18 @@ type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
 type IntegrityPolicyState = { paused: boolean; source: 'env' | 'ao' | 'checkpoint' }
 type IntegrityContext = { state: IntegrityPolicyState; snapshot: IntegritySnapshot | null }
 type IntegrityIncidentSeverity = 'low' | 'medium' | 'high' | 'critical'
+type IntegrityRole = 'root' | 'upgrade' | 'emergency' | 'reporter'
 
 const templateReadActions = new Set(['public.resolve-route', 'public.get-page'])
 const templateWriteActions = new Set(['checkout.create-order', 'checkout.create-payment-intent'])
 const incidentSeverities = new Set<IntegrityIncidentSeverity>(['low', 'medium', 'high', 'critical'])
 const INTEGRITY_CACHE_DEFAULT_TTL_MS = 10_000
+const incidentActionRoles: Record<string, IntegrityRole[]> = {
+  report: ['reporter', 'emergency', 'root'],
+  ack: ['reporter', 'emergency', 'root'],
+  pause: ['emergency', 'root'],
+  resume: ['emergency', 'root'],
+}
 
 type IntegrityRuntimeCache = {
   expiresAt: number
@@ -146,6 +153,55 @@ function checkToken(request: Request, expectedToken: string, headerName: string)
   const bearer = readBearerToken(request)
   const header = readHeaderToken(request, headerName)
   return tokenEquals(expectedToken, bearer) || tokenEquals(expectedToken, header)
+}
+
+function splitRefsCsv(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+}
+
+function readIncidentSignatureRef(req: Request, body: unknown): string {
+  const customHeaderName = (process.env.GATEWAY_INTEGRITY_INCIDENT_REF_HEADER || 'x-signature-ref').trim()
+  const headerRef = customHeaderName ? readHeaderToken(req, customHeaderName) : ''
+  if (headerRef) return headerRef
+  if (body && typeof body === 'object' && typeof (body as any).signatureRef === 'string') {
+    return (body as any).signatureRef.trim()
+  }
+  return ''
+}
+
+function readRoleRefsFromEnv(role: IntegrityRole): string[] {
+  const envByRole: Record<IntegrityRole, string> = {
+    root: process.env.GATEWAY_INTEGRITY_ROLE_ROOT_REFS || '',
+    upgrade: process.env.GATEWAY_INTEGRITY_ROLE_UPGRADE_REFS || '',
+    emergency: process.env.GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS || '',
+    reporter: process.env.GATEWAY_INTEGRITY_ROLE_REPORTER_REFS || '',
+  }
+  return splitRefsCsv(envByRole[role])
+}
+
+function collectRoleRefs(role: IntegrityRole, integrity: IntegrityContext): string[] {
+  const refs = new Set<string>()
+  const authority = integrity.snapshot?.authority
+  const roleRef = authority?.[role]
+  if (typeof roleRef === 'string' && roleRef.trim()) {
+    refs.add(roleRef.trim())
+  }
+  for (const ref of readRoleRefsFromEnv(role)) {
+    refs.add(ref)
+  }
+  return [...refs]
+}
+
+function collectAllowedIncidentRefs(action: string, integrity: IntegrityContext): { roles: IntegrityRole[]; refs: string[] } {
+  const roles = incidentActionRoles[action] || []
+  const refs = new Set<string>()
+  for (const role of roles) {
+    for (const ref of collectRoleRefs(role, integrity)) refs.add(ref)
+  }
+  return { roles, refs: [...refs] }
 }
 
 function recordWebhook5xx(provider: WebhookProvider) {
@@ -347,7 +403,7 @@ async function handleIntegrityState(req: Request, integrity: IntegrityContext): 
   })
 }
 
-async function handleIntegrityIncident(req: Request): Promise<Response> {
+async function handleIntegrityIncident(req: Request, integrity: IntegrityContext): Promise<Response> {
   if (req.method !== 'POST') return new Response('method', { status: 405 })
 
   const token = process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN || ''
@@ -402,6 +458,23 @@ async function handleIntegrityIncident(req: Request): Promise<Response> {
       status: 400,
       headers: { 'content-type': 'application/json' },
     })
+  }
+  if (process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF === '1') {
+    const { roles, refs } = collectAllowedIncidentRefs(action, integrity)
+    if (roles.length === 0 || refs.length === 0) {
+      return new Response(JSON.stringify({ error: 'incident_ref_policy_not_configured' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    const presentedRef = readIncidentSignatureRef(req, body)
+    if (!presentedRef || !refs.includes(presentedRef)) {
+      inc('gateway_integrity_incident_role_blocked')
+      return new Response(JSON.stringify({ error: 'forbidden_signature_ref' }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
   }
   if (providedIncidentId && providedIncidentId.length > 128) {
     return new Response(JSON.stringify({ error: 'invalid_incident_id' }), {
@@ -489,7 +562,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     return handleIntegrityState(request, integrity)
   }
   if (url.pathname === '/integrity/incident') {
-    return handleIntegrityIncident(request)
+    return handleIntegrityIncident(request, integrity)
   }
 
   if (url.pathname.startsWith('/cache/forget')) {

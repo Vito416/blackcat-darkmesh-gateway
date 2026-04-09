@@ -44,6 +44,7 @@ const help: Record<string, string> = {
   gateway_integrity_checkpoint_restore_total: 'Integrity state restored from signed local checkpoint',
   gateway_integrity_incident_total: 'Integrity incidents accepted by gateway',
   gateway_integrity_incident_auth_blocked_total: 'Integrity incident requests blocked by auth',
+  gateway_integrity_incident_role_blocked_total: 'Integrity incident requests blocked by signature-ref role policy',
   gateway_integrity_state_auth_blocked_total: 'Integrity state requests blocked by auth',
   gateway_integrity_incident_notify_ok_total: 'Integrity incident notifications forwarded successfully',
   gateway_integrity_incident_notify_fail_total: 'Integrity incident notification forwarding failures',

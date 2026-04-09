@@ -65,6 +65,9 @@ Configuration (per site)
   - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_URL` (optional incident forward target)
   - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_TOKEN` (optional Bearer token for incident forwarding)
   - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_HMAC` (optional HMAC secret; sent as `x-signature`)
+  - `GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF=1` (optional secondary auth gate based on authority signature refs)
+  - `GATEWAY_INTEGRITY_INCIDENT_REF_HEADER` (default `x-signature-ref`; can carry signer ref in header)
+  - `GATEWAY_INTEGRITY_ROLE_ROOT_REFS` / `GATEWAY_INTEGRITY_ROLE_UPGRADE_REFS` / `GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS` / `GATEWAY_INTEGRITY_ROLE_REPORTER_REFS` (comma lists for rotation windows and AO bootstrap fallback)
 - Template custom-backend guardrails:
   - `GATEWAY_TEMPLATE_TOKEN` (optional shared token required on `/template/call`)
   - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1` (default is read-only; write actions blocked unless enabled)
@@ -148,9 +151,17 @@ When `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1`, cache PUT requests must inclu
 - Resume normal mode: `POST /integrity/incident` with `{ "event": "...", "action": "resume" }`.
 - Acknowledge/report without pause toggle: `action: "ack"` or `action: "report"`.
 - Read current state: `GET /integrity/state` (returns policy source, pause status, active root/policy hash, release/authority/audit envelope).
+- Optional role-aware gate:
+  - enable `GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF=1`
+  - send signer reference via `x-signature-ref` (or body `signatureRef`)
+  - required roles by action:
+    - `pause`/`resume`: `emergency` or `root`
+    - `ack`/`report`: `reporter`, `emergency`, or `root`
+  - refs come from AO snapshot authority plus local rotation overlays in `GATEWAY_INTEGRITY_ROLE_*_REFS`.
 - Metrics to watch:
   - `gateway_integrity_incident_total`
   - `gateway_integrity_incident_auth_blocked_total`
+  - `gateway_integrity_incident_role_blocked_total`
   - `gateway_integrity_incident_notify_ok_total`
   - `gateway_integrity_incident_notify_fail_total`
   - `gateway_integrity_state_read_total`
