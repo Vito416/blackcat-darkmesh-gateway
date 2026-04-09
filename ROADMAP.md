@@ -14,6 +14,15 @@
 - CSP/SRI/COOP headers and asset hash pinning.
 - Replay defense on webhooks; HMAC on browser API (optional).
 
+## Immediate next sprint
+- Finish AO registry contract actions for publish/revoke/query/pause state.
+- Finalize AO-side authority lifecycle for `root/upgrade/emergency/reporter` and record one clean rotation drill.
+- Wire the AO audit commitment sequence/query path so gateway metrics map to immutable AO entries.
+- Port the remaining parity scenarios into CI: upgrade activation/cancel, compatibility rollback, revoked root, stale state.
+- Close the last decommission evidence gaps: recovery drill timestamps, AO outage fallback drill, rollback proof.
+- Add a small staging smoke for the incident/control path using the new helper and keep it in the CI gate.
+- Review the release notes and docs for the final `1.4.0`/migration cut so the old kernel repo can be retired cleanly.
+
 ## Phase 3 – Multi-tenant & Config
 - Per-merchant config service (template txid, TTLs, PSP creds) with hot-reload.
 - Admission control for envelopes (size/quota).

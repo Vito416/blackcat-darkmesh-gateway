@@ -31,10 +31,12 @@ describe('integrity policy gate', () => {
     return import('../src/handler.js')
   }
 
-  function makeTemplateWriteRequest() {
+  function makeTemplateWriteRequest(token?: string) {
+    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    if (token) headers['x-template-token'] = token
     return new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify({
         action: 'checkout.create-order',
         payload: { siteId: 'site-1', items: [{ sku: 'sku-1', qty: 1 }] },
@@ -175,6 +177,24 @@ describe('integrity policy gate', () => {
     const state = snapshot()
     expect(state.gauges.gateway_integrity_policy_paused).toBe(0)
     expect(state.counters.gateway_integrity_unverified_block || 0).toBe(0)
+  })
+
+  it('requires the template token and accepts the matching value', async () => {
+    process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '0'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'template-secret'
+    process.env.WRITE_API_URL = 'https://write.example'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+    const { handleRequest } = await loadHandler()
+
+    const badRes = await handleRequest(makeTemplateWriteRequest('wrong-secret'))
+    expect(badRes.status).toBe(401)
+    await expect(badRes.json()).resolves.toEqual({ error: 'unauthorized' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    const goodRes = await handleRequest(makeTemplateWriteRequest('template-secret'))
+    expect(goodRes.status).toBe(200)
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 
   it('falls back to the env flag when policy JSON is malformed', async () => {

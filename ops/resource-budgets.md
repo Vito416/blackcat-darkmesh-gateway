@@ -14,6 +14,9 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_RL_MAX_BUCKETS=3000`
 - `GATEWAY_WEBHOOK_REPLAY_TTL_MS=600000`
 - `GATEWAY_WEBHOOK_REPLAY_MAX_KEYS=3000`
+- `GW_CERT_CACHE_TTL_MS=1800000`
+- `GW_CERT_CACHE_MAX_SIZE=128`
+- `GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES=2048`
 - `AO_INTEGRITY_FETCH_TIMEOUT_MS=4000`
 - `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS=2`
 - `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS=75`
@@ -31,6 +34,9 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_RL_MAX_BUCKETS=10000`
 - `GATEWAY_WEBHOOK_REPLAY_TTL_MS=600000`
 - `GATEWAY_WEBHOOK_REPLAY_MAX_KEYS=10000`
+- `GW_CERT_CACHE_TTL_MS=21600000`
+- `GW_CERT_CACHE_MAX_SIZE=256`
+- `GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES=4096`
 - `AO_INTEGRITY_FETCH_TIMEOUT_MS=5000`
 - `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS=3`
 - `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS=100`
@@ -44,6 +50,16 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`
 - Keep incident replay dedupe bounded (`GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP`) to avoid memory growth on long-lived shared hosts.
 - Keep the rest aligned to Profile A or B.
+
+## Webhook verification budget
+- `GW_CERT_CACHE_TTL_MS` is clamped in code to a sane window, so prefer the profile defaults unless you have a measured PSP rotation reason to deviate.
+- `GW_CERT_CACHE_MAX_SIZE` should stay small on shared hosts; large values only make sense when you expect high certificate churn across many tenants.
+- `GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES` bounds Stripe header parsing so malformed header bombs fail closed before they can burn CPU.
+- For production, combine the cache budget with:
+  - `PAYPAL_CERT_ALLOW_PREFIXES` for explicit cert URL allowlisting
+  - `GW_CERT_PIN_SHA256` for pinned PSP cert fingerprints
+- Stripe signature headers are also bounded in code; if you are seeing rejection here, inspect the sender rather than relaxing the cap.
+- Diskless hosts should keep the webhook cache conservative and prefer shorter TTLs only when provider retry windows require it.
 
 ## Fetch/retry precedence
 - Integrity fetch cadence is resolved in this order:

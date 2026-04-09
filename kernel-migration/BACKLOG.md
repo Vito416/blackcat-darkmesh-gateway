@@ -6,6 +6,8 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 - Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 
+- Gateway-side implementation is largely complete for the current migration slice; the remaining blockers are mostly AO-side registry/authority lifecycle work and the final decommission evidence.
+
 - [~] P0.1 AO integrity registry contract surface (AO PR in flight; registry authority/audit extensions underway)
 - [~] P0.2 Gateway artifact verifier (core verifier + cache enforcement landed; AO release-root parity still pending)
 - [~] P0.3 Policy pause + degraded mode (runtime gate landed; checkpoint restore/fallback coverage expanded)
@@ -32,6 +34,10 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 Acceptance:
 - AO tests prove trusted/untrusted/revoked root transitions.
 - Gateway can fetch a stable trusted-root snapshot from AO.
+
+Progress notes:
+- AO registry actions and authority/audit extensions remain the open work.
+- Gateway consumers are waiting on the final stable AO snapshot/API shape; no further gateway-side unblocker is expected here.
 
 ### P0.2 Gateway artifact verifier
 - Add module to verify fetched template bundles against AO trusted roots.
@@ -86,6 +92,7 @@ Progress notes:
   - `gateway_integrity_audit_seq_to`
   - `gateway_integrity_audit_lag_seconds`
   - `gateway_integrity_checkpoint_age_seconds`
+- Remaining work is the AO-side commitment sequencing and immutable audit stream/query API.
 
 ### P1.3 Signed local checkpoint (gateway)
 - Persist last valid integrity snapshot with signature/hash.
@@ -106,6 +113,7 @@ Progress notes:
 - `GET /integrity/state` exposes runtime policy state and latest AO/checkpoint snapshot envelope.
 - Metrics added: incident accepted/auth-blocked/notify ok/notify fail + state read/auth-blocked.
 - Coverage added in `tests/integrity-incident.test.ts`.
+- Replay/idempotency dedupe and the smoke helper are in place; remaining work is operator automation and final staging evidence.
 
 ## P2 - Performance and platform polish (WEDOS-first)
 
@@ -122,6 +130,7 @@ Progress notes:
 - Precedence is explicit: call override > `AO_INTEGRITY_FETCH_*` env > `GATEWAY_RESOURCE_PROFILE` > medium fallback.
 - Alert guidance is now calibrated per profile in `ops/alerts-profiles.md`.
 - Validation errors still fail closed immediately (no retry on invalid snapshot payloads).
+- No open gateway-side follow-up remains beyond AO-side cadence/input finalization.
 
 ### P2.2 Resource budgets and limits
 - Cap verifier CPU/timeouts.
@@ -138,6 +147,7 @@ Progress notes:
   - cache reject reason counters
   - ratelimit/replay prune counters and config gauges
 - Production presets documented in `ops/resource-budgets.md` and `config/example.env`.
+- This slice is complete on the gateway side; remaining work is mostly deployment evidence and AO-side rollout coupling.
 
 ### P2.3 Optional diskless mode
 - Ensure gateway works even without local checkpoint writes.
@@ -150,6 +160,7 @@ Progress notes:
   - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless|disabled|memory-only`
 - In memory-only mode checkpoint read/write paths no-op safely (AO + env fallback remain active).
 - Integration coverage includes diskless mode behavior when AO is unavailable (`tests/integrity-policy-gate.test.ts`).
+- No additional gateway-side code remains for the optional diskless path.
 
 ## P3 - Nice-to-have / ecosystem scale
 

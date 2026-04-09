@@ -16,6 +16,9 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 | `increase(gateway_webhook_replay_total[5m])` | `> 2` | `> 3` | `> 2` |
 | `increase(gateway_webhook_replay_total[1m])` | `> 4` | `> 5` | `> 3` |
 | `increase(gateway_webhook_replay_pruned_total[10m])` | `> 60` | `> 160` | `> 40` |
+| `increase(gateway_integrity_incident_role_blocked_total[10m])` | `> 0` | `> 0` | `> 0` |
+| `increase(gateway_integrity_state_auth_blocked_total[5m])` | `> 3` | `> 3` | `> 3` |
+| `increase(gateway_integrity_incident_notify_fail_total[10m])` | `> 0` | `> 0` | `> 0` |
 | `gateway_integrity_checkpoint_age_seconds` stale | `> 32400` | `> 64800` | `> 21600` |
 | `gateway_integrity_audit_lag_seconds` high | `> 1800` | `> 3600` | `> 1200` |
 | `increase(gateway_integrity_audit_stream_anomaly_total[15m])` | `> 0` | `> 0` | `> 0` |
@@ -32,4 +35,5 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 - For diskless mode, checkpoint age usually tracks AO snapshot age (file checkpoint is disabled), so keep stale thresholds conservative and favor AO refresh over local retention.
 - Audit lag should stay comfortably below the alert threshold; if it climbs, check AO fetch cadence, checkpoint restore freshness, and queue backpressure.
 - Audit stream anomalies should page on the first regression, but tune them together with audit lag and checkpoint staleness: if all three move together, treat it as fetch/cadence drift; if anomaly fires alone, inspect stream ordering or a bad seq transition before widening the window.
+- Integrity role-blocked, state-auth-blocked, and notify-fail alerts are profile-agnostic control-plane signals; keep their thresholds stable across profiles and use the runbook for the first operator action.
 - If your traffic is bursty, increase `for:` windows before increasing numeric thresholds.

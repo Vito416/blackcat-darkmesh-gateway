@@ -14,6 +14,21 @@ The gateway currently accepts two transport shapes:
 The raw snapshot object is the canonical contract surface for producers. The
 codec envelope is only a compatibility wrapper for the current parser.
 
+## Compatibility table
+
+| Contract surface | Required shape | Parser behavior on violation |
+| --- | --- | --- |
+| Raw snapshot | Object with `release`, `policy`, `authority`, `audit` | Rejects with `integrity_invalid_snapshot` if the payload is not a JSON object or any required section is malformed. |
+| AO codec wrapper | `status: "OK"` plus `payload`, `body`, `result`, or `data` | Rejects with `integrity_fetch_failed` when `status === "ERROR"`; rejects with `integrity_invalid_snapshot` when `status === "OK"` but no nested snapshot field is present. |
+| `release.root` | Non-empty string | Rejects with `missing_trusted_root` if missing or blank. |
+| `policy.activeRoot` | Non-empty string matching `release.root` | Rejects with `missing_trusted_root` if missing or blank; rejects with `integrity_release_root_mismatch` if it diverges from `release.root`. |
+| `release.revokedAt` | Omitted on the active snapshot | Rejects with `integrity_release_root_mismatch` if the active snapshot is marked revoked. |
+| `policy.paused` | Boolean | Rejects with `integrity_invalid_snapshot` if the value is not a boolean. |
+| `policy.maxCheckInAgeSec` | Finite number | Rejects with `integrity_invalid_snapshot` if the value is not a finite number. |
+| `policy.compatibilityState.root` | Optional non-empty string equal to `release.root` or `policy.activeRoot` | Rejects with `integrity_release_root_mismatch` if it points at any other root. |
+| `authority.signatureRefs` | Array of non-empty strings | Rejects with `integrity_invalid_snapshot` if any member is blank or non-string. |
+| `audit.seqFrom` / `audit.seqTo` | Finite numbers | Rejects with `integrity_invalid_snapshot` if either value is not a finite number. |
+
 ## Top-level snapshot shape
 
 Required fields:

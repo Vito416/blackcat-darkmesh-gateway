@@ -173,7 +173,25 @@ Treat these as early warnings, not hard caps; the matching budget ceilings live 
     severity: warning
   annotations:
     summary: "Integrity incident blocked by role policy"
-    description: "Gateway refused incident action due to unauthorized or missing signatureRef."
+    description: "Gateway refused incident action due to unauthorized or missing signatureRef. See the integrity runbook first-response matrix."
+
+- alert: GatewayIntegrityStateAuthBlocked
+  expr: increase(gateway_integrity_state_auth_blocked_total[5m]) > 3
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Integrity state endpoint is being blocked by auth"
+    description: "State reads are failing auth repeatedly. Check token rollout, scrape config, or probing, then compare with the runbook first-response matrix."
+
+- alert: GatewayIntegrityIncidentNotifyFail
+  expr: increase(gateway_integrity_incident_notify_fail_total[10m]) > 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Integrity incident notification relay is failing"
+    description: "Incident forwarding is not reaching the downstream target. Check relay health, provider connectivity, and the runbook first-response matrix."
 
 - alert: GatewayIntegrityAuditLagHigh
   expr: gateway_integrity_audit_lag_seconds > 3600
@@ -182,7 +200,7 @@ Treat these as early warnings, not hard caps; the matching budget ceilings live 
     severity: warning
   annotations:
     summary: "Integrity audit lag is high"
-    description: "Gateway integrity snapshot/audit appears stale; compare against the profile matrix and AO commit cadence."
+    description: "Gateway integrity snapshot/audit appears stale; compare against the profile matrix, AO commit cadence, and the runbook first-response matrix."
 
 - alert: GatewayIntegrityAuditStreamAnomaly
   expr: increase(gateway_integrity_audit_stream_anomaly_total[15m]) > 0
@@ -191,7 +209,7 @@ Treat these as early warnings, not hard caps; the matching budget ceilings live 
     severity: warning
   annotations:
     summary: "Integrity audit stream anomaly detected"
-    description: "AO audit sequence regressed or arrived out of order. Correlate with audit lag and checkpoint staleness before widening thresholds."
+    description: "AO audit sequence regressed or arrived out of order. Correlate with audit lag, checkpoint staleness, and the runbook first-response matrix before widening thresholds."
 
 - alert: GatewayPSPBreakerOpenStripe
   expr: write_psp_stripe_breaker_open > 0

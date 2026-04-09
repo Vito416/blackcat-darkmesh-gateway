@@ -1,47 +1,83 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-echo "[integrity-gate] build"
-npm run build
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "[integrity-gate] missing required command: $cmd" >&2
+    exit 127
+  fi
+}
 
-echo "[integrity-gate] integrity-verifier"
-npx vitest run tests/integrity-verifier.test.ts
+run_step() {
+  local label="$1"
+  shift
+  echo "[integrity-gate] >>> ${label}"
+  "$@"
+  echo "[integrity-gate] <<< ${label} [ok]"
+  STEPS_DONE=$((STEPS_DONE + 1))
+}
 
-echo "[integrity-gate] integrity-client"
-npx vitest run tests/integrity-client.test.ts
+on_error() {
+  local exit_code=$?
+  echo "[integrity-gate] <<< ${CURRENT_STEP:-unknown} [fail] exit=${exit_code}" >&2
+  exit "$exit_code"
+}
 
-echo "[integrity-gate] integrity-checkpoint"
-npx vitest run tests/integrity-checkpoint.test.ts
+trap on_error ERR
 
-echo "[integrity-gate] integrity-cache-enforcement"
-npx vitest run tests/integrity-cache-enforcement.test.ts
+echo "[integrity-gate] starting 14 checks"
+CURRENT_STEP="preflight"
+require_cmd npm
+require_cmd npx
 
-echo "[integrity-gate] integrity-parity"
-npx vitest run tests/integrity-parity.test.ts
+STEPS_DONE=0
+STEPS_TOTAL=14
+CURRENT_STEP=""
 
-echo "[integrity-gate] integrity-policy-gate"
-npx vitest run tests/integrity-policy-gate.test.ts
+CURRENT_STEP="build"
+run_step "$CURRENT_STEP" npm run build
 
-echo "[integrity-gate] integrity-incident"
-npx vitest run tests/integrity-incident.test.ts
+CURRENT_STEP="integrity-verifier"
+run_step "$CURRENT_STEP" npx vitest run tests/integrity-verifier.test.ts
 
-echo "[integrity-gate] fetch-control"
-npx vitest run tests/fetch-control.test.ts
+CURRENT_STEP="integrity-client"
+run_step "$CURRENT_STEP" npx vitest run tests/integrity-client.test.ts
 
-echo "[integrity-gate] resource-hardening"
-npx vitest run tests/resource-hardening.test.ts
+CURRENT_STEP="integrity-checkpoint"
+run_step "$CURRENT_STEP" npx vitest run tests/integrity-checkpoint.test.ts
 
-echo "[integrity-gate] rate-replay-limits"
-npx vitest run tests/rate-replay-limits.test.ts
+CURRENT_STEP="integrity-cache-enforcement"
+run_step "$CURRENT_STEP" npx vitest run tests/integrity-cache-enforcement.test.ts
 
-echo "[integrity-gate] budget-metrics"
-npx vitest run tests/budget-metrics.test.ts
+CURRENT_STEP="integrity-parity"
+run_step "$CURRENT_STEP" npx vitest run tests/integrity-parity.test.ts
 
-echo "[integrity-gate] metrics-auth"
-npx vitest run tests/metrics-auth.test.ts
+CURRENT_STEP="integrity-policy-gate"
+run_step "$CURRENT_STEP" npx vitest run tests/integrity-policy-gate.test.ts
 
-echo "[integrity-gate] webhook-pentest"
-npx vitest run tests/webhook-pentest.test.ts
+CURRENT_STEP="integrity-incident"
+run_step "$CURRENT_STEP" npx vitest run tests/integrity-incident.test.ts
+
+CURRENT_STEP="fetch-control"
+run_step "$CURRENT_STEP" npx vitest run tests/fetch-control.test.ts
+
+CURRENT_STEP="resource-hardening"
+run_step "$CURRENT_STEP" npx vitest run tests/resource-hardening.test.ts
+
+CURRENT_STEP="rate-replay-limits"
+run_step "$CURRENT_STEP" npx vitest run tests/rate-replay-limits.test.ts
+
+CURRENT_STEP="budget-metrics"
+run_step "$CURRENT_STEP" npx vitest run tests/budget-metrics.test.ts
+
+CURRENT_STEP="metrics-auth"
+run_step "$CURRENT_STEP" npx vitest run tests/metrics-auth.test.ts
+
+CURRENT_STEP="webhook-pentest"
+run_step "$CURRENT_STEP" npx vitest run tests/webhook-pentest.test.ts
+
+echo "[integrity-gate] SUCCESS ${STEPS_DONE}/${STEPS_TOTAL} checks passed"

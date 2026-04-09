@@ -255,6 +255,21 @@ function checkToken(request: Request, expectedToken: string, headerName: string)
   return tokenEquals(expectedToken, bearer) || tokenEquals(expectedToken, header)
 }
 
+function basicCredentialsMatch(expectedUser: string, expectedPass: string, presented: string): boolean {
+  if (!presented || !/^Basic\s+/i.test(presented)) return false
+  try {
+    const b64 = presented.replace(/^Basic\s+/i, '')
+    const decoded = Buffer.from(b64, 'base64').toString('utf8')
+    const colonIndex = decoded.indexOf(':')
+    if (colonIndex <= 0) return false
+    const user = decoded.slice(0, colonIndex)
+    const pass = decoded.slice(colonIndex + 1)
+    return tokenEquals(expectedUser, user) && tokenEquals(expectedPass, pass)
+  } catch (_) {
+    return false
+  }
+}
+
 function splitRefsCsv(raw: string): string[] {
   return raw
     .split(',')
@@ -429,7 +444,7 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
   const requiredToken = process.env.GATEWAY_TEMPLATE_TOKEN
   if (requiredToken) {
     const presented = (req.headers.get('x-template-token') || '').trim()
-    if (presented !== requiredToken) {
+    if (!tokenEquals(requiredToken, presented)) {
       inc('gateway_template_call_blocked')
       return new Response(JSON.stringify({ error: 'unauthorized' }), {
         status: 401,
@@ -702,8 +717,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     const token = process.env.GATEWAY_FORGET_TOKEN
     if (token) {
       const auth = request.headers.get('authorization') || request.headers.get('x-forget-token') || ''
-      const presented = auth.replace(/^Bearer\s+/i, '').trim()
-      if (presented !== token) return new Response('unauthorized', { status: 401 })
+      const bearer = auth.replace(/^Bearer\s+/i, '').trim()
+      if (!tokenEquals(token, bearer) && !tokenEquals(token, auth.trim())) {
+        return new Response('unauthorized', { status: 401 })
+      }
     }
     const body = await request.json().catch(() => ({}))
     const subject = body.subject as string | undefined
@@ -737,18 +754,13 @@ export async function handleRequest(request: Request): Promise<Response> {
       const alt = request.headers.get('x-metrics-token') || ''
       let authed = false
       if (needBearer && /^Bearer\s+/i.test(auth)) {
-        authed = auth.replace(/^Bearer\s+/i, '').trim() === process.env.METRICS_BEARER_TOKEN
+        authed = tokenEquals(process.env.METRICS_BEARER_TOKEN || '', auth.replace(/^Bearer\s+/i, '').trim())
       }
       if (needBearer && !authed && alt) {
-        authed = alt === process.env.METRICS_BEARER_TOKEN
+        authed = tokenEquals(process.env.METRICS_BEARER_TOKEN || '', alt)
       }
-      if (!authed && needBasic && /^Basic\s+/i.test(auth)) {
-        const b64 = auth.replace(/^Basic\s+/i, '')
-        try {
-          const decoded = Buffer.from(b64, 'base64').toString()
-          const [user, pass] = decoded.split(':')
-          if (user === process.env.METRICS_BASIC_USER && pass === process.env.METRICS_BASIC_PASS) authed = true
-        } catch (_) { /* ignore */ }
+      if (!authed && needBasic) {
+        authed = basicCredentialsMatch(process.env.METRICS_BASIC_USER || '', process.env.METRICS_BASIC_PASS || '', auth)
       }
       if (!authed) {
         inc('gateway_metrics_auth_blocked')

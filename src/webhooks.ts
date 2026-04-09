@@ -1,14 +1,51 @@
 import { inc, gauge } from './metrics.js'
 import crypto from 'crypto'
 
+const DEFAULT_CERT_TTL_MS = 6 * 60 * 60 * 1000
+const MIN_CERT_TTL_MS = 60 * 1000
+const MAX_CERT_TTL_MS = 24 * 60 * 60 * 1000
+const DEFAULT_CERT_CACHE_MAX = 256
+const MIN_CERT_CACHE_MAX = 1
+const MAX_CERT_CACHE_MAX = 4096
+const MAX_CERT_URL_BYTES = 2048
+const DEFAULT_STRIPE_SIGNATURE_HEADER_BYTES = 4096
+const MIN_STRIPE_SIGNATURE_HEADER_BYTES = 256
+const MAX_STRIPE_SIGNATURE_HEADER_BYTES = 16384
+const MAX_STRIPE_SIGNATURE_PARTS = 32
+
 function timingSafeCompare(left: string, right: string): boolean {
   if (left.length !== right.length) return false
   return crypto.timingSafeEqual(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'))
 }
 
-function parseStripeSignatureHeader(sigHeader: string): { timestamp: string | null; signatures: string[] } {
+function parseBoundedInt(raw: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(raw || '', 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(Math.max(parsed, min), max)
+}
+
+function isValidCertUrl(rawUrl?: string): rawUrl is string {
+  if (!rawUrl) return false
+  const url = rawUrl.trim()
+  if (!url || url.length > MAX_CERT_URL_BYTES) return false
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:') return false
+    if (parsed.username || parsed.password) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
+function parseStripeSignatureHeader(sigHeader: string): { timestamp: string | null; signatures: string[] } | null {
+  const header = sigHeader.trim()
+  if (!header || header.length > STRIPE_SIGNATURE_HEADER_MAX_BYTES) return null
   const buckets: Record<string, string[]> = {}
-  for (const rawPart of sigHeader.split(',')) {
+  let seenParts = 0
+  for (const rawPart of header.split(',')) {
+    seenParts = seenParts + 1
+    if (seenParts > MAX_STRIPE_SIGNATURE_PARTS) return null
     const part = rawPart.trim()
     if (!part) continue
     const eq = part.indexOf('=')
@@ -27,6 +64,7 @@ function parseStripeSignatureHeader(sigHeader: string): { timestamp: string | nu
 export function verifyStripe(body: string, sigHeader: string | null, secret: string, toleranceMs: number): boolean {
   if (!body || !sigHeader || !secret) return false
   const parsed = parseStripeSignatureHeader(sigHeader)
+  if (!parsed) return false
   if (!parsed.timestamp || parsed.signatures.length === 0) return false
   const ts = Number.parseInt(parsed.timestamp, 10)
   if (!Number.isFinite(ts)) return false
@@ -49,6 +87,8 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
     const expected = crypto.createHmac('sha256', secret).update(body).digest('hex')
     if (timingSafeCompare(expected, sig.trim())) return true
   }
+  const certUrl = headers.get('PayPal-Cert-Url')
+  if (!isValidCertUrl(certUrl || undefined)) return false
   // Remote verify (requires PAYPAL_WEBHOOK_ID and client creds via env)
   const webhookId = process.env.PAYPAL_WEBHOOK_ID
   if (!webhookId) return false
@@ -57,7 +97,7 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
   try {
     const payload = {
       auth_algo: headers.get('PayPal-Auth-Algo'),
-      cert_url: headers.get('PayPal-Cert-Url'),
+      cert_url: certUrl,
       transmission_id: headers.get('PayPal-Transmission-Id'),
       transmission_sig: headers.get('PayPal-Transmission-Sig') || headers.get('PayPal-Transmission-Signature'),
       transmission_time: headers.get('PayPal-Transmission-Time'),
@@ -101,8 +141,14 @@ function paypalBase() {
 
 // Simple cert cache placeholder (for future pinning)
 const certCache = new Map<string, number>()
-const CERT_TTL = parseInt(process.env.GW_CERT_CACHE_TTL_MS || '21600000', 10) // 6h
-const CERT_CACHE_MAX = Math.max(parseInt(process.env.GW_CERT_CACHE_MAX_SIZE || '256', 10) || 256, 1)
+const CERT_TTL = parseBoundedInt(process.env.GW_CERT_CACHE_TTL_MS, DEFAULT_CERT_TTL_MS, MIN_CERT_TTL_MS, MAX_CERT_TTL_MS)
+const CERT_CACHE_MAX = parseBoundedInt(process.env.GW_CERT_CACHE_MAX_SIZE, DEFAULT_CERT_CACHE_MAX, MIN_CERT_CACHE_MAX, MAX_CERT_CACHE_MAX)
+const STRIPE_SIGNATURE_HEADER_MAX_BYTES = parseBoundedInt(
+  process.env.GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES,
+  DEFAULT_STRIPE_SIGNATURE_HEADER_BYTES,
+  MIN_STRIPE_SIGNATURE_HEADER_BYTES,
+  MAX_STRIPE_SIGNATURE_HEADER_BYTES,
+)
 const CERT_ALLOW_PREFIXES = (process.env.PAYPAL_CERT_ALLOW_PREFIXES || '')
   .split(',')
   .map((s) => s.trim())
@@ -141,6 +187,10 @@ function certPinnedOk(fingerprint?: string): boolean {
 
 export function noteCert(url?: string, fingerprint?: string): boolean {
   if (!url) return true
+  if (!isValidCertUrl(url)) {
+    inc('gateway_webhook_cert_allow_fail')
+    return false
+  }
   const now = Date.now()
   sweepCerts(now)
   if (!certAllowed(url)) {

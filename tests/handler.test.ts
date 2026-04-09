@@ -18,11 +18,56 @@ describe('handler cache and shadow modes', () => {
     const forgetReqNoAuth = new Request('http://gateway/cache/forget', { method: 'POST', body: JSON.stringify({ subject: 'subj1' }), headers: { 'content-type': 'application/json' } })
     const resNo = await handleRequest(forgetReqNoAuth)
     expect(resNo.status).toBe(401)
+    const forgetReqBadBearer = new Request('http://gateway/cache/forget', {
+      method: 'POST',
+      body: JSON.stringify({ subject: 'subj1' }),
+      headers: { 'content-type': 'application/json', authorization: 'Bearer wrong' },
+    })
+    const resBadBearer = await handleRequest(forgetReqBadBearer)
+    expect(resBadBearer.status).toBe(401)
     const forgetReq = new Request('http://gateway/cache/forget', { method: 'POST', body: JSON.stringify({ subject: 'subj1' }), headers: { 'content-type': 'application/json', 'x-forget-token': 'secret' } })
     const res = await handleRequest(forgetReq)
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.removed).toBe(1)
+  })
+
+  it('uses timing-safe matching for metrics auth tokens', async () => {
+    process.env.GATEWAY_REQUIRE_METRICS_AUTH = '1'
+    process.env.METRICS_BEARER_TOKEN = 'metrics-secret'
+    process.env.METRICS_BASIC_USER = 'metrics-user'
+    process.env.METRICS_BASIC_PASS = 'metrics-pass'
+    const { handleRequest } = await import('../src/handler.js')
+
+    const badBearerRes = await handleRequest(
+      new Request('http://gateway/metrics', {
+        headers: { authorization: 'Bearer wrong' },
+      }),
+    )
+    expect(badBearerRes.status).toBe(401)
+
+    const badBasic = Buffer.from('metrics-user:wrong-pass').toString('base64')
+    const badBasicRes = await handleRequest(
+      new Request('http://gateway/metrics', {
+        headers: { authorization: `Basic ${badBasic}` },
+      }),
+    )
+    expect(badBasicRes.status).toBe(401)
+
+    const headerRes = await handleRequest(
+      new Request('http://gateway/metrics', {
+        headers: { 'x-metrics-token': 'metrics-secret' },
+      }),
+    )
+    expect(headerRes.status).toBe(200)
+
+    const basic = Buffer.from('metrics-user:metrics-pass').toString('base64')
+    const basicRes = await handleRequest(
+      new Request('http://gateway/metrics', {
+        headers: { authorization: `Basic ${basic}` },
+      }),
+    )
+    expect(basicRes.status).toBe(200)
   })
 
   it('shadow mode returns 202 on invalid stripe sig', async () => {

@@ -5,6 +5,7 @@ const INCIDENT_URL_PATH = '/integrity/incident'
 const STATE_URL_PATH = '/integrity/state'
 const TEMPLATE_URL_PATH = '/template/call'
 const WRITE_ACTION = 'checkout.create-order'
+const VALID_PROTOCOLS = new Set(['http:', 'https:'])
 const WRITE_PAYLOAD = {
   siteId: 'smoke-site',
   items: [{ sku: 'smoke-sku', qty: 1 }],
@@ -51,13 +52,52 @@ function checkpoint(status, step, message) {
   console.log(`[${status}] ${step}: ${message}`)
 }
 
+function readEnv(name) {
+  if (!Object.prototype.hasOwnProperty.call(process.env, name)) return undefined
+  return process.env[name]
+}
+
+function normalizeRequiredValue(label, value) {
+  if (typeof value !== 'string') fail('config', `${label} must be a non-empty string`)
+  const trimmed = value.trim()
+  if (!trimmed) fail('config', `${label} must be a non-empty string`)
+  return trimmed
+}
+
+function normalizeOptionalValue(label, value) {
+  if (typeof value === 'undefined') return ''
+  if (typeof value !== 'string') fail('config', `${label} must be a string`)
+  const trimmed = value.trim()
+  if (!trimmed) fail('config', `${label} must not be blank when provided`)
+  return trimmed
+}
+
+function parsePositiveInteger(label, value, defaultValue) {
+  if (typeof value === 'undefined' || value === '') return defaultValue
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isInteger(parsed) || parsed <= 0) fail('config', `${label} must be a positive integer, got ${value}`)
+  return parsed
+}
+
+function normalizeBaseUrl(value) {
+  const candidate = normalizeRequiredValue('base url', value)
+  let parsed
+  try {
+    parsed = new URL(candidate)
+  } catch (_) {
+    fail('config', `invalid base url: ${candidate}`)
+  }
+  if (!VALID_PROTOCOLS.has(parsed.protocol)) fail('config', `base url must use http or https: ${candidate}`)
+  return parsed.toString()
+}
+
 function parseArgs(argv) {
   const args = {
-    baseUrl: '',
-    stateToken: '',
-    incidentToken: '',
-    templateToken: '',
-    timeoutMs: '',
+    baseUrl: undefined,
+    stateToken: undefined,
+    incidentToken: undefined,
+    templateToken: undefined,
+    timeoutMs: undefined,
   }
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -105,24 +145,20 @@ function resolveUrl(baseUrl, path) {
   }
 }
 
-function readEnv(name) {
-  const value = process.env[name]
-  return typeof value === 'string' ? value.trim() : ''
-}
-
 function resolveConfig(args) {
-  const baseUrl = (args.baseUrl || readEnv('GATEWAY_BASE_URL')).trim()
-  if (!baseUrl) fail('config', 'set GATEWAY_BASE_URL or pass --base-url')
-
-  let timeoutMs = Number.parseInt(args.timeoutMs || readEnv('GATEWAY_SMOKE_TIMEOUT_MS') || `${DEFAULT_TIMEOUT_MS}`, 10)
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = DEFAULT_TIMEOUT_MS
+  const baseUrl = normalizeBaseUrl(args.baseUrl ?? readEnv('GATEWAY_BASE_URL'))
+  const timeoutMs = parsePositiveInteger(
+    'timeout ms',
+    args.timeoutMs ?? readEnv('GATEWAY_SMOKE_TIMEOUT_MS'),
+    DEFAULT_TIMEOUT_MS,
+  )
 
   return {
     baseUrl,
     timeoutMs,
-    stateToken: (args.stateToken || readEnv('GATEWAY_INTEGRITY_STATE_TOKEN')).trim(),
-    incidentToken: (args.incidentToken || readEnv('GATEWAY_INTEGRITY_INCIDENT_TOKEN')).trim(),
-    templateToken: (args.templateToken || readEnv('GATEWAY_TEMPLATE_TOKEN')).trim(),
+    stateToken: normalizeOptionalValue('state token', args.stateToken ?? readEnv('GATEWAY_INTEGRITY_STATE_TOKEN')),
+    incidentToken: normalizeOptionalValue('incident token', args.incidentToken ?? readEnv('GATEWAY_INTEGRITY_INCIDENT_TOKEN')),
+    templateToken: normalizeOptionalValue('template token', args.templateToken ?? readEnv('GATEWAY_TEMPLATE_TOKEN')),
   }
 }
 
@@ -136,8 +172,18 @@ async function fetchWithTimeout(url, init, timeoutMs) {
   }
 }
 
-async function requestJson(url, init, timeoutMs) {
-  const res = await fetchWithTimeout(url, init, timeoutMs)
+function previewText(text, limit = 500) {
+  if (typeof text !== 'string') return ''
+  return text.length > limit ? `${text.slice(0, limit)}…` : text
+}
+
+async function requestJson(step, url, init, timeoutMs) {
+  let res
+  try {
+    res = await fetchWithTimeout(url, init, timeoutMs)
+  } catch (err) {
+    fail(step, `request to ${url} failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
   const text = await res.text()
   let json = null
   try {
@@ -175,6 +221,7 @@ function buildTemplateHeaders(token) {
 async function readState(config, label) {
   const url = resolveUrl(config.baseUrl, STATE_URL_PATH)
   const { res, text, json } = await requestJson(
+    label,
     url,
     {
       method: 'GET',
@@ -184,10 +231,10 @@ async function readState(config, label) {
   )
 
   if (res.status !== 200) {
-    fail(label, `expected 200 from ${STATE_URL_PATH}, got ${res.status}: ${text.slice(0, 500)}`)
+    fail(label, `expected 200 from ${STATE_URL_PATH}, got ${res.status}: ${previewText(text)}`)
   }
   if (!json || typeof json !== 'object' || !json.policy || typeof json.policy.paused !== 'boolean') {
-    fail(label, `unexpected state payload: ${text.slice(0, 500)}`)
+    fail(label, `unexpected state payload: ${previewText(text)}`)
   }
 
   checkpoint('PASS', label, `paused=${json.policy.paused} source=${json.policy.source || 'unknown'}`)
@@ -195,6 +242,9 @@ async function readState(config, label) {
 }
 
 async function sendIncident(config, action, label) {
+  if (action !== 'pause' && action !== 'resume') {
+    fail('config', `unsupported incident action: ${action}`)
+  }
   const url = resolveUrl(config.baseUrl, INCIDENT_URL_PATH)
   const body =
     action === 'pause'
@@ -202,6 +252,7 @@ async function sendIncident(config, action, label) {
       : { action, event: 'manual-unfreeze', source: 'smoke', severity: 'high' }
 
   const { res, text, json } = await requestJson(
+    label,
     url,
     {
       method: 'POST',
@@ -212,10 +263,10 @@ async function sendIncident(config, action, label) {
   )
 
   if (res.status !== 200) {
-    fail(label, `expected 200 from ${INCIDENT_URL_PATH}, got ${res.status}: ${text.slice(0, 500)}`)
+    fail(label, `expected 200 from ${INCIDENT_URL_PATH}, got ${res.status}: ${previewText(text)}`)
   }
   if (!json || typeof json !== 'object' || json.ok !== true) {
-    fail(label, `unexpected incident response: ${text.slice(0, 500)}`)
+    fail(label, `unexpected incident response: ${previewText(text)}`)
   }
   if (json.action !== action) {
     fail(label, `expected action=${action}, got ${String(json.action)}`)
@@ -233,6 +284,7 @@ async function callPausedTemplate(config) {
   }
 
   const { res, text, json } = await requestJson(
+    'template-call',
     url,
     {
       method: 'POST',
@@ -243,10 +295,10 @@ async function callPausedTemplate(config) {
   )
 
   if (res.status !== 503) {
-    fail('template-call', `expected 503 while paused, got ${res.status}: ${text.slice(0, 500)}`)
+    fail('template-call', `expected 503 while paused, got ${res.status}: ${previewText(text)}`)
   }
   if (!json || typeof json !== 'object') {
-    fail('template-call', `expected JSON paused envelope, got: ${text.slice(0, 500)}`)
+    fail('template-call', `expected JSON paused envelope, got: ${previewText(text)}`)
   }
   const expected = {
     error: 'policy_paused',
@@ -281,6 +333,7 @@ async function main() {
   let originalPaused = null
   let currentPaused = null
   let restoreNeeded = false
+  let exitCode = 0
 
   try {
     const initialState = await readState(config, 'state-before')
@@ -316,7 +369,7 @@ async function main() {
     checkpoint('PASS', 'flow', 'incident control smoke completed')
   } catch (err) {
     checkpoint('FAIL', 'flow', err instanceof Error ? err.message : String(err))
-    process.exitCode = 1
+    exitCode = 1
   } finally {
     if (originalPaused !== null && restoreNeeded) {
       try {
@@ -324,13 +377,19 @@ async function main() {
         checkpoint('PASS', 'cleanup', `restored original paused=${originalPaused}`)
       } catch (err) {
         checkpoint('FAIL', 'cleanup', err instanceof Error ? err.message : String(err))
-        process.exitCode = 1
+        exitCode = 1
       }
     }
   }
+
+  return exitCode
 }
 
-main().catch((err) => {
-  checkpoint('FAIL', 'fatal', err instanceof Error ? err.message : String(err))
-  process.exit(1)
-})
+main()
+  .then((code) => {
+    process.exit(code)
+  })
+  .catch((err) => {
+    checkpoint('FAIL', 'fatal', err instanceof Error ? err.message : String(err))
+    process.exit(1)
+  })

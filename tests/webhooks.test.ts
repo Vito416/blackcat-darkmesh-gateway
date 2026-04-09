@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { verifyStripe, verifyPayPal, noteCert } from '../src/webhooks.js'
 
 const stripeSecret = 'whsec_test'
@@ -19,6 +19,20 @@ async function metricValue(name: string) {
   if (!line) return 0
   return parseFloat(line.split(' ')[1]) || 0
 }
+
+afterEach(() => {
+  vi.useRealTimers()
+  delete process.env.GW_CERT_PIN_SHA256
+  delete process.env.GW_CERT_CACHE_MAX_SIZE
+  delete process.env.GW_CERT_CACHE_TTL_MS
+  delete process.env.PAYPAL_CERT_ALLOW_PREFIXES
+  delete process.env.GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES
+  delete process.env.PAYPAL_WEBHOOK_ID
+  delete process.env.PAYPAL_API_BASE
+  delete process.env.PAYPAL_CLIENT_ID
+  delete process.env.PAYPAL_CLIENT_SECRET
+  vi.resetModules()
+})
 
 describe('webhook verification', () => {
   it('verifies stripe signature', () => {
@@ -45,11 +59,27 @@ describe('webhook verification', () => {
     expect(ok).toBe(false)
   })
 
+  it('rejects oversized stripe signature headers', async () => {
+    process.env.GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES = '256'
+    vi.resetModules()
+    const { verifyStripe: vs } = await import('../src/webhooks.js')
+    const body = JSON.stringify({ id: 'evt_big', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const hmac = crypto.createHmac('sha256', stripeSecret).update(`${ts}.${body}`).digest('hex')
+    const sig = `t=${ts},v1=${hmac},v1=${'a'.repeat(300)}`
+    expect(sig.length).toBeGreaterThan(256)
+    const ok = vs(body, sig, stripeSecret, 300000)
+    expect(ok).toBe(false)
+  })
+
   it('verifies paypal HMAC path when secret provided', async () => {
     const body = JSON.stringify({ id: 'WH-1', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
     const secret = 'ppsecret'
     const sig = crypto.createHmac('sha256', secret).update(body).digest('hex')
-    const headers = new Headers({ 'PayPal-Transmission-Sig': sig })
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': sig,
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+    })
     const ok = await verifyPayPal(body, headers, secret)
     expect(ok).toBe(true)
   })
@@ -57,6 +87,19 @@ describe('webhook verification', () => {
   it('rejects malformed paypal body without throwing', async () => {
     const headers = new Headers({ 'PayPal-Transmission-Sig': 'deadbeef' })
     await expect(verifyPayPal('{"id":', headers, 'ppsecret')).resolves.toBe(false)
+  })
+
+  it('rejects malformed paypal cert urls before remote verification', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    const body = JSON.stringify({ id: 'WH-2', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'not-a-url',
+      'PayPal-Transmission-Sig': 'deadbeef',
+      'PayPal-Transmission-Id': 'tx-1',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(false)
   })
 
   it('rejects paypal when signature missing', async () => {
@@ -94,6 +137,24 @@ describe('webhook verification', () => {
     expect(nc('https://cert-1.example.com/a.pem', 'pin1')).toBe(true)
     expect(nc('https://cert-2.example.com/b.pem', 'pin2')).toBe(true)
     expect(nc('https://cert-3.example.com/c.pem', 'pin3')).toBe(true)
+    expect(await metricValue('gateway_webhook_cert_cache_size')).toBe(2)
+  })
+
+  it('clamps cert cache ttl to a sane minimum', async () => {
+    process.env.GW_CERT_CACHE_TTL_MS = '1'
+    process.env.GW_CERT_CACHE_MAX_SIZE = '8'
+    process.env.GW_CERT_PIN_SHA256 = ''
+    process.env.PAYPAL_CERT_ALLOW_PREFIXES = ''
+    vi.resetModules()
+    const { reset } = await import('../src/metrics.js')
+    reset()
+    const { noteCert: nc } = await import('../src/webhooks.js')
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    expect(nc('https://cert-1.example.com/a.pem', 'pin1')).toBe(true)
+    expect(await metricValue('gateway_webhook_cert_cache_size')).toBe(1)
+    vi.setSystemTime(10)
+    expect(nc('https://cert-2.example.com/b.pem', 'pin2')).toBe(true)
     expect(await metricValue('gateway_webhook_cert_cache_size')).toBe(2)
   })
 })

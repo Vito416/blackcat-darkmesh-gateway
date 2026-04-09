@@ -2,6 +2,8 @@
 
 Do not archive/delete the old repo until all checks below are complete.
 
+Gateway-side implementation and test coverage are ahead of the AO-side registry/authority lifecycle, so the remaining deletion gate is still blocked on the AO API and rollout evidence.
+
 ## A. Knowledge preservation
 
 - [ ] Kernel source snapshot commit is recorded in this folder.
@@ -13,7 +15,7 @@ Do not archive/delete the old repo until all checks below are complete.
 
 - [ ] Trusted release registry logic is available via AO APIs.
 - [ ] Revoke semantics are enforced by gateway verifier.
-- [ ] Pause/degraded mode policy is enforced in gateway runtime.
+- [x] Pause/degraded mode policy is enforced in gateway runtime.
 - [ ] Upgrade lifecycle equivalent (`propose/activate/cancel`) is implemented in AO/write flows.
 - [ ] Compatibility rollback policy is implemented or explicitly deferred with documented risk.
 
@@ -21,30 +23,30 @@ Do not archive/delete the old repo until all checks below are complete.
 
 - [ ] Authority separation (`root/upgrade/emergency/reporter`) exists in AO policy model.
 - [ ] Key rotation procedure is implemented and tested.
-- [ ] Replay/idempotency checks exist for privileged integrity actions.
-- [ ] Incident path exists (report + operational response).
+- [x] Replay/idempotency checks exist for privileged integrity actions.
+- [x] Incident path exists (report + operational response).
 
 ## D. Observability
 
-- [ ] Integrity metrics are exposed and scraped.
-- [ ] Alert thresholds are defined for integrity failures and paused mode.
+- [x] Integrity metrics are exposed and scraped.
+- [x] Alert thresholds are defined for integrity failures and paused mode.
 - [ ] Audit commitments (or equivalent immutable integrity proofs) are produced and queryable.
 
 ## E. Test parity
 
 - [ ] Kernel-derived parity scenarios are ported into AO/gateway tests.
-- [ ] CI contains integrity-focused tests (not only basic unit coverage).
-- [ ] CI integrity tests pass for `integrity-client`, `integrity-verifier`, `integrity-policy-gate`, `integrity-checkpoint`, and `integrity-parity`.
+- [x] CI contains integrity-focused tests (not only basic unit coverage).
+- [x] CI integrity tests pass for `integrity-client`, `integrity-verifier`, `integrity-policy-gate`, `integrity-checkpoint`, and `integrity-parity`.
 - [ ] Negative tests cover revoked root, hash mismatch, missing authority, stale state.
 - [ ] Checkpoint tamper test passes and fails closed on signature mismatch.
 
 ## F. Operational readiness
 
-- [ ] Runbook includes:
-  - [ ] key rotation
-  - [ ] emergency pause/unpause
-  - [ ] degraded mode behavior
-  - [ ] recovery from AO outage
+- [x] Runbook includes:
+  - [x] key rotation
+  - [x] emergency pause/unpause
+  - [x] degraded mode behavior
+  - [x] recovery from AO outage
 - [ ] WEDOS/shared-hosting limits are validated (resource and runtime model).
 - [ ] Recovery drill completed at least once in staging with timestamps captured in notes.
 - [ ] Key rotation drill completed at least once for each integrity role.

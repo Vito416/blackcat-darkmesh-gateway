@@ -172,3 +172,16 @@ Operational interpretation:
 - role blocked spike -> stale signer refs, wrong role, or attack traffic.
 - notify fail spike -> incident relay downstream unavailable.
 - fetch failure spike -> AO dependency outage or network path regression.
+
+### Alert -> First Response
+
+| Alert | First response |
+| --- | --- |
+| `GatewayIntegrityCheckpointStale` | Refresh AO policy first; if the checkpoint is still stale, treat local state as absent and pin the last known-good snapshot until recovery. |
+| `GatewayIntegrityAuditLagHigh` | Check AO fetch cadence, queue backpressure, and restore freshness; if this appears with checkpoint stale or anomaly, suspect fetch drift. |
+| `GatewayIntegrityAuditStreamAnomaly` | Inspect the last accepted sequence transition for regression or out-of-order delivery before changing any thresholds. |
+| `GatewayIntegrityIncidentRoleBlocked` | Verify `x-signature-ref`, role overlay, and recent rotation; confirm the signer is mapped to the intended role before retrying. |
+| `GatewayIntegrityStateAuthBlocked` | Verify the state token and scrape path; repeated blocks usually mean probing, a bad secret rollout, or an automation misconfiguration. |
+| `GatewayIntegrityIncidentNotifyFail` | Check the downstream notify target/provider health and keep manual triage active until forwarding recovers. |
+
+If checkpoint stale, audit lag, and audit anomaly all fire together, treat it as AO fetch/cadence drift first. If only one fires, start with the layer named in the matrix above.

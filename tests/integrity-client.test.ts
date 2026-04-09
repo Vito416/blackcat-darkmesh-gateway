@@ -142,6 +142,40 @@ describe('integrity snapshot client', () => {
     })
   })
 
+  it('fails closed when policy.paused is not a boolean', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    const broken = validSnapshot()
+    broken.policy.paused = 'false' as unknown as boolean
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(broken), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
+      code: 'integrity_invalid_snapshot',
+    })
+  })
+
+  it('fails closed when audit.seqFrom is not a finite number', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    const broken = validSnapshot()
+    broken.audit.seqFrom = '1' as unknown as number
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(broken), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
+      code: 'integrity_invalid_snapshot',
+    })
+  })
+
   it('times out slow fetches using the configured timeout', async () => {
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.AO_INTEGRITY_FETCH_TIMEOUT_MS = '20'
