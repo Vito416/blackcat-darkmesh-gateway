@@ -7,9 +7,9 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 
 - [ ] P0.1 AO integrity registry contract surface
-- [ ] P0.2 Gateway artifact verifier
-- [ ] P0.3 Policy pause + degraded mode
-- [ ] P0.4 Migration parity tests
+- [~] P0.2 Gateway artifact verifier (core verifier + cache enforcement landed; AO release-root parity still pending)
+- [~] P0.3 Policy pause + degraded mode (runtime gate landed; remaining AO policy-state edge cases pending)
+- [x] P0.4 Migration parity tests
 - [ ] P1.1 Authority separation and rotation workflow
 - [ ] P1.2 Audit commitments stream
 - [ ] P1.3 Signed local checkpoint (gateway)

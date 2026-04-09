@@ -53,6 +53,13 @@ Configuration (per site)
 - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
 - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
 - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
+- Integrity policy and snapshot:
+  - `AO_INTEGRITY_URL` (AO endpoint for integrity snapshot)
+  - `GATEWAY_INTEGRITY_CACHE_TTL_MS` (snapshot cache TTL in ms, default 10000)
+  - `GATEWAY_INTEGRITY_POLICY_PAUSED=1` (env fallback pause switch)
+  - `GATEWAY_INTEGRITY_POLICY_JSON` (optional JSON override, e.g. `{\"paused\":true}`)
+  - `GATEWAY_INTEGRITY_CHECKPOINT_PATH` + `GATEWAY_INTEGRITY_CHECKPOINT_SECRET` (signed local checkpoint fallback)
+  - `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1` (fail closed unless cache entries are integrity-verified)
 - Template custom-backend guardrails:
   - `GATEWAY_TEMPLATE_TOKEN` (optional shared token required on `/template/call`)
   - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1` (default is read-only; write actions blocked unless enabled)
@@ -118,6 +125,10 @@ Open items to design/implement
 - `/template/call` → constrained template backend API (allowlisted actions only, schema-validated, optional token + HMAC).
 - `/metrics` → Prom/OpenMetrics (protected, text format; set `GATEWAY_REQUIRE_METRICS_AUTH=1` + bearer/basic creds).
 - `/cache/forget` → internal, called by AO ForgetSubject (token-protected).
+
+When `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1`, cache PUT requests must include:
+- `x-integrity-root` (trusted root reference)
+- `x-integrity-hash` (sha256 hex of the uploaded body)
 
 ## Security hardening (to implement)
 - Strict CSP/COOP for served templates; SRI for all static assets.

@@ -1,7 +1,7 @@
 # Tests (skeleton)
 
 - Unit: manifest verification, cache TTL/wipe, PSP signature check.
-- Integrity parity: `tests/integrity-client.test.ts`, `tests/integrity-verifier.test.ts`, `tests/integrity-parity.test.ts` cover paused-mode semantics, missing trusted root classification, and integrity mismatch classification.
+- Integrity parity: `tests/integrity-client.test.ts`, `tests/integrity-verifier.test.ts`, `tests/integrity-parity.test.ts`, and `tests/integrity-cache-enforcement.test.ts` cover paused-mode semantics, missing trusted root classification, integrity mismatch classification, and verified-cache fail-closed behavior.
 - Integration: checkout flow with fake PSP/webhooks, cache wipe on ForgetSubject.
 - Load: cache hit/miss under concurrency.
 

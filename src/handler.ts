@@ -1,6 +1,6 @@
 import { Buffer } from 'buffer'
 import crypto from 'crypto'
-import { get, put, sweep, forgetSubject, dropKey } from './cache.js'
+import { fetchEntry, put, sweep, forgetSubject, dropKey } from './cache.js'
 import { inc, gauge, toProm } from './metrics.js'
 import { check as rateCheck } from './ratelimit.js'
 import { verifyStripe, verifyPayPal, noteCert } from './webhooks.js'
@@ -8,9 +8,12 @@ import { markAndCheck } from './replay.js'
 import { proxyTemplateCall } from './templateApi.js'
 import { fetchIntegritySnapshot } from './integrity/client.js'
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
+import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
+import type { IntegritySnapshot } from './integrity/types.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
 type IntegrityPolicyState = { paused: boolean; source: 'env' | 'ao' | 'checkpoint' }
+type IntegrityContext = { state: IntegrityPolicyState; snapshot: IntegritySnapshot | null }
 
 const templateReadActions = new Set(['public.resolve-route', 'public.get-page'])
 const templateWriteActions = new Set(['checkout.create-order', 'checkout.create-payment-intent'])
@@ -19,11 +22,13 @@ const INTEGRITY_CACHE_DEFAULT_TTL_MS = 10_000
 type IntegrityRuntimeCache = {
   expiresAt: number
   state: IntegrityPolicyState
+  snapshot: IntegritySnapshot | null
 }
 
 const integrityRuntime: IntegrityRuntimeCache = {
   expiresAt: 0,
   state: { paused: false, source: 'env' },
+  snapshot: null,
 }
 
 function readEnvIntegrityPolicyState(): IntegrityPolicyState {
@@ -59,24 +64,50 @@ async function resolveIntegrityPolicyState(): Promise<IntegrityPolicyState> {
 
   const fallback = readEnvIntegrityPolicyState()
   let resolved: IntegrityPolicyState = fallback
+  let snapshot: IntegritySnapshot | null = null
 
   try {
-    const snapshot = await fetchIntegritySnapshot()
+    snapshot = await fetchIntegritySnapshot()
     resolved = { paused: !!snapshot.policy.paused, source: 'ao' }
     await writeIntegrityCheckpoint(snapshot).catch(() => null)
   } catch (_) {
     inc('gateway_integrity_snapshot_fetch_fail')
-    const checkpoint = await readIntegrityCheckpoint().catch(() => null)
-    if (checkpoint) {
-      resolved = { paused: !!checkpoint.policy.paused, source: 'checkpoint' }
+    snapshot = await readIntegrityCheckpoint().catch(() => null)
+    if (snapshot) {
+      resolved = { paused: !!snapshot.policy.paused, source: 'checkpoint' }
       inc('gateway_integrity_checkpoint_restore')
     }
   }
 
   integrityRuntime.state = resolved
+  integrityRuntime.snapshot = snapshot
   integrityRuntime.expiresAt = now + readIntegrityCacheTtlMs()
   gauge('gateway_integrity_policy_paused', resolved.paused ? 1 : 0)
   return resolved
+}
+
+async function resolveIntegrityContext(): Promise<IntegrityContext> {
+  const state = await resolveIntegrityPolicyState()
+  return { state, snapshot: integrityRuntime.snapshot }
+}
+
+function requireVerifiedCache(): boolean {
+  return process.env.GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE === '1'
+}
+
+function collectTrustedRoots(snapshot: IntegritySnapshot): string[] {
+  const roots = new Set<string>()
+  if (snapshot.policy.activeRoot) roots.add(snapshot.policy.activeRoot)
+  if (snapshot.release.root) roots.add(snapshot.release.root)
+  if (snapshot.policy.pendingUpgrade?.root) roots.add(snapshot.policy.pendingUpgrade.root)
+  if (snapshot.policy.compatibilityState?.root) roots.add(snapshot.policy.compatibilityState.root)
+  return [...roots]
+}
+
+function integrityErrorStatus(code: string): number {
+  if (code === 'policy_paused') return 503
+  if (code === 'missing_trusted_root') return 503
+  return 422
 }
 
 function policyPausedResponse(): Response {
@@ -117,19 +148,82 @@ async function handleInbox(req: Request): Promise<Response> {
   return new Response('ok', { status: 200 })
 }
 
-async function handleCache(req: Request, key: string, paused: boolean): Promise<Response> {
+async function handleCache(
+  req: Request,
+  key: string,
+  paused: boolean,
+  integritySnapshot: IntegritySnapshot | null,
+): Promise<Response> {
+  const verifiedCacheRequired = requireVerifiedCache()
   if (req.method === 'PUT') {
     if (paused) return policyPausedResponse()
     const buf = await req.arrayBuffer()
     const subject = req.headers.get('X-Subject') || undefined
-    put(key, buf, subject)
+
+    if (verifiedCacheRequired) {
+      if (!integritySnapshot?.policy?.activeRoot) {
+        inc('gateway_integrity_verify_fail')
+        return new Response(JSON.stringify({ error: 'missing_trusted_root' }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+
+      const root = (req.headers.get('x-integrity-root') || '').trim()
+      const declaredHash = (req.headers.get('x-integrity-hash') || '').trim()
+      const actualHash = sha256Hex(new Uint8Array(buf))
+      if (declaredHash && declaredHash !== actualHash) {
+        inc('gateway_integrity_verify_fail')
+        return new Response(JSON.stringify({ error: 'integrity_mismatch' }), {
+          status: 422,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+
+      const verify = verifyManifestEntry(
+        { root, hash: actualHash },
+        {
+          activeRoot: integritySnapshot.policy.activeRoot,
+          trustedRoots: collectTrustedRoots(integritySnapshot),
+          expectedHash: declaredHash || undefined,
+          paused: integritySnapshot.policy.paused,
+        },
+      )
+
+      if (!verify.ok) {
+        inc('gateway_integrity_verify_fail')
+        return new Response(JSON.stringify({ error: verify.code || 'integrity_mismatch' }), {
+          status: integrityErrorStatus(verify.code || 'integrity_mismatch'),
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+
+      inc('gateway_integrity_verify_ok')
+      put(key, buf, {
+        subject,
+        integrity: {
+          verified: true,
+          root,
+          hash: actualHash,
+          verifiedAt: Date.now(),
+        },
+      })
+    } else {
+      put(key, buf, subject)
+    }
     return new Response('stored', { status: 201 })
   }
   if (req.method === 'GET') {
     markReadonlyFallback(paused)
-    const buf = get(key)
-    if (!buf) return new Response('miss', { status: 404 })
-    return new Response(buf, { status: 200 })
+    const result = fetchEntry(key, { requireVerified: verifiedCacheRequired })
+    if (result.status === 'unverified') {
+      return new Response(JSON.stringify({ error: 'integrity_mismatch' }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    if (result.status !== 'hit') return new Response('miss', { status: 404 })
+    return new Response(result.value, { status: 200 })
   }
   return new Response('method', { status: 405 })
 }
@@ -198,8 +292,8 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
 
 export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
-  const integrityState = await resolveIntegrityPolicyState()
-  const integrityPaused = integrityState.paused
+  const integrity = await resolveIntegrityContext()
+  const integrityPaused = integrity.state.paused
 
   if (url.pathname.startsWith('/cache/forget')) {
     if (request.method !== 'POST') return new Response('method', { status: 405 })
@@ -220,7 +314,7 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
   if (url.pathname.startsWith('/cache/')) {
     const key = url.pathname.replace('/cache/', '')
-    return handleCache(request, key, integrityPaused)
+    return handleCache(request, key, integrityPaused, integrity.snapshot)
   }
   if (url.pathname === '/inbox') {
     if (integrityPaused) return policyPausedResponse()

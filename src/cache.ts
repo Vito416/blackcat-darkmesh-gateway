@@ -1,36 +1,63 @@
 import { inc, gauge } from './metrics.js'
 
-type CacheEntry = { value: ArrayBuffer; expiresAt: number }
+export type CacheIntegrityMeta = {
+  verified: boolean
+  root?: string
+  hash?: string
+  verifiedAt?: number
+}
+
+type CacheEntry = { value: ArrayBuffer; expiresAt: number; integrity?: CacheIntegrityMeta }
+type PutOptions = { subject?: string; integrity?: CacheIntegrityMeta }
+type FetchOptions = { requireVerified?: boolean }
+export type CacheFetchResult =
+  | { status: 'hit'; value: ArrayBuffer; integrity?: CacheIntegrityMeta }
+  | { status: 'miss' | 'expired' | 'unverified' }
 
 const store = new Map<string, CacheEntry>()
 const subjects = new Map<string, Set<string>>()
 const TTL_MS = parseInt(process.env.GATEWAY_CACHE_TTL_MS || '300000', 10) || 300000
 gauge('gateway_cache_ttl_ms', TTL_MS)
 
-export function put(key: string, value: ArrayBuffer, subject?: string) {
-  store.set(key, { value, expiresAt: Date.now() + TTL_MS })
-  if (subject) {
-    const set = subjects.get(subject) || new Set<string>()
+export function put(key: string, value: ArrayBuffer, subjectOrOptions?: string | PutOptions) {
+  const opts: PutOptions =
+    typeof subjectOrOptions === 'string'
+      ? { subject: subjectOrOptions }
+      : subjectOrOptions || {}
+
+  store.set(key, { value, expiresAt: Date.now() + TTL_MS, integrity: opts.integrity })
+  if (opts.subject) {
+    const set = subjects.get(opts.subject) || new Set<string>()
     set.add(key)
-    subjects.set(subject, set)
+    subjects.set(opts.subject, set)
   }
   gauge('gateway_cache_size', store.size)
 }
 
-export function get(key: string): ArrayBuffer | null {
+export function fetchEntry(key: string, options: FetchOptions = {}): CacheFetchResult {
   const entry = store.get(key)
   if (!entry) {
     inc('gateway_cache_miss')
-    return null
+    return { status: 'miss' }
   }
   if (Date.now() > entry.expiresAt) {
     store.delete(key)
     inc('gateway_cache_expired')
     gauge('gateway_cache_size', store.size)
-    return null
+    return { status: 'expired' }
+  }
+  if (options.requireVerified && !entry.integrity?.verified) {
+    inc('gateway_integrity_unverified_block')
+    return { status: 'unverified' }
   }
   inc('gateway_cache_hit')
-  return entry.value
+  return { status: 'hit', value: entry.value, integrity: entry.integrity }
+}
+
+export function get(key: string): ArrayBuffer | null {
+  const result = fetchEntry(key)
+  if (result.status !== 'hit') return null
+  return result.value
 }
 
 export function sweep() {
