@@ -125,6 +125,15 @@ Open items to design/implement
 - Webhook pen-tests: `npm test -- --run tests/webhook-pentest.test.ts`
 - Bez lokálního Node: `docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm test -- --run tests/webhook-pentest.test.ts"`
 
+## Kernel integrity migration
+- Detailed migration package from `blackcat-kernel-contracts` is tracked in `kernel-migration/`.
+- Start with `kernel-migration/README.md`, then follow:
+  - `KERNEL_PORT_SCOPE.md`
+  - `AO_GATEWAY_DESIGN.md`
+  - `BACKLOG.md`
+  - `DECOMMISSION_CHECKLIST.md`
+- Temporary upstream references are stored in `kernel-migration/upstream/` to avoid losing design/security context during the port.
+
 ## Releases
 - Release drafts are created from main; see the latest draft and published tags in [Releases](https://github.com/Vito416/blackcat-darkmesh-gateway/releases).
 Open items to design/implement
