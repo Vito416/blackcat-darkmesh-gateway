@@ -25,6 +25,8 @@ Source snapshot:
   - detailed P0/P1/P2 implementation backlog and acceptance criteria.
 - `DECOMMISSION_CHECKLIST.md`
   - strict checklist required before deleting/archiving `blackcat-kernel-contracts`.
+- `contracts/`
+  - versioned AO integrity snapshot contract surface for the gateway, including schema and field compatibility notes.
 - `upstream/`
   - temporary copied upstream docs kept here as migration references.
 
@@ -35,6 +37,12 @@ Source snapshot:
 3. Keep Gateway checks lightweight on request path; do heavy verification on publish/cache-fill/startup hooks.
 4. Preserve authority separation (`root`, `upgrade`, `emergency`, `reporter`) with rotatable keys.
 5. Keep clear incident and rollback paths.
+
+## Contract surface
+
+The canonical gateway-facing AO integrity snapshot contract is documented in
+`contracts/README.md`, with the versioned JSON schema in
+`contracts/integrity-snapshot-v1.schema.json`.
 
 ## WEDOS NoLimit compatibility direction
 

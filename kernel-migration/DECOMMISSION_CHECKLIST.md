@@ -46,15 +46,20 @@ Do not archive/delete the old repo until all checks below are complete.
   - [ ] degraded mode behavior
   - [ ] recovery from AO outage
 - [ ] WEDOS/shared-hosting limits are validated (resource and runtime model).
+- [ ] Recovery drill completed at least once in staging with timestamps captured in notes.
+- [ ] Key rotation drill completed at least once for each integrity role.
+- [ ] AO fetch fallback was exercised and resumed without manual state repair.
 
 ## G. Final gate before deletion
 
-- [ ] Stakeholder sign-off: security
-- [ ] Stakeholder sign-off: operations
-- [ ] Stakeholder sign-off: architecture
-- [ ] P0 integrity rollout complete with `npm test` + focused integrity tests green.
-- [ ] A final migration summary is committed in gateway + AO notes
-- [ ] A rollback plan exists in case hidden dependency on old repo is discovered
+- [ ] Stakeholder sign-off: security (`1` documented approval, no open critical findings, no unresolved auth/rotation gaps).
+- [ ] Stakeholder sign-off: operations (`1` documented approval, runbook and recovery drill verified, on-call knows rollback path).
+- [ ] Stakeholder sign-off: architecture (`1` documented approval, target state and decommission scope match the approved design).
+- [ ] P0 integrity rollout complete with `npm test` + focused integrity tests green on the current branch.
+- [ ] Final migration summary committed in gateway + AO notes with date, scope, and rollback reference.
+- [ ] Rollback plan documented and tested in staging for at least one failure scenario.
+- [ ] No open P0/P1 migration blockers remain in backlog.
+- [ ] The old repo has been dry-run archived or mirrored with a verified restore path before deletion.
 
 ## Recommended deletion sequence
 

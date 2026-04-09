@@ -131,3 +131,12 @@ These complement existing webhook/cache metrics.
 - `blackcat-darkmesh-gateway`: enforces runtime integrity decisions at the edge/backend layer.
 
 This gives us kernel-level guarantees without EVM lock-in.
+
+## 10) Versioned contract surface
+
+The gateway-facing AO integrity snapshot contract is versioned separately in:
+- `kernel-migration/contracts/README.md`
+- `kernel-migration/contracts/integrity-snapshot-v1.schema.json`
+
+This keeps the data contract explicit while the parser and migration notes evolve
+independently.

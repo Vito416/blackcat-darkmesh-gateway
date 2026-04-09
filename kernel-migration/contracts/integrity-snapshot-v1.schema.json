@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vito416/blackcat-darkmesh-gateway/kernel-migration/contracts/integrity-snapshot-v1.schema.json",
+  "title": "BlackCat Darkmesh Gateway AO Integrity Snapshot v1",
+  "description": "Versioned contract for the AO integrity snapshot consumed by the gateway. The gateway accepts the raw snapshot object as the canonical shape and also unwraps AO codec envelopes with status=OK.",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/rawSnapshot"
+    },
+    {
+      "$ref": "#/$defs/aoCodecOkEnvelope"
+    }
+  ],
+  "$defs": {
+    "rawSnapshot": {
+      "type": "object",
+      "required": ["release", "policy", "authority", "audit"],
+      "properties": {
+        "release": {
+          "$ref": "#/$defs/releaseRecord"
+        },
+        "policy": {
+          "$ref": "#/$defs/policyRecord"
+        },
+        "authority": {
+          "$ref": "#/$defs/authorityRecord"
+        },
+        "audit": {
+          "$ref": "#/$defs/auditRecord"
+        }
+      },
+      "description": "Canonical AO integrity snapshot payload after any transport envelope has been removed."
+    },
+    "releaseRecord": {
+      "type": "object",
+      "required": ["componentId", "version", "root", "uriHash", "metaHash", "publishedAt"],
+      "properties": {
+        "componentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uriHash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metaHash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "publishedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revokedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Release metadata for the active AO integrity root. The gateway currently rejects active snapshots when revokedAt is present."
+    },
+    "policyRecord": {
+      "type": "object",
+      "required": ["activeRoot", "activePolicyHash", "paused", "maxCheckInAgeSec"],
+      "properties": {
+        "activeRoot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activePolicyHash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "maxCheckInAgeSec": {
+          "type": "number"
+        },
+        "pendingUpgrade": {
+          "$ref": "#/$defs/pendingUpgradeRecord"
+        },
+        "compatibilityState": {
+          "$ref": "#/$defs/compatibilityStateRecord"
+        }
+      },
+      "description": "Operational policy state. activeRoot must match release.root in the current gateway parser."
+    },
+    "pendingUpgradeRecord": {
+      "type": "object",
+      "required": ["root", "hash", "expiry", "proposedAt"],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expiry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proposedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Optional upgrade proposal metadata kept by AO for operational visibility."
+    },
+    "compatibilityStateRecord": {
+      "type": "object",
+      "required": ["root", "hash", "until"],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "until": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Optional compatibility overlap metadata. The gateway currently accepts compatibilityState.root only when it matches release.root or policy.activeRoot."
+    },
+    "authorityRecord": {
+      "type": "object",
+      "required": ["root", "upgrade", "emergency", "reporter", "signatureRefs"],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "upgrade": {
+          "type": "string",
+          "minLength": 1
+        },
+        "emergency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reporter": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signatureRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "description": "Authority routing metadata used by gateway/operator workflows."
+    },
+    "auditRecord": {
+      "type": "object",
+      "required": ["seqFrom", "seqTo", "merkleRoot", "metaHash", "reporterRef", "acceptedAt"],
+      "properties": {
+        "seqFrom": {
+          "type": "number"
+        },
+        "seqTo": {
+          "type": "number"
+        },
+        "merkleRoot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metaHash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reporterRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acceptedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Audit commitment summary paired with the snapshot."
+    },
+    "aoCodecOkEnvelope": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "const": "OK"
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["payload"],
+          "properties": {
+            "payload": {
+              "$ref": "#/$defs/rawSnapshot"
+            }
+          }
+        },
+        {
+          "required": ["body"],
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/rawSnapshot"
+            }
+          }
+        },
+        {
+          "required": ["result"],
+          "properties": {
+            "result": {
+              "$ref": "#/$defs/rawSnapshot"
+            }
+          }
+        },
+        {
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/rawSnapshot"
+            }
+          }
+        }
+      ],
+      "description": "AO codec envelope variant accepted by the current gateway parser. The snapshot must be nested under payload, body, result, or data."
+    }
+  }
+}
