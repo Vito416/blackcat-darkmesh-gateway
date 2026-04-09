@@ -16,6 +16,18 @@ type IntegrityPolicyState = { paused: boolean; source: 'env' | 'ao' | 'checkpoin
 type IntegrityContext = { state: IntegrityPolicyState; snapshot: IntegritySnapshot | null }
 type IntegrityIncidentSeverity = 'low' | 'medium' | 'high' | 'critical'
 type IntegrityRole = 'root' | 'upgrade' | 'emergency' | 'reporter'
+type IntegrityIncidentRecord = {
+  incidentId: string
+  action: string
+  event: string
+  source: string
+  severity: IntegrityIncidentSeverity
+  paused: boolean
+  recordedAt: string
+}
+type IntegrityIncidentReplayRecord = IntegrityIncidentRecord & {
+  seenAt: number
+}
 
 const templateReadActions = new Set(['public.resolve-route', 'public.get-page'])
 const templateWriteActions = new Set(['checkout.create-order', 'checkout.create-payment-intent'])
@@ -27,6 +39,9 @@ const incidentActionRoles: Record<string, IntegrityRole[]> = {
   pause: ['emergency', 'root'],
   resume: ['emergency', 'root'],
 }
+const integrityIncidentReplay = new Map<string, IntegrityIncidentReplayRecord>()
+const INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS = 30 * 60 * 1000
+const INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP = 256
 
 type IntegrityRuntimeCache = {
   expiresAt: number
@@ -84,6 +99,36 @@ function readIntegrityCacheTtlMs(): number {
   const parsed = raw ? Number.parseInt(raw, 10) : INTEGRITY_CACHE_DEFAULT_TTL_MS
   if (!Number.isFinite(parsed) || parsed <= 0) return INTEGRITY_CACHE_DEFAULT_TTL_MS
   return parsed
+}
+
+function readIntegrityIncidentReplayTtlMs(): number {
+  const raw = process.env.GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS
+  const parsed = raw ? Number.parseInt(raw, 10) : INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS
+  if (!Number.isFinite(parsed) || parsed <= 0) return INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS
+  return parsed
+}
+
+function readIntegrityIncidentReplayCap(): number {
+  const raw = process.env.GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP
+  const parsed = raw ? Number.parseInt(raw, 10) : INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP
+  if (!Number.isFinite(parsed) || parsed <= 0) return INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP
+  return parsed
+}
+
+function pruneIntegrityIncidentReplay(now = Date.now()) {
+  const ttlMs = readIntegrityIncidentReplayTtlMs()
+  for (const [incidentId, record] of integrityIncidentReplay.entries()) {
+    if (now - record.seenAt > ttlMs) {
+      integrityIncidentReplay.delete(incidentId)
+    }
+  }
+
+  const cap = readIntegrityIncidentReplayCap()
+  while (integrityIncidentReplay.size > cap) {
+    const oldestKey = integrityIncidentReplay.keys().next().value
+    if (!oldestKey) break
+    integrityIncidentReplay.delete(oldestKey)
+  }
 }
 
 async function resolveIntegrityPolicyState(): Promise<IntegrityPolicyState> {
@@ -157,6 +202,29 @@ function policyPausedResponse(): Response {
       'cache-control': 'no-store',
     },
   })
+}
+
+function incidentDuplicateResponse(record: IntegrityIncidentRecord): Response {
+  inc('gateway_integrity_incident_duplicate')
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      duplicate: true,
+      idempotent: true,
+      incidentId: record.incidentId,
+      action: record.action,
+      paused: record.paused,
+      status: 'duplicate',
+      recordedAt: record.recordedAt,
+    }),
+    {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      },
+    },
+  )
 }
 
 function markReadonlyFallback(paused: boolean) {
@@ -527,6 +595,14 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
     })
   }
 
+  const incidentId =
+    providedIncidentId && providedIncidentId.length > 0 ? providedIncidentId : crypto.randomUUID()
+  pruneIntegrityIncidentReplay()
+  const existingIncident = providedIncidentId ? integrityIncidentReplay.get(incidentId) || null : null
+  if (existingIncident) {
+    return incidentDuplicateResponse(existingIncident)
+  }
+
   if (action === 'pause') {
     integrityRuntime.state = { paused: true, source: 'env' }
     integrityRuntime.expiresAt = Date.now() + readIntegrityCacheTtlMs()
@@ -537,8 +613,6 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
     gauge('gateway_integrity_policy_paused', 0)
   }
 
-  const incidentId =
-    providedIncidentId && providedIncidentId.length > 0 ? providedIncidentId : crypto.randomUUID()
   const details = (body as any).details ?? null
   const occurredAt =
     typeof (body as any).occurredAt === 'string' && (body as any).occurredAt.trim()
@@ -557,6 +631,19 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
   }
 
   inc('gateway_integrity_incident')
+  if (providedIncidentId) {
+    integrityIncidentReplay.set(incidentId, {
+      incidentId,
+      action,
+      event,
+      source,
+      severity: severityInput,
+      paused: integrityRuntime.state.paused,
+      recordedAt: incident.receivedAt,
+      seenAt: Date.now(),
+    })
+    pruneIntegrityIncidentReplay()
+  }
 
   const notifyUrl = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_URL || '').trim()
   if (notifyUrl) {

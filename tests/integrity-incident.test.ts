@@ -4,6 +4,14 @@ import { reset, snapshot } from '../src/metrics.js'
 
 const originalEnv = { ...process.env }
 
+function clearIntegrityAoEnv() {
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('AO_INTEGRITY_')) {
+      delete process.env[key]
+    }
+  }
+}
+
 function makeIncidentRequest(body: Record<string, unknown>, headers: Record<string, string> = {}) {
   return new Request('http://gateway/integrity/incident', {
     method: 'POST',
@@ -61,11 +69,13 @@ describe('integrity incident and state endpoints', () => {
   beforeEach(() => {
     vi.resetModules()
     process.env = { ...originalEnv }
+    clearIntegrityAoEnv()
     reset()
   })
 
   afterEach(() => {
     process.env = { ...originalEnv }
+    clearIntegrityAoEnv()
     vi.restoreAllMocks()
     reset()
   })
@@ -245,7 +255,169 @@ describe('integrity incident and state endpoints', () => {
     const allowedWrite = await handleRequest(makeTemplateWriteRequest())
     expect(allowedWrite.status).toBe(200)
     expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+    const state = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(state.status).toBe(200)
+    await expect(state.json()).resolves.toMatchObject({ policy: { paused: false } })
     expect(snapshot().gauges.gateway_integrity_policy_paused).toBe(0)
+  })
+
+  it('deduplicates replayed incident ids and preserves the first applied side effect', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+
+    const { handleRequest } = await loadHandler()
+    const incidentId = 'incident-replay-001'
+
+    const first = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-freeze',
+          action: 'pause',
+          incidentId,
+          source: 'ops',
+          severity: 'critical',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+
+    expect(first.status).toBe(200)
+    await expect(first.json()).resolves.toMatchObject({
+      ok: true,
+      incidentId,
+      action: 'pause',
+      paused: true,
+    })
+
+    const duplicate = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-unfreeze',
+          action: 'resume',
+          incidentId,
+          source: 'ops',
+          severity: 'critical',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+
+    expect(duplicate.status).toBe(200)
+    await expect(duplicate.json()).resolves.toMatchObject({
+      ok: true,
+      duplicate: true,
+      idempotent: true,
+      incidentId,
+      action: 'pause',
+      paused: true,
+      status: 'duplicate',
+    })
+
+    const metrics = snapshot()
+    expect(metrics.counters.gateway_integrity_incident).toBe(1)
+    expect(metrics.counters.gateway_integrity_incident_duplicate).toBe(1)
+
+    const state = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(state.status).toBe(200)
+    await expect(state.json()).resolves.toMatchObject({ policy: { paused: true } })
+  })
+
+  it('expires replay ids after the configured ttl and stops deduping stale incidents', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS = '1'
+    const nowSpy = vi.spyOn(Date, 'now')
+    nowSpy.mockReturnValue(1000)
+
+    const { handleRequest } = await loadHandler()
+    const incidentId = 'ttl-expire-001'
+
+    const first = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-freeze', action: 'pause', incidentId, source: 'ops', severity: 'critical' },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+    expect(first.status).toBe(200)
+
+    nowSpy.mockReturnValue(1005)
+    const second = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-unfreeze', action: 'resume', incidentId, source: 'ops', severity: 'critical' },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+
+    expect(second.status).toBe(200)
+    await expect(second.json()).resolves.toMatchObject({
+      ok: true,
+      incidentId,
+      action: 'resume',
+      paused: false,
+    })
+
+    expect(snapshot().counters.gateway_integrity_incident_duplicate).toBeUndefined()
+  })
+
+  it('evicts the oldest replay ids when the cache cap is exceeded', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP = '1'
+    const nowSpy = vi.spyOn(Date, 'now')
+    nowSpy.mockReturnValue(2000)
+
+    const { handleRequest } = await loadHandler()
+
+    const first = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-freeze',
+          action: 'pause',
+          incidentId: 'cap-evict-001',
+          source: 'ops',
+          severity: 'critical',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+    expect(first.status).toBe(200)
+
+    nowSpy.mockReturnValue(2001)
+    const second = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'routine-report',
+          action: 'report',
+          incidentId: 'cap-evict-002',
+          source: 'ops',
+          severity: 'medium',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+    expect(second.status).toBe(200)
+
+    nowSpy.mockReturnValue(2002)
+    const third = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-thaw',
+          action: 'resume',
+          incidentId: 'cap-evict-001',
+          source: 'ops',
+          severity: 'critical',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+
+    expect(third.status).toBe(200)
+    await expect(third.json()).resolves.toMatchObject({
+      ok: true,
+      incidentId: 'cap-evict-001',
+      action: 'resume',
+      paused: false,
+    })
+
+    expect(snapshot().counters.gateway_integrity_incident_duplicate).toBeUndefined()
   })
 
   it('forwards incident notifications and records notify metrics', async () => {
