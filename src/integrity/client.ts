@@ -140,20 +140,39 @@ function parseAudit(raw: unknown): IntegrityAuditRecord {
   }
 }
 
-function unwrapSnapshot(raw: unknown): unknown {
-  if (!isObject(raw)) return raw
-
+function extractCodecPayload(raw: Record<string, unknown>): unknown | undefined {
+  if (!('status' in raw)) return undefined
   const status = typeof raw.status === 'string' ? raw.status : ''
-  if (!status) return raw
+  if (!status) return undefined
 
   if (status === 'OK') {
-    if (!('payload' in raw)) return raw
-    return raw.payload
+    const payloadKeys = ['payload', 'body', 'result', 'data'] as const
+    for (const key of payloadKeys) {
+      if (key in raw) {
+        return raw[key]
+      }
+    }
+    throw new IntegritySnapshotError(
+      'integrity_invalid_snapshot',
+      'codec envelope status OK is missing a payload field',
+    )
   }
+
   if (status === 'ERROR') {
     const code = typeof raw.code === 'string' ? raw.code : 'upstream_error'
     const message = typeof raw.message === 'string' ? raw.message : 'upstream returned error envelope'
     throw new IntegritySnapshotError('integrity_fetch_failed', `${code}:${message}`)
+  }
+
+  return undefined
+}
+
+function unwrapSnapshot(raw: unknown): unknown {
+  if (!isObject(raw)) return raw
+
+  const payload = extractCodecPayload(raw)
+  if (payload !== undefined) {
+    return payload
   }
   return raw
 }

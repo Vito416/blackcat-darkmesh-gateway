@@ -6,9 +6,9 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 - Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 
-- [ ] P0.1 AO integrity registry contract surface
+- [~] P0.1 AO integrity registry contract surface (AO PR in flight; registry authority/audit extensions underway)
 - [~] P0.2 Gateway artifact verifier (core verifier + cache enforcement landed; AO release-root parity still pending)
-- [~] P0.3 Policy pause + degraded mode (runtime gate landed; remaining AO policy-state edge cases pending)
+- [~] P0.3 Policy pause + degraded mode (runtime gate landed; checkpoint restore/fallback coverage expanded)
 - [x] P0.4 Migration parity tests
 - [ ] P1.1 Authority separation and rotation workflow
 - [ ] P1.2 Audit commitments stream
@@ -27,6 +27,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
   - policy pause state query
 - Add role/signature enforcement for registry-mutating actions.
 - Add replay/idempotency tests for registry writes.
+- Add authority and audit commitment actions for the v1.4.0 workflow.
 
 Acceptance:
 - AO tests prove trusted/untrusted/revoked root transitions.
@@ -48,6 +49,7 @@ Acceptance:
 - Add gateway runtime gate controlled by AO policy state.
 - Implement read-only fallback behavior for mutable endpoints.
 - Ensure deterministic response codes and audit logs.
+- Restore from checkpoint when AO fetch fails; fall back to env state only when no checkpoint exists.
 
 Acceptance:
 - integration test: when `paused=true`, mutating endpoints fail closed.

@@ -84,6 +84,46 @@ describe('integrity snapshot client', () => {
     expect(snapshot.policy.activePolicyHash).toBe('policy-789')
   })
 
+  it('accepts AO codec envelope responses with body field', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 'OK',
+          body: validSnapshot(),
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+    )
+
+    const snapshot = await fetchIntegritySnapshot()
+    expect(snapshot.release.version).toBe('1.2.0')
+    expect(snapshot.authority.reporter).toBe('sig-reporter')
+  })
+
+  it('accepts AO codec envelope responses with result field', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 'OK',
+          result: validSnapshot(),
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+    )
+
+    const snapshot = await fetchIntegritySnapshot()
+    expect(snapshot.release.root).toBe('root-abc')
+    expect(snapshot.audit.seqTo).toBe(3)
+  })
+
   it('fails on AO codec error envelopes', async () => {
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -102,6 +142,25 @@ describe('integrity snapshot client', () => {
 
     await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
       code: 'integrity_fetch_failed',
+    })
+  })
+
+  it('fails closed when codec envelope reports OK but omits a payload field', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 'OK',
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+    )
+
+    await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
+      code: 'integrity_invalid_snapshot',
     })
   })
 
