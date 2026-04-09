@@ -17,6 +17,8 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `AO_INTEGRITY_FETCH_TIMEOUT_MS=4000`
 - `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS=2`
 - `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS=75`
+- `GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS=900000`
+- `GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP=128`
 - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS=43200`
 
 ### Profile B: WEDOS medium (balanced default)
@@ -32,12 +34,15 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `AO_INTEGRITY_FETCH_TIMEOUT_MS=5000`
 - `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS=3`
 - `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS=100`
+- `GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS=1800000`
+- `GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP=256`
 - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS=86400`
 
 ### Profile C: Diskless/ephemeral host
 - `GATEWAY_RESOURCE_PROFILE=diskless`
 - `GATEWAY_INTEGRITY_DISKLESS=1`
 - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`
+- Keep incident replay dedupe bounded (`GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP`) to avoid memory growth on long-lived shared hosts.
 - Keep the rest aligned to Profile A or B.
 
 ## Fetch/retry precedence
