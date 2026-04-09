@@ -25,6 +25,8 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+      - name: Integrity parity
+        run: npm test -- --run tests/integrity-*.test.ts
       - name: Unit + metrics auth
         run: npm test -- --run tests/metrics-auth.test.ts
       - name: Webhook pen-tests
@@ -44,6 +46,8 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
+      - name: Integrity parity
+        run: npm test -- --run tests/integrity-*.test.ts
       - name: Test (full suite)
         run: npm test
       - name: PSP smoke (built dist)

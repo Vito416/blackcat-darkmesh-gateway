@@ -137,6 +137,16 @@ Open items to design/implement
 - Webhook pen-tests: `npm test -- --run tests/webhook-pentest.test.ts`
 - Bez lokálního Node: `docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm test -- --run tests/webhook-pentest.test.ts"`
 
+### Next execution order (P0 rollout)
+1. `npm test`
+2. `npm run build`
+3. `npm test -- --run tests/integrity-client.test.ts`
+4. `npm test -- --run tests/integrity-verifier.test.ts`
+5. `npm test -- --run tests/integrity-policy-gate.test.ts`
+6. `npm test -- --run tests/integrity-checkpoint.test.ts`
+7. `npm test -- --run tests/integrity-parity.test.ts`
+8. Re-run the full suite before any kernel-retirement decision.
+
 ## Kernel integrity migration
 - Detailed migration package from `blackcat-kernel-contracts` is tracked in `kernel-migration/`.
 - Start with `kernel-migration/README.md`, then follow:

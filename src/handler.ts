@@ -1,13 +1,52 @@
 import { Buffer } from 'buffer'
 import crypto from 'crypto'
 import { get, put, sweep, forgetSubject, dropKey } from './cache.js'
-import { inc, gauge, snapshot, toProm } from './metrics.js'
+import { inc, gauge, toProm } from './metrics.js'
 import { check as rateCheck } from './ratelimit.js'
 import { verifyStripe, verifyPayPal, noteCert } from './webhooks.js'
 import { markAndCheck } from './replay.js'
 import { proxyTemplateCall } from './templateApi.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
+type IntegrityPolicyState = { paused: boolean }
+
+const templateReadActions = new Set(['public.resolve-route', 'public.get-page'])
+const templateWriteActions = new Set(['checkout.create-order', 'checkout.create-payment-intent'])
+
+function readIntegrityPolicyState(): IntegrityPolicyState {
+  const fallbackPaused = process.env.GATEWAY_INTEGRITY_POLICY_PAUSED === '1'
+  const raw = process.env.GATEWAY_INTEGRITY_POLICY_JSON?.trim()
+  if (!raw) return { paused: fallbackPaused }
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && typeof parsed.paused === 'boolean') {
+      return { paused: parsed.paused }
+    }
+  } catch (_) {
+    // Ignore malformed policy JSON and fall back to the env flag.
+  }
+
+  return { paused: fallbackPaused }
+}
+
+function integrityPolicyPaused(): boolean {
+  const { paused } = readIntegrityPolicyState()
+  gauge('gateway_integrity_policy_paused', paused ? 1 : 0)
+  return paused
+}
+
+function policyPausedResponse(): Response {
+  inc('gateway_integrity_unverified_block')
+  return new Response(JSON.stringify({ error: 'policy_paused' }), {
+    status: 503,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+function markReadonlyFallback(paused: boolean) {
+  if (paused) inc('gateway_integrity_fallback_readonly')
+}
 
 function recordWebhook5xx(provider: WebhookProvider) {
   inc(`gateway_webhook_${provider}_5xx`)
@@ -35,14 +74,16 @@ async function handleInbox(req: Request): Promise<Response> {
   return new Response('ok', { status: 200 })
 }
 
-async function handleCache(req: Request, key: string): Promise<Response> {
+async function handleCache(req: Request, key: string, paused: boolean): Promise<Response> {
   if (req.method === 'PUT') {
+    if (paused) return policyPausedResponse()
     const buf = await req.arrayBuffer()
     const subject = req.headers.get('X-Subject') || undefined
     put(key, buf, subject)
     return new Response('stored', { status: 201 })
   }
   if (req.method === 'GET') {
+    markReadonlyFallback(paused)
     const buf = get(key)
     if (!buf) return new Response('miss', { status: 404 })
     return new Response(buf, { status: 200 })
@@ -50,7 +91,7 @@ async function handleCache(req: Request, key: string): Promise<Response> {
   return new Response('method', { status: 405 })
 }
 
-async function handleTemplateCall(req: Request): Promise<Response> {
+async function handleTemplateCall(req: Request, paused: boolean): Promise<Response> {
   inc('gateway_template_call')
   if (req.method !== 'POST') return new Response('method', { status: 405 })
 
@@ -85,6 +126,14 @@ async function handleTemplateCall(req: Request): Promise<Response> {
     })
   }
 
+  if (paused && templateWriteActions.has(action)) {
+    return policyPausedResponse()
+  }
+
+  if (paused && templateReadActions.has(action)) {
+    markReadonlyFallback(true)
+  }
+
   const res = await proxyTemplateCall({
     action,
     payload,
@@ -106,8 +155,11 @@ async function handleTemplateCall(req: Request): Promise<Response> {
 
 export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
+  const integrityPaused = integrityPolicyPaused()
+
   if (url.pathname.startsWith('/cache/forget')) {
     if (request.method !== 'POST') return new Response('method', { status: 405 })
+    if (integrityPaused) return policyPausedResponse()
     const token = process.env.GATEWAY_FORGET_TOKEN
     if (token) {
       const auth = request.headers.get('authorization') || request.headers.get('x-forget-token') || ''
@@ -124,15 +176,17 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
   if (url.pathname.startsWith('/cache/')) {
     const key = url.pathname.replace('/cache/', '')
-    return handleCache(request, key)
+    return handleCache(request, key, integrityPaused)
   }
   if (url.pathname === '/inbox') {
+    if (integrityPaused) return policyPausedResponse()
     return handleInbox(request)
   }
   if (url.pathname === '/template/call') {
-    return handleTemplateCall(request)
+    return handleTemplateCall(request, integrityPaused)
   }
   if (url.pathname === '/metrics') {
+    markReadonlyFallback(integrityPaused)
     const needBasic = !!(process.env.METRICS_BASIC_USER && process.env.METRICS_BASIC_PASS)
     const needBearer = !!process.env.METRICS_BEARER_TOKEN
     const mustGuard = process.env.GATEWAY_REQUIRE_METRICS_AUTH !== '0'
@@ -166,6 +220,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     return new Response(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } })
   }
   if (url.pathname === '/webhook/stripe') {
+    if (integrityPaused) return policyPausedResponse()
     return wrapWebhook('stripe', async () => {
       const body = await request.text()
       const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), process.env.STRIPE_WEBHOOK_SECRET || '', parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE_MS || '300000', 10))
@@ -181,6 +236,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     })
   }
   if (url.pathname === '/webhook/paypal') {
+    if (integrityPaused) return policyPausedResponse()
     return wrapWebhook('paypal', async () => {
       const body = await request.text()
       const headers = request.headers
@@ -199,6 +255,7 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
 
   if (url.pathname === '/webhook/demo-forward') {
+    if (integrityPaused) return policyPausedResponse()
     const target = process.env.WORKER_NOTIFY_URL || 'http://localhost:8787/notify'
     const token = process.env.WORKER_AUTH_TOKEN || process.env.WORKER_NOTIFY_TOKEN || 'test-notify'
     const hmacSecret = process.env.WORKER_NOTIFY_HMAC || ''
@@ -239,5 +296,6 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
   // periodic sweep
   sweep()
+  if (url.pathname === '/') markReadonlyFallback(integrityPaused)
   return new Response('Gateway skeleton', { status: 200 })
 }

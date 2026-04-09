@@ -2,6 +2,22 @@
 
 This backlog is written to avoid re-discovery work and to make execution straightforward.
 
+## Tracker
+
+- Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
+
+- [ ] P0.1 AO integrity registry contract surface
+- [ ] P0.2 Gateway artifact verifier
+- [ ] P0.3 Policy pause + degraded mode
+- [ ] P0.4 Migration parity tests
+- [ ] P1.1 Authority separation and rotation workflow
+- [ ] P1.2 Audit commitments stream
+- [ ] P1.3 Signed local checkpoint (gateway)
+- [ ] P1.4 Incident/reporting hooks
+- [ ] P2.1 Verification scheduling optimizations
+- [ ] P2.2 Resource budgets and limits
+- [ ] P2.3 Optional diskless mode
+
 ## P0 - Mandatory before kernel repo retirement
 
 ### P0.1 AO integrity registry contract surface

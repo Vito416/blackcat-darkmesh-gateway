@@ -34,7 +34,9 @@ Do not archive/delete the old repo until all checks below are complete.
 
 - [ ] Kernel-derived parity scenarios are ported into AO/gateway tests.
 - [ ] CI contains integrity-focused tests (not only basic unit coverage).
+- [ ] CI integrity tests pass for `integrity-client`, `integrity-verifier`, `integrity-policy-gate`, `integrity-checkpoint`, and `integrity-parity`.
 - [ ] Negative tests cover revoked root, hash mismatch, missing authority, stale state.
+- [ ] Checkpoint tamper test passes and fails closed on signature mismatch.
 
 ## F. Operational readiness
 
@@ -50,6 +52,7 @@ Do not archive/delete the old repo until all checks below are complete.
 - [ ] Stakeholder sign-off: security
 - [ ] Stakeholder sign-off: operations
 - [ ] Stakeholder sign-off: architecture
+- [ ] P0 integrity rollout complete with `npm test` + focused integrity tests green.
 - [ ] A final migration summary is committed in gateway + AO notes
 - [ ] A rollback plan exists in case hidden dependency on old repo is discovered
 

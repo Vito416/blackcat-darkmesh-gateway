@@ -37,6 +37,17 @@
 - Align webhook retry/breaker metrics with AO/Write (`write.webhook.*`, `write.psp.*`) and expose via Prom endpoint.
 - Add E2E test harness: fake PSP + worker + write ingest to validate encrypted checkout → AO state.
 
+## Next execution order (P0 rollout)
+1. Land integrity client + verifier + policy gate + checkpoint helpers.
+2. Run focused tests:
+   - `npm test -- --run tests/integrity-client.test.ts`
+   - `npm test -- --run tests/integrity-verifier.test.ts`
+   - `npm test -- --run tests/integrity-policy-gate.test.ts`
+   - `npm test -- --run tests/integrity-checkpoint.test.ts`
+   - `npm test -- --run tests/integrity-parity.test.ts`
+3. Run `npm test` and `npm run build` after the focused set passes.
+4. Only then evaluate kernel-repo decommission readiness.
+
 ## Testing/Tooling
 - E2E harness with fake PSP + scripted webhooks.
 - Chaos tests for breaker/retry; cache wipe after ForgetSubject.

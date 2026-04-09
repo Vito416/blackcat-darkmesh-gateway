@@ -35,6 +35,9 @@ const help: Record<string, string> = {
   gateway_template_call_ok_total: 'Template API calls forwarded successfully',
   gateway_template_call_blocked_total: 'Template API calls blocked by policy/auth/validation',
   gateway_template_call_backend_fail_total: 'Template API calls failed at backend',
+  gateway_integrity_policy_paused: 'Gateway integrity policy paused (1 when paused, 0 otherwise)',
+  gateway_integrity_fallback_readonly_total: 'Read-only requests served while integrity policy paused',
+  gateway_integrity_unverified_block_total: 'Requests blocked by integrity gate',
 }
 
 const types: Record<string, 'counter' | 'gauge'> = {}
