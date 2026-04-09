@@ -14,9 +14,11 @@ import type { IntegritySnapshot } from './integrity/types.js'
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
 type IntegrityPolicyState = { paused: boolean; source: 'env' | 'ao' | 'checkpoint' }
 type IntegrityContext = { state: IntegrityPolicyState; snapshot: IntegritySnapshot | null }
+type IntegrityIncidentSeverity = 'low' | 'medium' | 'high' | 'critical'
 
 const templateReadActions = new Set(['public.resolve-route', 'public.get-page'])
 const templateWriteActions = new Set(['checkout.create-order', 'checkout.create-payment-intent'])
+const incidentSeverities = new Set<IntegrityIncidentSeverity>(['low', 'medium', 'high', 'critical'])
 const INTEGRITY_CACHE_DEFAULT_TTL_MS = 10_000
 
 type IntegrityRuntimeCache = {
@@ -120,6 +122,30 @@ function policyPausedResponse(): Response {
 
 function markReadonlyFallback(paused: boolean) {
   if (paused) inc('gateway_integrity_fallback_readonly')
+}
+
+function readBearerToken(request: Request): string {
+  const auth = request.headers.get('authorization') || ''
+  if (/^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, '').trim()
+  return ''
+}
+
+function readHeaderToken(request: Request, headerName: string): string {
+  return (request.headers.get(headerName) || '').trim()
+}
+
+function tokenEquals(expected: string, presented: string): boolean {
+  if (!expected || !presented) return false
+  const a = Buffer.from(expected)
+  const b = Buffer.from(presented)
+  if (a.length !== b.length) return false
+  return crypto.timingSafeEqual(a, b)
+}
+
+function checkToken(request: Request, expectedToken: string, headerName: string): boolean {
+  const bearer = readBearerToken(request)
+  const header = readHeaderToken(request, headerName)
+  return tokenEquals(expectedToken, bearer) || tokenEquals(expectedToken, header)
 }
 
 function recordWebhook5xx(provider: WebhookProvider) {
@@ -290,10 +316,181 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
   return res
 }
 
+async function handleIntegrityState(req: Request, integrity: IntegrityContext): Promise<Response> {
+  if (req.method !== 'GET') return new Response('method', { status: 405 })
+
+  const token = process.env.GATEWAY_INTEGRITY_STATE_TOKEN || ''
+  if (token && !checkToken(req, token, 'x-integrity-token')) {
+    inc('gateway_integrity_state_auth_blocked')
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  inc('gateway_integrity_state_read')
+  const payload = {
+    policy: {
+      paused: integrity.state.paused,
+      source: integrity.state.source,
+      activeRoot: integrity.snapshot?.policy?.activeRoot || null,
+      activePolicyHash: integrity.snapshot?.policy?.activePolicyHash || null,
+      maxCheckInAgeSec: integrity.snapshot?.policy?.maxCheckInAgeSec || null,
+    },
+    release: integrity.snapshot?.release || null,
+    authority: integrity.snapshot?.authority || null,
+    audit: integrity.snapshot?.audit || null,
+  }
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+async function handleIntegrityIncident(req: Request): Promise<Response> {
+  if (req.method !== 'POST') return new Response('method', { status: 405 })
+
+  const token = process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN || ''
+  if (!token) {
+    return new Response('incident_auth_not_configured', { status: 500 })
+  }
+  if (!checkToken(req, token, 'x-incident-token')) {
+    inc('gateway_integrity_incident_auth_blocked')
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== 'object') {
+    return new Response(JSON.stringify({ error: 'invalid_json' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  const event = String((body as any).event || '').trim()
+  const source = String((body as any).source || 'gateway').trim()
+  const severityInput = String((body as any).severity || 'medium').toLowerCase() as IntegrityIncidentSeverity
+  const action = String((body as any).action || 'report').toLowerCase()
+  const providedIncidentId =
+    typeof (body as any).incidentId === 'string' && (body as any).incidentId.trim().length > 0
+      ? (body as any).incidentId.trim()
+      : null
+
+  if (!event || event.length > 128) {
+    return new Response(JSON.stringify({ error: 'event_required' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  if (!source || source.length > 128) {
+    return new Response(JSON.stringify({ error: 'invalid_source' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  if (!incidentSeverities.has(severityInput)) {
+    return new Response(JSON.stringify({ error: 'invalid_severity' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  if (!['report', 'ack', 'pause', 'resume'].includes(action)) {
+    return new Response(JSON.stringify({ error: 'invalid_action' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  if (providedIncidentId && providedIncidentId.length > 128) {
+    return new Response(JSON.stringify({ error: 'invalid_incident_id' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  if (action === 'pause') {
+    integrityRuntime.state = { paused: true, source: 'env' }
+    integrityRuntime.expiresAt = Date.now() + readIntegrityCacheTtlMs()
+    gauge('gateway_integrity_policy_paused', 1)
+  } else if (action === 'resume') {
+    integrityRuntime.state = { paused: false, source: 'env' }
+    integrityRuntime.expiresAt = Date.now() + readIntegrityCacheTtlMs()
+    gauge('gateway_integrity_policy_paused', 0)
+  }
+
+  const incidentId =
+    providedIncidentId && providedIncidentId.length > 0 ? providedIncidentId : crypto.randomUUID()
+  const details = (body as any).details ?? null
+  const occurredAt =
+    typeof (body as any).occurredAt === 'string' && (body as any).occurredAt.trim()
+      ? (body as any).occurredAt.trim()
+      : new Date().toISOString()
+
+  const incident = {
+    incidentId,
+    event,
+    source,
+    severity: severityInput,
+    action,
+    occurredAt,
+    receivedAt: new Date().toISOString(),
+    details,
+  }
+
+  inc('gateway_integrity_incident')
+
+  const notifyUrl = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_URL || '').trim()
+  if (notifyUrl) {
+    const notifyToken = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_TOKEN || '').trim()
+    const notifyHmac = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_HMAC || '').trim()
+    const bodyRaw = JSON.stringify(incident)
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    }
+    if (notifyToken) headers.authorization = `Bearer ${notifyToken}`
+    if (notifyHmac) {
+      headers['x-signature'] = crypto.createHmac('sha256', notifyHmac).update(bodyRaw).digest('hex')
+    }
+
+    try {
+      const res = await fetch(notifyUrl, { method: 'POST', headers, body: bodyRaw })
+      if (!res.ok) {
+        inc('gateway_integrity_incident_notify_fail')
+        return new Response(JSON.stringify({ error: 'incident_notify_failed', status: res.status }), {
+          status: 502,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      inc('gateway_integrity_incident_notify_ok')
+    } catch (_) {
+      inc('gateway_integrity_incident_notify_fail')
+      return new Response(JSON.stringify({ error: 'incident_notify_failed' }), {
+        status: 502,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+  }
+
+  return new Response(JSON.stringify({ ok: true, incidentId, paused: integrityRuntime.state.paused, action }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
 export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
   const integrity = await resolveIntegrityContext()
   const integrityPaused = integrity.state.paused
+
+  if (url.pathname === '/integrity/state') {
+    markReadonlyFallback(integrityPaused)
+    return handleIntegrityState(request, integrity)
+  }
+  if (url.pathname === '/integrity/incident') {
+    return handleIntegrityIncident(request)
+  }
 
   if (url.pathname.startsWith('/cache/forget')) {
     if (request.method !== 'POST') return new Response('method', { status: 405 })

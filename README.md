@@ -60,6 +60,11 @@ Configuration (per site)
   - `GATEWAY_INTEGRITY_POLICY_JSON` (optional JSON override, e.g. `{\"paused\":true}`)
   - `GATEWAY_INTEGRITY_CHECKPOINT_PATH` + `GATEWAY_INTEGRITY_CHECKPOINT_SECRET` (signed local checkpoint fallback)
   - `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1` (fail closed unless cache entries are integrity-verified)
+  - `GATEWAY_INTEGRITY_STATE_TOKEN` (optional auth token for `GET /integrity/state`; accepts Bearer or `x-integrity-token`)
+  - `GATEWAY_INTEGRITY_INCIDENT_TOKEN` (required auth token for `POST /integrity/incident`; accepts Bearer or `x-incident-token`)
+  - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_URL` (optional incident forward target)
+  - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_TOKEN` (optional Bearer token for incident forwarding)
+  - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_HMAC` (optional HMAC secret; sent as `x-signature`)
 - Template custom-backend guardrails:
   - `GATEWAY_TEMPLATE_TOKEN` (optional shared token required on `/template/call`)
   - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1` (default is read-only; write actions blocked unless enabled)
@@ -123,6 +128,8 @@ Open items to design/implement
 - `/api/public/*` → served from AO read state (cached).
 - `/webhook/:psp` → PSP bridge ingress.
 - `/template/call` → constrained template backend API (allowlisted actions only, schema-validated, optional token + HMAC).
+- `/integrity/state` → read current runtime integrity state + latest AO/checkpoint snapshot details (optional token).
+- `/integrity/incident` → authenticated incident intake (`report|ack|pause|resume`) with optional forwarding hook.
 - `/metrics` → Prom/OpenMetrics (protected, text format; set `GATEWAY_REQUIRE_METRICS_AUTH=1` + bearer/basic creds).
 - `/cache/forget` → internal, called by AO ForgetSubject (token-protected).
 
@@ -135,6 +142,19 @@ When `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1`, cache PUT requests must inclu
 - HMAC on browser→gateway API calls (optional) to deter tampering between CDN hops.
 - mTLS / signed requests between Gateway↔Write AO/Worker where supported.
 - Rate-limit buckets per IP + per session; PoW challenge toggle for abusive clients.
+
+## Integrity incident operations
+- Freeze mutating routes (runtime pause): `POST /integrity/incident` with `{ "event": "...", "action": "pause", "severity": "critical" }`.
+- Resume normal mode: `POST /integrity/incident` with `{ "event": "...", "action": "resume" }`.
+- Acknowledge/report without pause toggle: `action: "ack"` or `action: "report"`.
+- Read current state: `GET /integrity/state` (returns policy source, pause status, active root/policy hash, release/authority/audit envelope).
+- Metrics to watch:
+  - `gateway_integrity_incident_total`
+  - `gateway_integrity_incident_auth_blocked_total`
+  - `gateway_integrity_incident_notify_ok_total`
+  - `gateway_integrity_incident_notify_fail_total`
+  - `gateway_integrity_state_read_total`
+  - `gateway_integrity_state_auth_blocked_total`
 
 ## Testing plan
 - Unit: manifest verification, cache TTL/wipe, PSP signature verify.

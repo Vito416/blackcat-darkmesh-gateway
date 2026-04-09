@@ -42,6 +42,12 @@ const help: Record<string, string> = {
   gateway_integrity_verify_fail_total: 'Cache artifact integrity checks failed',
   gateway_integrity_snapshot_fetch_fail_total: 'AO integrity snapshot fetch/validation failures',
   gateway_integrity_checkpoint_restore_total: 'Integrity state restored from signed local checkpoint',
+  gateway_integrity_incident_total: 'Integrity incidents accepted by gateway',
+  gateway_integrity_incident_auth_blocked_total: 'Integrity incident requests blocked by auth',
+  gateway_integrity_state_auth_blocked_total: 'Integrity state requests blocked by auth',
+  gateway_integrity_incident_notify_ok_total: 'Integrity incident notifications forwarded successfully',
+  gateway_integrity_incident_notify_fail_total: 'Integrity incident notification forwarding failures',
+  gateway_integrity_state_read_total: 'Integrity state read requests served',
 }
 
 const types: Record<string, 'counter' | 'gauge'> = {}

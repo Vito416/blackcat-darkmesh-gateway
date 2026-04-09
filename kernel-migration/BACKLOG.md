@@ -13,7 +13,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - [ ] P1.1 Authority separation and rotation workflow
 - [ ] P1.2 Audit commitments stream
 - [ ] P1.3 Signed local checkpoint (gateway)
-- [ ] P1.4 Incident/reporting hooks
+- [~] P1.4 Incident/reporting hooks (incident/state endpoints + metrics + tests landed; operator automation/runbook hardening remains)
 - [ ] P2.1 Verification scheduling optimizations
 - [ ] P2.2 Resource budgets and limits
 - [ ] P2.3 Optional diskless mode
@@ -82,6 +82,12 @@ Acceptance:
 ### P1.4 Incident/reporting hooks
 - Add incident action path and metrics pipeline.
 - Add operator runbook for pause/resume and incident ack.
+
+Progress notes:
+- `POST /integrity/incident` supports authenticated `report|ack|pause|resume`.
+- `GET /integrity/state` exposes runtime policy state and latest AO/checkpoint snapshot envelope.
+- Metrics added: incident accepted/auth-blocked/notify ok/notify fail + state read/auth-blocked.
+- Coverage added in `tests/integrity-incident.test.ts`.
 
 ## P2 - Performance and platform polish (WEDOS-first)
 
