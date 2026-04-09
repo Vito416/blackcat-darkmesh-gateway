@@ -24,6 +24,7 @@ describe('metrics exporter', () => {
 
   it('includes integrity incident/state metric descriptors', () => {
     const prom = toProm()
+    expect(prom).toContain('# HELP gateway_cache_store_reject_total Cache entries rejected by admission limits')
     expect(prom).toContain(
       '# HELP gateway_integrity_checkpoint_age_seconds Age of the last integrity checkpoint/snapshot audit in seconds',
     )

@@ -16,7 +16,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - [~] P1.4 Incident/reporting hooks (incident/state endpoints + metrics + tests landed; operator automation/runbook hardening remains)
 - [~] P2.1 Verification scheduling optimizations (integrity fetch timeout/retry controls landed; startup/cache-fill cadence tuning remains)
 - [~] P2.2 Resource budgets and limits (cache/ratelimit/replay bounds + stress tests landed; final production thresholds remain)
-- [ ] P2.3 Optional diskless mode
+- [~] P2.3 Optional diskless mode (memory-only checkpoint mode landed; constrained-host profile validation remains)
 
 ## P0 - Mandatory before kernel repo retirement
 
@@ -136,6 +136,12 @@ Progress notes:
 - Ensure gateway works even without local checkpoint writes.
 - Keep correctness through AO fetch + memory-only verification.
 - Prefer tmpfs or no checkpoint path over fragile persistent storage on small hosts.
+
+Progress notes:
+- Explicit memory-only operation is now available via:
+  - `GATEWAY_INTEGRITY_DISKLESS=1`, or
+  - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless|disabled|memory-only`
+- In memory-only mode checkpoint read/write paths no-op safely (AO + env fallback remain active).
 
 ## P3 - Nice-to-have / ecosystem scale
 

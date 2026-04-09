@@ -37,6 +37,12 @@ type CheckpointEnvelopeBody = {
   metadata?: IntegrityCheckpointMetadata
 }
 
+function isDisklessCheckpointMode(): boolean {
+  if (process.env.GATEWAY_INTEGRITY_DISKLESS === '1') return true
+  const rawMode = (process.env.GATEWAY_INTEGRITY_CHECKPOINT_MODE || '').trim().toLowerCase()
+  return rawMode === 'disabled' || rawMode === 'diskless' || rawMode === 'memory-only'
+}
+
 function resolvePath(path?: string): string | undefined {
   const value = path || process.env.GATEWAY_INTEGRITY_CHECKPOINT_PATH
   return value && value.trim().length > 0 ? value : undefined
@@ -155,6 +161,8 @@ export async function writeIntegrityCheckpoint(
   path?: string,
   secret?: string,
 ): Promise<boolean | null> {
+  if (isDisklessCheckpointMode()) return null
+
   const resolvedPath = resolvePath(path)
   if (!resolvedPath) return null
 
@@ -191,6 +199,8 @@ export async function readIntegrityCheckpoint(
   path?: string,
   secret?: string,
 ): Promise<IntegritySnapshot | null> {
+  if (isDisklessCheckpointMode()) return null
+
   const resolvedPath = resolvePath(path)
   if (!resolvedPath) return null
 

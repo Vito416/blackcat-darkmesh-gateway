@@ -5,7 +5,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 ## Checkpoint policy
 - Restore a signed checkpoint only when it verifies and is within `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS`.
 - Treat anything older as missing and refresh from AO instead of stretching local state.
-- On diskless or limited-hosting deployments, leave `GATEWAY_INTEGRITY_CHECKPOINT_PATH` unset or mount it on tmpfs.
+- On diskless or limited-hosting deployments, set `GATEWAY_INTEGRITY_DISKLESS=1` (or `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`) and keep checkpoint writes disabled.
 
 ## Cache budget
 - Watch `gateway_cache_size` as the hard memory budget signal for encrypted envelopes and cached artifacts.

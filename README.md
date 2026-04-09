@@ -61,6 +61,8 @@ Configuration (per site)
     - `GATEWAY_INTEGRITY_POLICY_JSON` (optional JSON override, e.g. `{\"paused\":true}`)
     - `GATEWAY_INTEGRITY_CHECKPOINT_PATH` + `GATEWAY_INTEGRITY_CHECKPOINT_SECRET` (signed local checkpoint fallback)
     - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS` (ignore older checkpoints; stale files are treated as absent)
+    - `GATEWAY_INTEGRITY_DISKLESS=1` (force memory-only mode; disable checkpoint file reads/writes)
+    - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless|disabled|memory-only` (equivalent explicit checkpoint disable mode)
     - `AO_INTEGRITY_FETCH_TIMEOUT_MS`, `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS`, `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS` (AO/integrity fetch timeout + retry budget)
     - `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1` (fail closed unless cache entries are integrity-verified)
     - `GATEWAY_INTEGRITY_STATE_TOKEN` (optional auth token for `GET /integrity/state`; accepts Bearer or `x-integrity-token`)
@@ -178,7 +180,7 @@ When `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1`, cache PUT requests must inclu
 ## Integrity checkpoint policy
 - Only restore a checkpoint when it verifies and its age is within `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS`.
 - Treat stale or unverifiable checkpoints as missing; fall back to AO fetch, then env state.
-- For diskless or limited-hosting deployments, leave `GATEWAY_INTEGRITY_CHECKPOINT_PATH` unset or point it at tmpfs and keep the host read-only aside from runtime scratch.
+- For diskless or limited-hosting deployments, set `GATEWAY_INTEGRITY_DISKLESS=1` (or `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`) and keep host runtime storage ephemeral.
 - Keep `AO_INTEGRITY_FETCH_TIMEOUT_MS` and retry settings tight enough to fail fast on unhealthy AO/integrity endpoints, but not so tight that routine leader changes flap the control plane.
 
 ## Testing plan

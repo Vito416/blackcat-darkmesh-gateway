@@ -46,6 +46,8 @@ const checkpointEnvKeys = [
   'GATEWAY_INTEGRITY_CHECKPOINT_PATH',
   'GATEWAY_INTEGRITY_CHECKPOINT_SECRET',
   'GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS',
+  'GATEWAY_INTEGRITY_DISKLESS',
+  'GATEWAY_INTEGRITY_CHECKPOINT_MODE',
 ] as const
 
 let checkpointEnvSnapshot: Record<(typeof checkpointEnvKeys)[number], string | undefined>
@@ -190,5 +192,21 @@ describe('integrity checkpoint', () => {
 
     expect(written).toBeNull()
     expect(roundTrip).toBeNull()
+  })
+
+  it('stays memory-only when diskless checkpoint mode is enabled', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'gateway-checkpoint-'))
+    const file = join(dir, 'checkpoint.json')
+    const snapshot = sampleSnapshot()
+
+    process.env.GATEWAY_INTEGRITY_DISKLESS = '1'
+    process.env.GATEWAY_INTEGRITY_CHECKPOINT_PATH = file
+    process.env.GATEWAY_INTEGRITY_CHECKPOINT_SECRET = 'secret-123'
+
+    const written = await writeIntegrityCheckpoint(snapshot)
+    const restored = await readIntegrityCheckpoint()
+
+    expect(written).toBeNull()
+    expect(restored).toBeNull()
   })
 })
