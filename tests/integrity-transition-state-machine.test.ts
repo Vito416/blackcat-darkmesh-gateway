@@ -24,6 +24,20 @@ function makeStateRequest() {
   return new Request('http://gateway/integrity/state')
 }
 
+type SequenceStep = {
+  action: 'report' | 'ack' | 'pause' | 'resume'
+  event: string
+  incidentId: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  signatureRef: string
+}
+
+type SequenceCase = {
+  name: string
+  steps: SequenceStep[]
+  expectedPaused: boolean
+}
+
 async function readPaused(handleRequest: (req: Request) => Promise<Response>): Promise<boolean> {
   const res = await handleRequest(makeStateRequest())
   expect(res.status).toBe(200)
@@ -50,7 +64,105 @@ describe('integrity transition state machine', () => {
     reset()
   })
 
-  it('only lets pause and resume change the runtime paused state across mixed sequences', async () => {
+  const sequenceCases: SequenceCase[] = [
+    {
+      name: 'report and ack never leave the policy paused',
+      expectedPaused: false,
+      steps: [
+        {
+          action: 'report',
+          event: 'integrity-warning',
+          incidentId: 'sm-report-1',
+          severity: 'medium',
+          signatureRef: 'sig-reporter',
+        },
+        {
+          action: 'ack',
+          event: 'integrity-ack',
+          incidentId: 'sm-ack-1',
+          severity: 'low',
+          signatureRef: 'sig-reporter',
+        },
+        {
+          action: 'report',
+          event: 'integrity-warning-repeat',
+          incidentId: 'sm-report-2',
+          severity: 'medium',
+          signatureRef: 'sig-reporter',
+        },
+      ],
+    },
+    {
+      name: 'pause survives interleaved read-only actions until an explicit resume',
+      expectedPaused: false,
+      steps: [
+        {
+          action: 'pause',
+          event: 'manual-freeze',
+          incidentId: 'sm-pause-1',
+          severity: 'critical',
+          signatureRef: 'sig-emergency',
+        },
+        {
+          action: 'report',
+          event: 'integrity-warning',
+          incidentId: 'sm-report-3',
+          severity: 'medium',
+          signatureRef: 'sig-reporter',
+        },
+        {
+          action: 'ack',
+          event: 'integrity-ack',
+          incidentId: 'sm-ack-2',
+          severity: 'low',
+          signatureRef: 'sig-reporter',
+        },
+        {
+          action: 'resume',
+          event: 'manual-unfreeze',
+          incidentId: 'sm-resume-1',
+          severity: 'high',
+          signatureRef: 'sig-emergency',
+        },
+      ],
+    },
+    {
+      name: 'a final pause stays active across mixed follow-up actions',
+      expectedPaused: true,
+      steps: [
+        {
+          action: 'ack',
+          event: 'integrity-ack',
+          incidentId: 'sm-ack-3',
+          severity: 'low',
+          signatureRef: 'sig-reporter',
+        },
+        {
+          action: 'report',
+          event: 'integrity-warning',
+          incidentId: 'sm-report-4',
+          severity: 'medium',
+          signatureRef: 'sig-reporter',
+        },
+        {
+          action: 'pause',
+          event: 'manual-freeze',
+          incidentId: 'sm-pause-2',
+          severity: 'critical',
+          signatureRef: 'sig-emergency',
+        },
+        {
+          action: 'report',
+          event: 'integrity-warning-after-pause',
+          incidentId: 'sm-report-5',
+          severity: 'medium',
+          signatureRef: 'sig-reporter',
+        },
+      ],
+    },
+  ]
+
+  it.each(sequenceCases)('$name', async ({ steps, expectedPaused }) => {
     process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
     process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF = '1'
     process.env.GATEWAY_INTEGRITY_ROLE_REPORTER_REFS = 'sig-reporter'
@@ -59,59 +171,10 @@ describe('integrity transition state machine', () => {
     const { handleRequest } = await loadHandler()
 
     expect(await readPaused(handleRequest)).toBe(false)
-
-    const steps = [
-      {
-        action: 'report',
-        event: 'integrity-warning',
-        incidentId: 'sm-report-1',
-        severity: 'medium',
-        signatureRef: 'sig-reporter',
-        expectedPaused: false,
-      },
-      {
-        action: 'ack',
-        event: 'integrity-ack',
-        incidentId: 'sm-ack-1',
-        severity: 'low',
-        signatureRef: 'sig-reporter',
-        expectedPaused: false,
-      },
-      {
-        action: 'pause',
-        event: 'manual-freeze',
-        incidentId: 'sm-pause-1',
-        severity: 'critical',
-        signatureRef: 'sig-emergency',
-        expectedPaused: true,
-      },
-      {
-        action: 'report',
-        event: 'integrity-warning',
-        incidentId: 'sm-report-2',
-        severity: 'medium',
-        signatureRef: 'sig-reporter',
-        expectedPaused: true,
-      },
-      {
-        action: 'ack',
-        event: 'integrity-ack',
-        incidentId: 'sm-ack-2',
-        severity: 'low',
-        signatureRef: 'sig-reporter',
-        expectedPaused: true,
-      },
-      {
-        action: 'resume',
-        event: 'manual-unfreeze',
-        incidentId: 'sm-resume-1',
-        severity: 'high',
-        signatureRef: 'sig-emergency',
-        expectedPaused: false,
-      },
-    ] as const
+    let currentPaused = false
 
     for (const step of steps) {
+      const nextPaused = step.action === 'pause' ? true : step.action === 'resume' ? false : currentPaused
       const res = await handleRequest(
         makeIncidentRequest(
           {
@@ -133,10 +196,13 @@ describe('integrity transition state machine', () => {
         ok: true,
         action: step.action,
         incidentId: step.incidentId,
-        paused: step.expectedPaused,
+        paused: nextPaused,
       })
-      expect(await readPaused(handleRequest)).toBe(step.expectedPaused)
+      currentPaused = nextPaused
+      expect(await readPaused(handleRequest)).toBe(currentPaused)
     }
+
+    expect(currentPaused).toBe(expectedPaused)
   })
 
   it('keeps repeated pause and resume incidents idempotent and preserves the first side effect', async () => {
@@ -233,6 +299,58 @@ describe('integrity transition state machine', () => {
     })
 
     expect(await readPaused(handleRequest)).toBe(false)
+  })
+
+  it('locks duplicate incident ids to the first transition and prevents later flips', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+
+    const { handleRequest } = await loadHandler()
+    const incidentId = 'incident-lock-001'
+
+    const first = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-freeze',
+          action: 'pause',
+          incidentId,
+          source: 'ops',
+          severity: 'critical',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+    expect(first.status).toBe(200)
+    await expect(first.json()).resolves.toMatchObject({
+      ok: true,
+      incidentId,
+      action: 'pause',
+      paused: true,
+    })
+    expect(await readPaused(handleRequest)).toBe(true)
+
+    const replayedResume = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-unfreeze',
+          action: 'resume',
+          incidentId,
+          source: 'ops',
+          severity: 'high',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+    expect(replayedResume.status).toBe(200)
+    await expect(replayedResume.json()).resolves.toMatchObject({
+      ok: true,
+      duplicate: true,
+      idempotent: true,
+      incidentId,
+      action: 'pause',
+      paused: true,
+      status: 'duplicate',
+    })
+    expect(await readPaused(handleRequest)).toBe(true)
   })
 
   it('rejects unauthorized and forbidden incident actions without mutating paused state', async () => {

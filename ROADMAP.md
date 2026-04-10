@@ -28,6 +28,7 @@
 - [gateway] Port the remaining parity scenarios into CI: upgrade activation/cancel, compatibility rollback, revoked root, stale state.
 - [ops] Close the last decommission evidence gaps: recovery drill timestamps, AO outage fallback drill, rollback proof.
 - [gateway/ops] Keep the incident/control-path smoke in the CI gate and update the `1.4.0` migration release notes before retirement.
+- [gateway/ops] Institutionalize the evidence-bundle cadence: compare output, attestation JSON, validation result, and workflow link should ship together for every P3 check.
 
 ## Phase 3 – Multi-tenant & Config
 - Per-merchant config service (template txid, TTLs, PSP creds) with hot-reload.

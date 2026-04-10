@@ -1,19 +1,11 @@
 #!/usr/bin/env node
 
-import { createHash, createHmac } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-
-const VALID_PROTOCOLS = new Set(['http:', 'https:'])
-const SCRIPT_VERSION_TAG = 'integrity-attestation-v1'
-const COMPARED_FIELDS = [
-  ['policy.paused', ['policy', 'paused']],
-  ['policy.activeRoot', ['policy', 'activeRoot']],
-  ['policy.activePolicyHash', ['policy', 'activePolicyHash']],
-  ['release.version', ['release', 'version']],
-  ['release.root', ['release', 'root']],
-  ['audit.seqTo', ['audit', 'seqTo']],
-]
+import {
+  VALID_PROTOCOLS,
+  buildAttestationArtifact,
+} from './lib/attestation-core.js'
 
 function usage(exitCode = 0) {
   console.log(
@@ -168,110 +160,6 @@ function formatGatewayLabel(url, index) {
   return `#${index + 1} ${host}`
 }
 
-function getField(snapshot, path) {
-  let current = snapshot
-  for (const key of path) {
-    if (!current || typeof current !== 'object' || !(key in current)) return { found: false }
-    current = current[key]
-  }
-  return { found: true, value: current }
-}
-
-function compareSnapshots(results) {
-  const comparedFields = []
-  let mismatchCount = 0
-  let invalidFieldCount = 0
-
-  for (const [field, path] of COMPARED_FIELDS) {
-    const values = results.map((result) => {
-      const entry = getField(result.snapshot, path)
-      return {
-        gateway: result.label,
-        url: result.url,
-        found: entry.found,
-        value: entry.found ? entry.value : null,
-      }
-    })
-
-    if (values.some((entry) => !entry.found)) {
-      invalidFieldCount += 1
-      comparedFields.push({
-        field,
-        status: 'invalid',
-        values,
-      })
-      continue
-    }
-
-    const consensus = values.every((entry) => deepEqual(entry.value, values[0].value))
-    if (!consensus) mismatchCount += 1
-    comparedFields.push({
-      field,
-      status: consensus ? 'consensus' : 'mismatch',
-      values,
-    })
-  }
-
-  return { comparedFields, mismatchCount, invalidFieldCount }
-}
-
-function deepEqual(left, right) {
-  return canonicalJson(left) === canonicalJson(right)
-}
-
-function canonicalize(value) {
-  if (value === null || typeof value !== 'object') return value
-  if (Array.isArray(value)) return value.map((entry) => canonicalize(entry))
-  const out = {}
-  for (const key of Object.keys(value).sort()) {
-    const entry = value[key]
-    if (typeof entry !== 'undefined') {
-      out[key] = canonicalize(entry)
-    }
-  }
-  return out
-}
-
-function canonicalJson(value) {
-  return JSON.stringify(canonicalize(value))
-}
-
-function sha256Hex(text) {
-  return createHash('sha256').update(text).digest('hex')
-}
-
-function signHmac(secret, text) {
-  return createHmac('sha256', secret).update(text).digest('hex')
-}
-
-function buildArtifact(results, comparison) {
-  const generatedAt = new Date().toISOString()
-  const canonicalSegment = {
-    artifactType: 'gateway-integrity-attestation',
-    scriptVersionTag: SCRIPT_VERSION_TAG,
-    generatedAt,
-    gateways: results.map((result) => ({
-      label: result.label,
-      url: result.url,
-      snapshot: result.snapshot,
-    })),
-    comparedFields: comparison.comparedFields,
-    summary: {
-      mismatchCount: comparison.mismatchCount,
-      invalidFieldCount: comparison.invalidFieldCount,
-      gatewayCount: results.length,
-    },
-  }
-
-  const canonicalText = canonicalJson(canonicalSegment)
-  const artifact = {
-    ...canonicalSegment,
-    digest: `sha256:${sha256Hex(canonicalText)}`,
-  }
-
-  return { artifact, canonicalText }
-}
-
 async function writeArtifact(outPath, artifact) {
   await mkdir(dirname(outPath), { recursive: true })
   await writeFile(outPath, `${JSON.stringify(artifact)}\n`, 'utf8')
@@ -293,19 +181,19 @@ async function main() {
     }
   }
 
-  const comparison = compareSnapshots(results)
-  const { artifact, canonicalText } = buildArtifact(results, comparison)
-
   const hmacEnvName = args.hmacEnv || ''
   const hmacSecret = hmacEnvName ? process.env[hmacEnvName] || '' : ''
-  if (hmacEnvName && hmacSecret.trim()) {
-    artifact.hmacEnv = hmacEnvName
-    artifact.hmacSha256 = `sha256:${signHmac(hmacSecret, canonicalText)}`
-  }
+  const { artifact } = buildAttestationArtifact({
+    results,
+    hmacEnvName,
+    hmacSecret,
+  })
 
   await writeArtifact(args.out, artifact)
 
-  process.exit(comparison.invalidFieldCount > 0 ? 2 : comparison.mismatchCount > 0 ? 3 : 0)
+  process.exit(
+    artifact.summary.invalidFieldCount > 0 ? 2 : artifact.summary.mismatchCount > 0 ? 3 : 0,
+  )
 }
 
 main().catch((err) => {

@@ -34,6 +34,12 @@ Gateway-side implementation and test coverage are ahead of the AO-side registry/
 
 ### D.1 Cross-gateway consistency evidence
 
+- Before go/no-go, the evidence bundle should contain:
+  - Compare run output captured from `npm run ops:compare-integrity`.
+  - Attestation JSON archived for the compare run with snapshot ids and consensus result.
+  - Validation result showing the attestation artifact passed schema/consistency checks.
+  - Manual consistency smoke `workflow_dispatch` link and log recorded with timestamp and operator.
+
 - [ ] Compare run artifact captured from `npm run ops:compare-integrity`.
 - [ ] Attestation JSON archived for the compare run with snapshot ids and consensus result.
 - [ ] Manual consistency smoke `workflow_dispatch` link recorded with timestamp and operator.

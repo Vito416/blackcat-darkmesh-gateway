@@ -199,6 +199,44 @@ Archive tip:
 - keep the generated JSON alongside the release notes, operator notes, or incident bundle so the exact comparison input stays reviewable later.
 - if `hmacSha256` is present, store the signing secret separately from the artifact and rotate it on the same cadence as the attestation bootstrap workflow.
 
+## Integrity evidence bundle
+
+`scripts/export-integrity-evidence.js` runs the compare helper and attestation generator back-to-back, then stores both outputs in a timestamped subdirectory under the chosen export root.
+
+The bundle contains:
+
+- `compare.txt` with the command summaries, exit codes, stdout, and stderr for both helper runs
+- `attestation.json` with the generated artifact
+- `manifest.json` with timestamps, URL list, redacted command-summary data, and result statuses
+
+Exit behavior:
+
+- the command exits `0` only when both helper runs succeed
+- if compare fails, the export exits with the compare code after still writing the bundle metadata
+- if attestation fails, the export exits non-zero after writing the compare log and manifest
+
+Usage:
+```bash
+GATEWAY_INTEGRITY_STATE_TOKEN=state-secret \
+  node scripts/export-integrity-evidence.js \
+    --url https://gateway-a.example.com \
+    --url https://gateway-b.example.com \
+    --out-dir ./artifacts/integrity-evidence
+
+node scripts/export-integrity-evidence.js \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com \
+  --token token-a \
+  --token token-b \
+  --out-dir ./artifacts/integrity-evidence \
+  --hmac-env GATEWAY_ATTESTATION_HMAC_KEY
+
+npm run ops:export-integrity-evidence -- \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com \
+  --out-dir ./artifacts/integrity-evidence
+```
+
 ## Other helpers
 
 - `fetch-template.ts` — pull Arweave template, verify manifest signature.

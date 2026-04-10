@@ -35,6 +35,14 @@ on:
         description: Optional token for consistency comparison
         required: false
         type: string
+      evidence_urls:
+        description: Comma-separated URLs for evidence dry-run export
+        required: false
+        type: string
+      evidence_token:
+        description: Optional token for evidence dry-run export
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -170,6 +178,65 @@ jobs:
           }
 
           const result = spawnSync('node', ['scripts/compare-integrity-state.js', ...args], {
+            stdio: 'inherit',
+            env: process.env,
+          })
+
+          process.exit(result.status ?? 1)
+          NODE
+
+  evidence-dry-run:
+    name: Evidence dry run
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+      - integrity-gate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.evidence_urls != '' }}
+    env:
+      EVIDENCE_URLS: ${{ inputs.evidence_urls }}
+      GATEWAY_INTEGRITY_STATE_TOKEN: ${{ inputs.evidence_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Help: compare
+        run: npm run ops:compare-integrity -- --help
+      - name: Help: attest
+        run: npm run ops:attest-integrity -- --help
+      - name: Help: export
+        run: npm run ops:export-integrity-evidence -- --help
+      - name: Help: validate
+        run: node scripts/validate-integrity-attestation.js --help
+      - name: Evidence export dry-run
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { spawnSync } = require('node:child_process')
+
+          const urls = (process.env.EVIDENCE_URLS || '')
+            .split(',')
+            .map((url) => url.trim())
+            .filter(Boolean)
+
+          if (urls.length < 2) {
+            console.error('[evidence-dry-run] evidence_urls must contain at least two URLs')
+            process.exit(64)
+          }
+
+          const args = ['scripts/export-integrity-evidence.js']
+          for (const url of urls) {
+            args.push('--url', url)
+          }
+          args.push('--out-dir', `${process.env.RUNNER_TEMP}/integrity-evidence-dry-run`)
+
+          const result = spawnSync('node', args, {
             stdio: 'inherit',
             env: process.env,
           })

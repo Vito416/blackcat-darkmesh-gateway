@@ -92,6 +92,13 @@ describe('integrity incident and state endpoints', () => {
     return import('../src/handler.js')
   }
 
+  async function readPaused(handleRequest: (req: Request) => Promise<Response>): Promise<boolean> {
+    const res = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    return Boolean(body.policy?.paused)
+  }
+
   it('guards /integrity/state with optional token auth and returns policy payload', async () => {
     process.env.GATEWAY_INTEGRITY_STATE_TOKEN = 'state-secret'
 
@@ -284,6 +291,90 @@ describe('integrity incident and state endpoints', () => {
     expect(stateAfterForbidden.status).toBe(200)
     await expect(stateAfterForbidden.json()).resolves.toMatchObject({ policy: { paused: false } })
   })
+
+  it.each([
+    {
+      name: 'invalid json body',
+      request: (token: string) =>
+        makeIncidentRawRequest('{not-json', {
+          'x-incident-token': token,
+          'x-signature-ref': 'sig-emergency',
+        }),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_json' },
+    },
+    {
+      name: 'missing event field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          { action: 'pause', severity: 'critical' },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'event_required' },
+    },
+    {
+      name: 'invalid action field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          { event: 'manual-freeze', action: 'flip', severity: 'critical' },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_action' },
+    },
+    {
+      name: 'invalid severity field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          { event: 'manual-freeze', action: 'pause', severity: 'urgent' },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_severity' },
+    },
+    {
+      name: 'invalid source field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          { event: 'manual-freeze', action: 'pause', source: 'x'.repeat(129), severity: 'critical' },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_source' },
+    },
+    {
+      name: 'invalid incident id field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          {
+            event: 'manual-freeze',
+            action: 'pause',
+            incidentId: 'x'.repeat(129),
+            severity: 'critical',
+          },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_incident_id' },
+    },
+  ])(
+    'keeps paused state unchanged for $name',
+    async ({ request, expectedStatus, expectedBody }) => {
+      process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+      process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF = '1'
+      process.env.GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS = 'sig-emergency'
+      process.env.GATEWAY_INTEGRITY_ROLE_REPORTER_REFS = 'sig-reporter'
+
+      const { handleRequest } = await loadHandler()
+      expect(await readPaused(handleRequest)).toBe(false)
+
+      const res = await handleRequest(request('incident-secret'))
+      expect(res.status).toBe(expectedStatus)
+      await expect(res.json()).resolves.toEqual(expectedBody)
+      expect(await readPaused(handleRequest)).toBe(false)
+    },
+  )
 
   it('applies pause/resume actions to runtime integrity policy', async () => {
     process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'

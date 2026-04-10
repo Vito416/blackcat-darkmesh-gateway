@@ -6,6 +6,8 @@
 - Default alert thresholds: `ops/alerts.md` (targets `wedos_medium`).
 - Profile-specific alert thresholds and tuning notes: `ops/alerts-profiles.md`.
 - Compare-integrity operator tool: `npm run ops:compare-integrity` compares two gateway integrity snapshots for drift.
+- Evidence bundle scripts: `scripts/compare-integrity-state.js` and `scripts/generate-integrity-attestation.js` produce the compare output and attestation JSON used for go/no-go evidence.
+- Schema validation: keep attestation payloads aligned with `ops/schemas/integrity-attestation.schema.json` before archiving the bundle.
 - Dashboard focus: `ops/dashboards/gateway-metrics.yml` now includes integrity mirror consistency, rate-limit tuning, and 429 pressure panels so you can spot drift and overload early.
 - Key metrics:
   - Cache: `gateway_cache_hit_total`, `gateway_cache_miss_total`, `gateway_cache_expired_total`, `gateway_cache_store_reject_total`, `gateway_cache_store_reject_size_total`, `gateway_cache_store_reject_capacity_total`, `gateway_cache_size`.
