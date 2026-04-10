@@ -96,4 +96,19 @@ describe('handler cache and shadow modes', () => {
     expect(state.counters.gateway_cache_store_reject).toBe(1)
     expect(state.counters.gateway_cache_store_reject_size).toBe(1)
   })
+
+  it('adds baseline security headers to handler responses', async () => {
+    delete process.env.GATEWAY_SECURITY_HEADERS_ENABLE
+    delete process.env.GATEWAY_SECURITY_HEADERS_CSP
+
+    const { handleRequest } = await import('../src/handler.js')
+    const res = await handleRequest(new Request('http://gateway/'))
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(res.headers.get('x-frame-options')).toBe('DENY')
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer')
+    expect(res.headers.get('x-xss-protection')).toBe('0')
+    expect(res.headers.get('content-security-policy')).toBeNull()
+  })
 })

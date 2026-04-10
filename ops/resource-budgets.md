@@ -9,6 +9,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_CACHE_TTL_MS=180000`
 - `GATEWAY_CACHE_MAX_ENTRY_BYTES=131072`
 - `GATEWAY_CACHE_MAX_ENTRIES=128`
+- `GATEWAY_CACHE_MAX_KEYS_PER_SUBJECT=32`
 - `GATEWAY_CACHE_ADMISSION_MODE=reject`
 - `GATEWAY_RL_WINDOW_MS=60000`
 - `GATEWAY_RL_MAX=80`
@@ -34,6 +35,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_CACHE_TTL_MS=300000`
 - `GATEWAY_CACHE_MAX_ENTRY_BYTES=262144`
 - `GATEWAY_CACHE_MAX_ENTRIES=256`
+- `GATEWAY_CACHE_MAX_KEYS_PER_SUBJECT=64`
 - `GATEWAY_CACHE_ADMISSION_MODE=reject`
 - `GATEWAY_RL_WINDOW_MS=60000`
 - `GATEWAY_RL_MAX=120`
@@ -94,13 +96,16 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 
 ## Cache budget
 - Watch `gateway_cache_size` as the hard memory budget signal for encrypted envelopes and cached artifacts.
+- Watch `gateway_cache_max_keys_per_subject` to keep per-tenant fan-out bounded before one tenant crowds out the shared cache.
 - Watch `gateway_cache_admission_mode` to confirm whether the cache is in reject mode (`0`) or LRU eviction mode (`1`).
 - Watch reject counters to distinguish pressure source:
   - `gateway_cache_store_reject_size_total`
   - `gateway_cache_store_reject_capacity_total`
+  - `gateway_cache_store_reject_subject_total`
 - Watch `gateway_cache_evict_lru_total` when using `GATEWAY_CACHE_ADMISSION_MODE=evict_lru`; sustained growth means the host is running near the cache ceiling and the cache is trading retention for admission.
 - If cache growth trends upward, shorten `GATEWAY_CACHE_TTL_MS` or tighten admission before scaling host memory.
 - Prefer a smaller stable cache over a large, bursty one on edge-class hosts.
+- If a tenant fans out heavily, lower `GATEWAY_CACHE_MAX_KEYS_PER_SUBJECT` before raising the global cache count so one subject cannot dominate the cache.
 
 ## Rate-limit budget
 - Watch `gateway_ratelimit_buckets` for cardinality drift.

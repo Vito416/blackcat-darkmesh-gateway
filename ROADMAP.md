@@ -1,5 +1,12 @@
 # Gateway Roadmap (draft)
 
+## Done recently
+- Added cache admission hardening and LRU fallback behavior for constrained hosts.
+- Tightened template proxy limits with body-size, timeout, and host allowlist guardrails.
+- Added replay pruning, webhook/body size caps, and clearer integrity metrics.
+- Split CI into build/tests and the dedicated integrity gate for faster diagnosis.
+- Tuned integrity fetch cadence and alert profiles for WEDOS-style hosting limits.
+
 ## Phase 1 – MVP (parity with current AO/Write/Worker)
 - Serve Arweave template (hash-verified) + cache with TTL.
 - Proxy core API: cart/checkout/session → Write AO; public read → AO.

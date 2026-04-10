@@ -31,6 +31,11 @@ export class IntegritySnapshotError extends Error {
   }
 }
 
+const NON_RETRYABLE_INTEGRITY_ERROR_CODES = new Set<IntegrityErrorCode>([
+  'integrity_invalid_snapshot',
+  'integrity_release_root_mismatch',
+])
+
 export type FetchIntegritySnapshotOptions = {
   url?: string
   fetchImpl?: IntegrityFetchLike
@@ -260,7 +265,7 @@ export async function fetchIntegritySnapshot(opts: FetchIntegritySnapshotOptions
 
       if (!response.ok) {
         if (isTransientIntegrityFetchStatus(response.status) && attempt < fetchControl.retryAttempts) {
-          await sleep(getIntegrityRetryDelayMs(fetchControl.retryBackoffMs, attempt))
+          await sleep(getIntegrityRetryDelayMs(fetchControl.retryBackoffMs, attempt, fetchControl.retryJitterMs))
           continue
         }
         throw new IntegritySnapshotError('integrity_fetch_failed', `upstream returned ${response.status}`)
@@ -277,11 +282,14 @@ export async function fetchIntegritySnapshot(opts: FetchIntegritySnapshotOptions
       return parseSnapshot(raw as SnapshotInput)
     } catch (error) {
       if (error instanceof IntegritySnapshotError) {
+        if (NON_RETRYABLE_INTEGRITY_ERROR_CODES.has(error.code)) {
+          throw error
+        }
         throw error
       }
 
       if ((isAbortError(error) || error instanceof Error) && attempt < fetchControl.retryAttempts) {
-        await sleep(getIntegrityRetryDelayMs(fetchControl.retryBackoffMs, attempt))
+        await sleep(getIntegrityRetryDelayMs(fetchControl.retryBackoffMs, attempt, fetchControl.retryJitterMs))
         continue
       }
 

@@ -36,4 +36,5 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 - Audit lag should stay comfortably below the alert threshold; if it climbs, check AO fetch cadence, checkpoint restore freshness, and queue backpressure.
 - Audit stream anomalies should page on the first regression, but tune them together with audit lag and checkpoint staleness: if all three move together, treat it as fetch/cadence drift; if anomaly fires alone, inspect stream ordering or a bad seq transition before widening the window.
 - Integrity role-blocked, state-auth-blocked, and notify-fail alerts are profile-agnostic control-plane signals; keep their thresholds stable across profiles and use the runbook for the first operator action.
+- Integrity fetch jitter (`AO_INTEGRITY_FETCH_RETRY_JITTER_MS`) helps smooth synchronized retries and reduce thundering-herd spikes; keep it near the default 25ms for normal hosts and only raise it if the AO snapshot endpoint is visibly getting bursty retries.
 - If your traffic is bursty, increase `for:` windows before increasing numeric thresholds.

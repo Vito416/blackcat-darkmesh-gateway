@@ -92,7 +92,7 @@ describe('integrity snapshot client', () => {
     const broken = validSnapshot()
     broken.policy.activeRoot = 'root-def'
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify(broken), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -102,6 +102,7 @@ describe('integrity snapshot client', () => {
     await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
       code: 'integrity_release_root_mismatch',
     })
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('fails closed when an active snapshot is marked revoked', async () => {
@@ -109,7 +110,7 @@ describe('integrity snapshot client', () => {
     const broken = validSnapshot()
     broken.release.revokedAt = '2026-04-09T01:00:00Z'
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify(broken), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -119,6 +120,7 @@ describe('integrity snapshot client', () => {
     await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
       code: 'integrity_release_root_mismatch',
     })
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('fails closed when compatibility state points at an unrelated root', async () => {
@@ -130,7 +132,7 @@ describe('integrity snapshot client', () => {
       until: '2026-04-09T01:00:00Z',
     }
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify(broken), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -140,6 +142,7 @@ describe('integrity snapshot client', () => {
     await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
       code: 'integrity_release_root_mismatch',
     })
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('fails closed when policy.paused is not a boolean', async () => {
@@ -147,7 +150,7 @@ describe('integrity snapshot client', () => {
     const broken = validSnapshot()
     broken.policy.paused = 'false' as unknown as boolean
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify(broken), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -157,6 +160,7 @@ describe('integrity snapshot client', () => {
     await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
       code: 'integrity_invalid_snapshot',
     })
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('fails closed when audit.seqFrom is not a finite number', async () => {
@@ -164,7 +168,7 @@ describe('integrity snapshot client', () => {
     const broken = validSnapshot()
     broken.audit.seqFrom = '1' as unknown as number
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify(broken), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -174,6 +178,7 @@ describe('integrity snapshot client', () => {
     await expect(fetchIntegritySnapshot()).rejects.toMatchObject({
       code: 'integrity_invalid_snapshot',
     })
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('times out slow fetches using the configured timeout', async () => {

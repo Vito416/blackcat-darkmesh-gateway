@@ -27,11 +27,13 @@ const MAX_ENTRIES = readPositiveEnvInt(
   ['GATEWAY_CACHE_MAX_ENTRIES', 'GATEWAY_CACHE_MAX_COUNT', 'GATEWAY_CACHE_ENTRY_LIMIT'],
   256,
 )
+const MAX_KEYS_PER_SUBJECT = readPositiveEnvInt(['GATEWAY_CACHE_MAX_KEYS_PER_SUBJECT'], 64)
 const ADMISSION_MODE = readAdmissionMode()
 
 gauge('gateway_cache_ttl_ms', TTL_MS)
 gauge('gateway_cache_max_entry_bytes', MAX_ENTRY_BYTES)
 gauge('gateway_cache_max_entries', MAX_ENTRIES)
+gauge('gateway_cache_max_keys_per_subject', MAX_KEYS_PER_SUBJECT)
 gauge('gateway_cache_admission_mode', ADMISSION_MODE === 'evict_lru' ? 1 : 0)
 
 function readPositiveEnvInt(names: string[], fallback: number): number {
@@ -69,6 +71,13 @@ function attachKeyToSubject(key: string, subject: string) {
   keySubject.set(key, subject)
 }
 
+function canAdmitSubjectKey(key: string, subject: string): boolean {
+  const set = subjects.get(subject)
+  if (!set) return true
+  if (set.has(key)) return true
+  return set.size < MAX_KEYS_PER_SUBJECT
+}
+
 function touchKey(key: string) {
   const entry = store.get(key)
   if (!entry) return
@@ -98,6 +107,13 @@ export function put(key: string, value: ArrayBuffer, subjectOrOptions?: string |
     inc('gateway_cache_store_reject_size')
     return false
   }
+
+  if (opts.subject && !canAdmitSubjectKey(key, opts.subject)) {
+    inc('gateway_cache_store_reject')
+    inc('gateway_cache_store_reject_subject')
+    return false
+  }
+
   const existed = store.has(key)
   if (!existed && store.size >= MAX_ENTRIES) {
     if (ADMISSION_MODE === 'evict_lru') {

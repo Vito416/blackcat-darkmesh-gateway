@@ -9,6 +9,7 @@ import { proxyTemplateCall } from './templateApi.js'
 import { fetchIntegritySnapshot } from './integrity/client.js'
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
 import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
+import { applySecurityHeaders } from './securityHeaders.js'
 import type { IntegritySnapshot } from './integrity/types.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
@@ -55,6 +56,14 @@ const integrityRuntime: IntegrityRuntimeCache = {
   expiresAt: 0,
   state: { paused: false, source: 'env' },
   snapshot: null,
+}
+
+function respond(body?: BodyInit | null, init?: ResponseInit): Response {
+  return applySecurityHeaders(new Response(body, init))
+}
+
+function secureResponse(response: Response): Response {
+  return applySecurityHeaders(response)
 }
 
 function updateIntegrityAuditGauges(snapshot: IntegritySnapshot | null) {
@@ -213,7 +222,7 @@ function policyPausedResponse(): Response {
     paused: true,
     retryable: false,
   }
-  return new Response(JSON.stringify(payload), {
+  return respond(JSON.stringify(payload), {
     status: 503,
     headers: {
       'content-type': 'application/json',
@@ -224,7 +233,7 @@ function policyPausedResponse(): Response {
 
 function incidentDuplicateResponse(record: IntegrityIncidentRecord): Response {
   inc('gateway_integrity_incident_duplicate')
-  return new Response(
+  return respond(
     JSON.stringify({
       ok: true,
       duplicate: true,
@@ -289,7 +298,7 @@ function basicCredentialsMatch(expectedUser: string, expectedPass: string, prese
 }
 
 function jsonErrorResponse(status: number, error: string, extra: Record<string, unknown> = {}): Response {
-  return new Response(JSON.stringify({ error, ...extra }), {
+  return respond(JSON.stringify({ error, ...extra }), {
     status,
     headers: {
       'content-type': 'application/json',
@@ -299,7 +308,7 @@ function jsonErrorResponse(status: number, error: string, extra: Record<string, 
 }
 
 function plainErrorResponse(status: number, message: string): Response {
-  return new Response(message, {
+  return respond(message, {
     status,
     headers: {
       'content-type': 'text/plain; charset=utf-8',
@@ -379,10 +388,10 @@ async function wrapWebhook(provider: WebhookProvider, fn: () => Promise<Response
   try {
     const res = await fn()
     if (res.status >= 500) recordWebhook5xx(provider)
-    return res
+    return secureResponse(res)
   } catch (_) {
     recordWebhook5xx(provider)
-    return new Response('error', { status: 500 })
+    return respond('error', { status: 500 })
   }
 }
 
@@ -390,11 +399,11 @@ async function handleInbox(req: Request): Promise<Response> {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown'
   if (!rateCheck(`inbox:${ip}`)) {
     inc('gateway_ratelimit_blocked')
-    return new Response('Too Many Requests', { status: 429 })
+    return respond('Too Many Requests', { status: 429 })
   }
   inc('gateway_inbox_accept')
   // skeleton: just ack
-  return new Response('ok', { status: 200 })
+  return respond('ok', { status: 200 })
 }
 
 async function handleCache(
@@ -412,7 +421,7 @@ async function handleCache(
     if (verifiedCacheRequired) {
       if (!integritySnapshot?.policy?.activeRoot) {
         inc('gateway_integrity_verify_fail')
-        return new Response(JSON.stringify({ error: 'missing_trusted_root' }), {
+        return respond(JSON.stringify({ error: 'missing_trusted_root' }), {
           status: 503,
           headers: { 'content-type': 'application/json' },
         })
@@ -423,7 +432,7 @@ async function handleCache(
       const actualHash = sha256Hex(new Uint8Array(buf))
       if (declaredHash && declaredHash !== actualHash) {
         inc('gateway_integrity_verify_fail')
-        return new Response(JSON.stringify({ error: 'integrity_mismatch' }), {
+        return respond(JSON.stringify({ error: 'integrity_mismatch' }), {
           status: 422,
           headers: { 'content-type': 'application/json' },
         })
@@ -441,7 +450,7 @@ async function handleCache(
 
       if (!verify.ok) {
         inc('gateway_integrity_verify_fail')
-        return new Response(JSON.stringify({ error: verify.code || 'integrity_mismatch' }), {
+        return respond(JSON.stringify({ error: verify.code || 'integrity_mismatch' }), {
           status: integrityErrorStatus(verify.code || 'integrity_mismatch'),
           headers: { 'content-type': 'application/json' },
         })
@@ -458,7 +467,7 @@ async function handleCache(
         },
       })
       if (!stored) {
-        return new Response(JSON.stringify({ error: 'cache_budget_exceeded' }), {
+        return respond(JSON.stringify({ error: 'cache_budget_exceeded' }), {
           status: 507,
           headers: { 'content-type': 'application/json' },
         })
@@ -466,39 +475,39 @@ async function handleCache(
     } else {
       const stored = put(key, buf, subject)
       if (!stored) {
-        return new Response(JSON.stringify({ error: 'cache_budget_exceeded' }), {
+        return respond(JSON.stringify({ error: 'cache_budget_exceeded' }), {
           status: 507,
           headers: { 'content-type': 'application/json' },
         })
       }
     }
-    return new Response('stored', { status: 201 })
+    return respond('stored', { status: 201 })
   }
   if (req.method === 'GET') {
     markReadonlyFallback(paused)
     const result = fetchEntry(key, { requireVerified: verifiedCacheRequired })
     if (result.status === 'unverified') {
-      return new Response(JSON.stringify({ error: 'integrity_mismatch' }), {
+      return respond(JSON.stringify({ error: 'integrity_mismatch' }), {
         status: 503,
         headers: { 'content-type': 'application/json' },
       })
     }
-    if (result.status !== 'hit') return new Response('miss', { status: 404 })
-    return new Response(result.value, { status: 200 })
+    if (result.status !== 'hit') return respond('miss', { status: 404 })
+    return respond(result.value, { status: 200 })
   }
-  return new Response('method', { status: 405 })
+  return respond('method', { status: 405 })
 }
 
 async function handleTemplateCall(req: Request, paused: boolean): Promise<Response> {
   inc('gateway_template_call')
-  if (req.method !== 'POST') return new Response('method', { status: 405 })
+  if (req.method !== 'POST') return respond('method', { status: 405 })
 
   const requiredToken = process.env.GATEWAY_TEMPLATE_TOKEN
   if (requiredToken) {
     const presented = (req.headers.get('x-template-token') || '').trim()
     if (!tokenEquals(requiredToken, presented)) {
       inc('gateway_template_call_blocked')
-      return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      return respond(JSON.stringify({ error: 'unauthorized' }), {
         status: 401,
         headers: { 'content-type': 'application/json' },
       })
@@ -508,7 +517,7 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
   const body = await req.json().catch(() => null)
   if (!body || typeof body !== 'object') {
     inc('gateway_template_call_blocked')
-    return new Response(JSON.stringify({ error: 'invalid_json' }), {
+    return respond(JSON.stringify({ error: 'invalid_json' }), {
       status: 400,
       headers: { 'content-type': 'application/json' },
     })
@@ -518,7 +527,7 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
   const payload = (body as any).payload
   if (!action) {
     inc('gateway_template_call_blocked')
-    return new Response(JSON.stringify({ error: 'action_required' }), {
+    return respond(JSON.stringify({ error: 'action_required' }), {
       status: 400,
       headers: { 'content-type': 'application/json' },
     })
@@ -548,16 +557,16 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
     inc('gateway_template_call_blocked')
   }
 
-  return res
+  return secureResponse(res)
 }
 
 async function handleIntegrityState(req: Request, integrity: IntegrityContext): Promise<Response> {
-  if (req.method !== 'GET') return new Response('method', { status: 405 })
+  if (req.method !== 'GET') return respond('method', { status: 405 })
 
   const token = process.env.GATEWAY_INTEGRITY_STATE_TOKEN || ''
   if (token && !checkToken(req, token, 'x-integrity-token')) {
     inc('gateway_integrity_state_auth_blocked')
-    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+    return respond(JSON.stringify({ error: 'unauthorized' }), {
       status: 401,
       headers: { 'content-type': 'application/json' },
     })
@@ -576,14 +585,14 @@ async function handleIntegrityState(req: Request, integrity: IntegrityContext): 
     authority: integrity.snapshot?.authority || null,
     audit: integrity.snapshot?.audit || null,
   }
-  return new Response(JSON.stringify(payload), {
+  return respond(JSON.stringify(payload), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })
 }
 
 async function handleIntegrityIncident(req: Request, integrity: IntegrityContext): Promise<Response> {
-  if (req.method !== 'POST') return new Response('method', { status: 405 })
+  if (req.method !== 'POST') return respond('method', { status: 405 })
 
   const bodyText = await req.text()
   if (bodyExceedsLimit(bodyText, readIntegrityIncidentMaxBodyBytes())) {
@@ -592,7 +601,7 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
 
   const token = process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN || ''
   if (!token) {
-    return new Response('incident_auth_not_configured', { status: 500 })
+    return respond('incident_auth_not_configured', { status: 500 })
   }
   if (!checkToken(req, token, 'x-incident-token')) {
     inc('gateway_integrity_incident_auth_blocked')
@@ -712,7 +721,7 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
       const res = await fetch(notifyUrl, { method: 'POST', headers, body: bodyRaw })
       if (!res.ok) {
         inc('gateway_integrity_incident_notify_fail')
-        return new Response(JSON.stringify({ error: 'incident_notify_failed', status: res.status }), {
+        return respond(JSON.stringify({ error: 'incident_notify_failed', status: res.status }), {
           status: 502,
           headers: { 'content-type': 'application/json' },
         })
@@ -720,14 +729,14 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
       inc('gateway_integrity_incident_notify_ok')
     } catch (_) {
       inc('gateway_integrity_incident_notify_fail')
-      return new Response(JSON.stringify({ error: 'incident_notify_failed' }), {
+      return respond(JSON.stringify({ error: 'incident_notify_failed' }), {
         status: 502,
         headers: { 'content-type': 'application/json' },
       })
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, incidentId, paused: integrityRuntime.state.paused, action }), {
+  return respond(JSON.stringify({ ok: true, incidentId, paused: integrityRuntime.state.paused, action }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })
@@ -747,14 +756,14 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
 
   if (url.pathname.startsWith('/cache/forget')) {
-    if (request.method !== 'POST') return new Response('method', { status: 405 })
+    if (request.method !== 'POST') return respond('method', { status: 405 })
     if (integrityPaused) return policyPausedResponse()
     const token = process.env.GATEWAY_FORGET_TOKEN
     if (token) {
       const auth = request.headers.get('authorization') || request.headers.get('x-forget-token') || ''
       const bearer = auth.replace(/^Bearer\s+/i, '').trim()
       if (!tokenEquals(token, bearer) && !tokenEquals(token, auth.trim())) {
-        return new Response('unauthorized', { status: 401 })
+        return respond('unauthorized', { status: 401 })
       }
     }
     const body = await request.json().catch(() => ({}))
@@ -763,7 +772,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     let removed = 0
     if (subject) removed = forgetSubject(subject)
     if (key) removed = dropKey(key) ? 1 : removed
-    return new Response(JSON.stringify({ removed }), { status: 200, headers: { 'content-type': 'application/json' } })
+    return respond(JSON.stringify({ removed }), { status: 200, headers: { 'content-type': 'application/json' } })
   }
   if (url.pathname.startsWith('/cache/')) {
     const key = url.pathname.replace('/cache/', '')
@@ -782,7 +791,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     const needBearer = !!process.env.METRICS_BEARER_TOKEN
     const mustGuard = process.env.GATEWAY_REQUIRE_METRICS_AUTH !== '0'
     if (!needBasic && !needBearer && mustGuard) {
-      return new Response('metrics_auth_not_configured', { status: 500 })
+      return respond('metrics_auth_not_configured', { status: 500 })
     }
     if (needBasic || needBearer || mustGuard) {
       const auth = request.headers.get('authorization') || ''
@@ -799,11 +808,11 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       if (!authed) {
         inc('gateway_metrics_auth_blocked')
-        return new Response('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } })
+        return respond('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } })
       }
     }
     const prom = toProm()
-    return new Response(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } })
+    return respond(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } })
   }
   if (url.pathname === '/webhook/stripe') {
     if (integrityPaused) return policyPausedResponse()
@@ -816,12 +825,12 @@ export async function handleRequest(request: Request): Promise<Response> {
       if (!ok) {
         inc('gateway_webhook_stripe_verify_fail')
         const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
-        return new Response('sig invalid', { status: shadow ? 202 : 401 })
+        return respond('sig invalid', { status: shadow ? 202 : 401 })
       }
       const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
-      if (id && markAndCheck(`stripe:${id}`)) return new Response('replay', { status: 200 })
+      if (id && markAndCheck(`stripe:${id}`)) return respond('replay', { status: 200 })
       inc('gateway_webhook_stripe_ok')
-      return new Response('ok', { status: 200 })
+      return respond('ok', { status: 200 })
     })
   }
   if (url.pathname === '/webhook/paypal') {
@@ -837,12 +846,12 @@ export async function handleRequest(request: Request): Promise<Response> {
       if (!ok || !certOk) {
         inc('gateway_webhook_paypal_verify_fail')
         const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
-        return new Response('sig invalid', { status: shadow ? 202 : 401 })
+        return respond('sig invalid', { status: shadow ? 202 : 401 })
       }
       const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
-      if (replayKey && markAndCheck(`paypal:${replayKey}`)) return new Response('replay', { status: 200 })
+      if (replayKey && markAndCheck(`paypal:${replayKey}`)) return respond('replay', { status: 200 })
       inc('gateway_webhook_paypal_ok')
-      return new Response('ok', { status: 200 })
+      return respond('ok', { status: 200 })
     })
   }
 
@@ -883,11 +892,11 @@ export async function handleRequest(request: Request): Promise<Response> {
       headers['X-Signature'] = sig
     }
     const resp = await fetch(target, { method: 'POST', headers, body })
-    if (resp.ok) return new Response('forwarded', { status: 200 })
-    return new Response('notify_failed', { status: 502 })
+    if (resp.ok) return respond('forwarded', { status: 200 })
+    return respond('notify_failed', { status: 502 })
   }
   // periodic sweep
   sweep()
   if (url.pathname === '/') markReadonlyFallback(integrityPaused)
-  return new Response('Gateway skeleton', { status: 200 })
+  return respond('Gateway skeleton', { status: 200 })
 }

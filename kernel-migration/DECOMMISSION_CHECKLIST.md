@@ -73,6 +73,23 @@ Use one row per drill or proof item. Keep the artifact link stable and prefer th
 |  |  |  |  |  | pending |
 |  |  |  |  |  | pending |
 
+## I. Evidence quality rubric
+
+- Acceptable proof: raw CI log, terminal log, PR link, release note, or staging artifact with a stable permalink.
+- Every proof should show the command/script, UTC timestamp, operator, and the exact expected outcome.
+- Preferred proof links include immutable artifacts: workflow run, commit, release, or raw log; avoid screenshots unless they supplement a stronger artifact.
+- Not enough: paraphrased notes, chat snippets without a permalink, or files that can be edited in place without history.
+
+## J. Go / No-Go decision template
+
+- Decision: `GO` / `NO-GO`
+- Date (UTC):
+- Approvers:
+- Reviewed evidence:
+- Remaining blockers:
+- Rollback reference:
+- Notes:
+
 ## Recommended deletion sequence
 
 1. Archive old repo (read-only) for a cooling-off period.

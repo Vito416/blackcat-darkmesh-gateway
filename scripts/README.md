@@ -76,9 +76,10 @@ Notes:
 The helper prints explicit `[PASS]` / `[FAIL]` checkpoints, exits with `0` only when the full flow succeeds, and exits non-zero on any validation, request, or cleanup failure.
 It also restores the original pause state best-effort at the end.
 The blocked mutable check uses `checkout.create-order` with a minimal payload, which matches the gateway's current write policy.
+The last log line is a compact CI-friendly summary in the form `[SMOKE] PASS ...` or `[SMOKE] FAIL step=... code=...`.
 Validation is strict:
 - `--base-url` and `GATEWAY_BASE_URL` must be non-empty `http`/`https` URLs
-- `--timeout-ms` and `GATEWAY_SMOKE_TIMEOUT_MS` must be positive integers when set
+- `--timeout-ms` and `GATEWAY_SMOKE_TIMEOUT_MS` must be positive integers when set, and default to `5000`
 - token flags/env vars are optional, but if provided they must not be blank
 
 Required configuration:
@@ -102,11 +103,14 @@ node scripts/e2e-integrity-incident-smoke.js \
   --state-token state-secret \
   --incident-token incident-secret \
   --template-token tmpl-secret
+
+npm run smoke:integrity-incident
 ```
 
 Tip:
 - If you only want to validate CLI parsing and help output, `--help` exits immediately without touching the network.
-- The helper prints a final `[PASS] flow: incident control smoke completed` line only after pause, blocked write, resume, and cleanup have all passed.
+- The helper prints a final `[SMOKE] PASS incident control smoke completed` line only after pause, blocked write, resume, and cleanup have all passed.
+- In CI, the incident smoke job is optional: it runs automatically only when the needed secrets are present, and it can also be triggered manually with `workflow_dispatch` inputs.
 
 ## Other helpers
 

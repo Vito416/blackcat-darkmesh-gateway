@@ -5,6 +5,28 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      gateway_base_url:
+        description: Gateway base URL for incident smoke
+        required: false
+        type: string
+      gateway_state_token:
+        description: Optional /integrity/state token override
+        required: false
+        type: string
+      gateway_incident_token:
+        description: Incident token override
+        required: false
+        type: string
+      gateway_template_token:
+        description: Template token override
+        required: false
+        type: string
+      gateway_smoke_timeout_ms:
+        description: Smoke request timeout in milliseconds
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -67,3 +89,30 @@ jobs:
         run: npm ci
       - name: PSP smoke (built dist)
         run: npm run smoke
+
+  incident-smoke:
+    name: Integrity incident smoke
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+      - integrity-gate
+    if: ${{ github.event_name == 'workflow_dispatch' || (secrets.GATEWAY_BASE_URL != '' && secrets.GATEWAY_INTEGRITY_INCIDENT_TOKEN != '' && secrets.GATEWAY_TEMPLATE_TOKEN != '') }}
+    env:
+      GATEWAY_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_base_url || secrets.GATEWAY_BASE_URL }}
+      GATEWAY_INTEGRITY_STATE_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_state_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
+      GATEWAY_INTEGRITY_INCIDENT_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_incident_token || secrets.GATEWAY_INTEGRITY_INCIDENT_TOKEN }}
+      GATEWAY_TEMPLATE_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_template_token || secrets.GATEWAY_TEMPLATE_TOKEN }}
+      GATEWAY_SMOKE_TIMEOUT_MS: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_smoke_timeout_ms || '5000' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Incident smoke (optional)
+        run: npm run smoke:integrity-incident

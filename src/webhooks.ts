@@ -12,6 +12,9 @@ const DEFAULT_STRIPE_SIGNATURE_HEADER_BYTES = 4096
 const MIN_STRIPE_SIGNATURE_HEADER_BYTES = 256
 const MAX_STRIPE_SIGNATURE_HEADER_BYTES = 16384
 const MAX_STRIPE_SIGNATURE_PARTS = 32
+const DEFAULT_PAYPAL_HTTP_TIMEOUT_MS = 7000
+const MIN_PAYPAL_HTTP_TIMEOUT_MS = 1000
+const MAX_PAYPAL_HTTP_TIMEOUT_MS = 60000
 
 function timingSafeCompare(left: string, right: string): boolean {
   if (left.length !== right.length) return false
@@ -22,6 +25,10 @@ function parseBoundedInt(raw: string | undefined, fallback: number, min: number,
   const parsed = Number.parseInt(raw || '', 10)
   if (!Number.isFinite(parsed)) return fallback
   return Math.min(Math.max(parsed, min), max)
+}
+
+function isAbortError(error: unknown): boolean {
+  return !!error && typeof error === 'object' && 'name' in error && (error as { name?: string }).name === 'AbortError'
 }
 
 function isValidCertUrl(rawUrl?: string): rawUrl is string {
@@ -36,6 +43,36 @@ function isValidCertUrl(rawUrl?: string): rawUrl is string {
   } catch {
     return false
   }
+}
+
+function parsePaypalApiAllowHosts(raw: string | undefined): string[] {
+  return (raw || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0)
+}
+
+function resolvePaypalApiBase(): URL | null {
+  const rawBase = process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com'
+  try {
+    const base = new URL(rawBase)
+    if (base.protocol !== 'https:') return null
+    if (base.username || base.password) return null
+    const allowHosts = parsePaypalApiAllowHosts(process.env.PAYPAL_API_ALLOW_HOSTS)
+    if (allowHosts.length > 0 && !allowHosts.includes(base.hostname.toLowerCase())) return null
+    return base
+  } catch {
+    return null
+  }
+}
+
+function getPaypalHttpTimeoutMs(): number {
+  return parseBoundedInt(
+    process.env.PAYPAL_HTTP_TIMEOUT_MS,
+    DEFAULT_PAYPAL_HTTP_TIMEOUT_MS,
+    MIN_PAYPAL_HTTP_TIMEOUT_MS,
+    MAX_PAYPAL_HTTP_TIMEOUT_MS,
+  )
 }
 
 function parseStripeSignatureHeader(sigHeader: string): { timestamp: string | null; signatures: string[] } | null {
@@ -92,7 +129,10 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
   // Remote verify (requires PAYPAL_WEBHOOK_ID and client creds via env)
   const webhookId = process.env.PAYPAL_WEBHOOK_ID
   if (!webhookId) return false
-  const token = await paypalToken()
+  const base = resolvePaypalApiBase()
+  if (!base) return false
+  const timeoutMs = getPaypalHttpTimeoutMs()
+  const token = await paypalToken(base, timeoutMs)
   if (!token) return false
   try {
     const payload = {
@@ -104,14 +144,24 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
       webhook_id: webhookId,
       webhook_event: parsedBody,
     }
-    const resp = await fetch(`${paypalBase()}/v1/notifications/verify-webhook-signature`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    })
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let resp: Response
+    try {
+      resp = await fetch(`${base.toString()}/v1/notifications/verify-webhook-signature`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timer)
+    }
     if (!resp.ok) return false
     const data = await resp.json()
     return Boolean(data && data.verification_status === 'SUCCESS')
@@ -120,23 +170,35 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
   }
 }
 
-async function paypalToken(): Promise<string | null> {
+async function paypalToken(base: URL, timeoutMs: number): Promise<string | null> {
   const cid = process.env.PAYPAL_CLIENT_ID
   const sec = process.env.PAYPAL_CLIENT_SECRET
   if (!cid || !sec) return null
-  const base = paypalBase()
-  const resp = await fetch(`${base}/v1/oauth2/token`, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${Buffer.from(`${cid}:${sec}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials',
-  })
-  if (!resp.ok) return null
-  const data = await resp.json()
-  return data.access_token || null
-}
-
-function paypalBase() {
-  return process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com'
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+  try {
+    const resp = await fetch(`${base.toString()}/v1/oauth2/token`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${cid}:${sec}`).toString('base64')}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials',
+      signal: controller.signal,
+    })
+    if (!resp.ok) return null
+    const data = await resp.json()
+    return data.access_token || null
+  } catch (error) {
+    if (timedOut || isAbortError(error)) return null
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 // Simple cert cache placeholder (for future pinning)

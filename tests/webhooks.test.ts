@@ -31,6 +31,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   delete process.env.GATEWAY_WEBHOOK_MAX_BODY_BYTES
   delete process.env.STRIPE_WEBHOOK_SECRET
   delete process.env.PAYPAL_WEBHOOK_SECRET
@@ -41,6 +42,8 @@ afterEach(() => {
   delete process.env.GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES
   delete process.env.PAYPAL_WEBHOOK_ID
   delete process.env.PAYPAL_API_BASE
+  delete process.env.PAYPAL_API_ALLOW_HOSTS
+  delete process.env.PAYPAL_HTTP_TIMEOUT_MS
   delete process.env.PAYPAL_CLIENT_ID
   delete process.env.PAYPAL_CLIENT_SECRET
   vi.resetModules()
@@ -94,6 +97,119 @@ describe('webhook verification', () => {
     })
     const ok = await verifyPayPal(body, headers, secret)
     expect(ok).toBe(true)
+  })
+
+  it('rejects non-https paypal api bases without calling fetch', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_API_BASE = 'http://api.sandbox.paypal.com'
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const body = JSON.stringify({ id: 'WH-http', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'deadbeef',
+      'PayPal-Transmission-Id': 'tx-http',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('respects paypal api host allowlists and accepts configured hosts', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_CLIENT_ID = 'client'
+    process.env.PAYPAL_CLIENT_SECRET = 'secret'
+    process.env.PAYPAL_API_BASE = 'https://api.sandbox.paypal.com'
+    process.env.PAYPAL_API_ALLOW_HOSTS = 'api.sandbox.paypal.com'
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: 'token-123' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ verification_status: 'SUCCESS' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const body = JSON.stringify({ id: 'WH-remote', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'sig',
+      'PayPal-Transmission-Id': 'tx-remote',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('blocks paypal api hosts not on the allowlist', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_API_BASE = 'https://evil.example'
+    process.env.PAYPAL_API_ALLOW_HOSTS = 'api.sandbox.paypal.com'
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const body = JSON.stringify({ id: 'WH-host', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'sig',
+      'PayPal-Transmission-Id': 'tx-host',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('times out paypal remote verification without throwing', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_CLIENT_ID = 'client'
+    process.env.PAYPAL_CLIENT_SECRET = 'secret'
+    process.env.PAYPAL_API_BASE = 'https://api.sandbox.paypal.com'
+    process.env.PAYPAL_API_ALLOW_HOSTS = 'api.sandbox.paypal.com'
+    process.env.PAYPAL_HTTP_TIMEOUT_MS = '5'
+    const fetchMock = vi.fn((_, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal as AbortSignal | undefined
+        const timer = setTimeout(() => {
+          _resolve(
+            new Response(JSON.stringify({ access_token: 'late-token' }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }),
+          )
+        }, 1000)
+        const onAbort = () => {
+          clearTimeout(timer)
+          const error = new Error('aborted')
+          error.name = 'AbortError'
+          reject(error)
+        }
+        if (signal) {
+          if (signal.aborted) {
+            onAbort()
+            return
+          }
+          signal.addEventListener('abort', onAbort, { once: true })
+        }
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const body = JSON.stringify({ id: 'WH-timeout', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'sig',
+      'PayPal-Transmission-Id': 'tx-timeout',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(false)
   })
 
   it('rejects malformed paypal body without throwing', async () => {

@@ -8,6 +8,14 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 - Gateway-side implementation is largely complete for the current migration slice; the remaining blockers are mostly AO-side registry/authority lifecycle work and the final decommission evidence.
 
+## This week execution
+
+- [gateway] Keep the integrity gate aligned with the live AO snapshot shape and retain the new smoke/CI checks as the default path.
+- [gateway] Finish the last parity coverage for upgrade activation/cancel, rollback acceptance, revoked root rejection, and stale-state defense.
+- [ao] Close the registry actions for publish/revoke/query/pause state so gateway consumers can trust one stable API surface.
+- [ao] Finalize `root/upgrade/emergency/reporter` lifecycle and audit commitment sequencing/query surfaces for the v1.4.0 workflow.
+- [ops] Capture the remaining decommission artifacts: recovery drill timestamps, AO fallback drill, and rollback proof, then record the sign-off.
+
 ## Open blockers
 
 ### Gateway-side remaining work
