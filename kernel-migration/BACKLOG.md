@@ -204,6 +204,11 @@ Progress notes:
 - Preferred P3 operator path is now evidence export first, attestation validation second, then manual dispatch only when the bundle is complete.
 - CI `evidence-dry-run` now exercises the same export + validation chain to catch operator workflow drift before manual dispatch.
 - CI `evidence-dry-run` also exercises latest-bundle selection, strict bundle checks, and workflow dispatch payload dry-run to keep the full operator chain regression-safe.
+- New helper scripts now cover the operator-facing P3 loop:
+  - `scripts/compare-integrity-matrix.js` for pairwise/all-gateway drift checks.
+  - `scripts/build-attestation-exchange-pack.js` for cross-gateway evidence exchange bundles.
+  - `scripts/index-evidence-bundles.js` for strict/portable bundle indexing (JSON/CSV).
+  - `scripts/suggest-ratelimit-overrides.js` for profile-aware rate-limit override suggestions from traffic stats.
 
 ## Suggested execution order
 

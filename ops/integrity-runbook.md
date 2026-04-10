@@ -307,3 +307,68 @@ Fail criteria:
 - attestation export fails or produces a digest mismatch
 - validation returns non-zero
 - dispatch is rejected or the smoke job fails
+
+## 9) Weekly consistency drill
+
+Run this once per week on the active release branch to confirm the evidence chain still works end to end.
+
+### 9.1 Resolve the latest bundle
+
+```bash
+node scripts/latest-evidence-bundle.js \
+  --root ./artifacts/integrity-evidence \
+  --require-files
+```
+
+Pass:
+- prints the newest bundle path and the expected artifact files
+- exits `0`
+
+Fail:
+- exits `3` when no bundle can be resolved
+- exits non-zero when required files are missing
+
+### 9.2 Check the bundle
+
+```bash
+node scripts/check-evidence-bundle.js \
+  --dir ./artifacts/integrity-evidence/<timestamp> \
+  --strict
+```
+
+Pass:
+- prints a valid bundle summary
+- exits `0`
+
+Fail:
+- exits `3` when manifest or attestation content is inconsistent
+- exits `64` on invalid arguments
+
+### 9.3 Dispatch the smoke
+
+```bash
+GH_TOKEN="$GH_TOKEN" \
+  node scripts/dispatch-consistency-smoke.js \
+    --owner Vito416 \
+    --repo blackcat-darkmesh-gateway \
+    --workflow ci.yml \
+    --ref feat/gateway-p2-1-hardening-batch \
+    --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
+    --consistency-token "$STATE_TOKEN" \
+    --evidence-urls https://gateway-a.example.com,https://gateway-b.example.com \
+    --evidence-token "$STATE_TOKEN"
+```
+
+Pass:
+- GitHub accepts the dispatch request
+- the smoke workflow starts with the provided URLs
+
+Fail:
+- exits non-zero if the token is missing or the API rejects the request
+- use `--dry-run` first when validating a new payload shape
+
+Weekly drill checklist:
+- `GATEWAY_INTEGRITY_STATE_TOKEN` is populated for compare and validation steps
+- `GH_TOKEN` or `GITHUB_TOKEN` is available for the dispatch step
+- `GATEWAY_ATTESTATION_HMAC_KEY` is set if the attestation export should be signed
+- archive the latest compare, attestation, and workflow run links with the release notes

@@ -29,14 +29,34 @@ dashboard:
       targets:
         - expr: gateway_cache_size
           legendFormat: cache_size
-    - title: "Integrity mirror consistency"
+    - title: "Integrity fetch retry pressure"
       type: timeseries
       datasource: Prometheus
       targets:
-        - expr: rate(gateway_integrity_mirror_mismatch_total[5m])
-          legendFormat: mirror_mismatch/s
-        - expr: rate(gateway_integrity_mirror_fetch_fail_total[5m])
-          legendFormat: mirror_fetch_fail/s
+        - expr: increase(gateway_integrity_snapshot_fetch_fail_total[5m])
+          legendFormat: snapshot_fetch_fail/5m
+        - expr: increase(gateway_integrity_mirror_fetch_fail_total[5m])
+          legendFormat: mirror_fetch_fail/5m
+    - title: "Mirror mismatch / fetch-fail trend windows"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: increase(gateway_integrity_mirror_mismatch_total[5m])
+          legendFormat: mismatch/5m
+        - expr: increase(gateway_integrity_mirror_mismatch_total[15m])
+          legendFormat: mismatch/15m
+        - expr: increase(gateway_integrity_mirror_fetch_fail_total[5m])
+          legendFormat: fetch_fail/5m
+        - expr: increase(gateway_integrity_mirror_fetch_fail_total[15m])
+          legendFormat: fetch_fail/15m
+    - title: "Checkpoint age vs audit lag"
+      type: stat
+      datasource: Prometheus
+      targets:
+        - expr: gateway_integrity_checkpoint_age_seconds
+          legendFormat: checkpoint_age_s
+        - expr: gateway_integrity_audit_lag_seconds
+          legendFormat: audit_lag_s
     - title: "Rate limit tuning snapshot"
       type: stat
       datasource: Prometheus

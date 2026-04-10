@@ -305,3 +305,55 @@ node scripts/dispatch-consistency-smoke.js \
 - `fetch-template.ts` — pull Arweave template, verify manifest signature.
 - `psp-webhook-replay.ts` — replay stored webhook fixtures against local gateway.
 - `cache-wipe.ts` — trigger ForgetSubject wipe for testing.
+
+## Weekly consistency drill
+
+Use the helpers below to verify the evidence chain once a week before promotion or release sign-off.
+
+### 1) Resolve the latest bundle
+
+```bash
+node scripts/latest-evidence-bundle.js \
+  --root ./artifacts/integrity-evidence \
+  --require-files
+```
+
+Pass: the helper prints the newest bundle path plus `compare.txt`, `attestation.json`, and `manifest.json`, then exits `0`.
+
+Fail: exit `3` means no bundle was found; any other non-zero exit means the bundle root or required files are invalid.
+
+### 2) Check the bundle
+
+```bash
+node scripts/check-evidence-bundle.js \
+  --dir ./artifacts/integrity-evidence/<timestamp> \
+  --strict
+```
+
+Pass: the bundle manifest and attestation validate cleanly, then the helper exits `0`.
+
+Fail: exit `3` means the bundle content does not line up; exit `64` means the command line or paths are invalid.
+
+### 3) Dispatch the smoke
+
+```bash
+GH_TOKEN="$GH_TOKEN" \
+  node scripts/dispatch-consistency-smoke.js \
+    --owner Vito416 \
+    --repo blackcat-darkmesh-gateway \
+    --workflow ci.yml \
+    --ref feat/gateway-p2-1-hardening-batch \
+    --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
+    --consistency-token "$STATE_TOKEN" \
+    --evidence-urls https://gateway-a.example.com,https://gateway-b.example.com \
+    --evidence-token "$STATE_TOKEN"
+```
+
+Pass: GitHub accepts the dispatch and the workflow picks up the supplied URLs.
+
+Fail: the helper exits non-zero if `GH_TOKEN` / `GITHUB_TOKEN` is missing or the API rejects the request; use `--dry-run` first when checking a new payload.
+
+Weekly drill env vars:
+- `GATEWAY_INTEGRITY_STATE_TOKEN` for compare and validation flows
+- `GATEWAY_ATTESTATION_HMAC_KEY` if the attestation should be signed
+- `GH_TOKEN` or `GITHUB_TOKEN` for the workflow dispatch

@@ -48,6 +48,16 @@ Use these as starter `for:` values when you need profile-specific alert rules. T
 | Webhook replay pressure | `for: 5m` | `for: 5m` | `for: 3m` |
 | Role / auth / notify control-plane failures | keep the default short window; only widen after a confirmed retry storm | keep the default short window; only widen after a confirmed retry storm | keep the default short window; only widen after a confirmed retry storm |
 
+## Dashboard to alert map
+
+Use this quick map when a panel is noisy and you need the matching alert name without cross-reading `ops/alerts.md`.
+
+| Dashboard panel | Primary alert |
+| --- | --- |
+| Integrity fetch retry pressure | `GatewayIntegrityMirrorFetchFail` |
+| Mirror mismatch / fetch-fail trend windows | `GatewayIntegrityMirrorMismatch`, `GatewayIntegrityMirrorFetchFail` |
+| Checkpoint age vs audit lag | `GatewayIntegrityCheckpointStale`, `GatewayIntegrityAuditLagHigh` |
+
 ## Notes
 
 - Keep thresholds below the hard caps from `ops/resource-budgets.md` so alerts fire before exhaustion.
