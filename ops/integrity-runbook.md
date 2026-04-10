@@ -344,7 +344,28 @@ Fail:
 - exits `3` when manifest or attestation content is inconsistent
 - exits `64` on invalid arguments
 
-### 9.3 Dispatch the smoke
+### 9.3 Index and package evidence
+
+```bash
+node scripts/index-evidence-bundles.js \
+  --root ./artifacts/integrity-evidence \
+  --strict \
+  --format json
+
+node scripts/build-attestation-exchange-pack.js \
+  --bundle ./artifacts/integrity-evidence/<timestamp> \
+  --out ./artifacts/integrity-evidence/attestation-exchange-pack.json
+```
+
+Pass:
+- bundle index renders with expected rows
+- exchange pack is generated and includes an `ok` summary
+
+Fail:
+- exits `3` on strict validation errors or malformed content
+- exits `64` on invalid CLI usage
+
+### 9.4 Dispatch the smoke
 
 ```bash
 GH_TOKEN="$GH_TOKEN" \

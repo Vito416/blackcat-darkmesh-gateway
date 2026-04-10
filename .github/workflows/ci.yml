@@ -35,6 +35,10 @@ on:
         description: Optional token for consistency comparison
         required: false
         type: string
+      consistency_mode:
+        description: Consistency comparison mode (pairwise|all)
+        required: false
+        type: string
       evidence_urls:
         description: Comma-separated URLs for evidence dry-run export
         required: false
@@ -143,6 +147,7 @@ jobs:
     env:
       CONSISTENCY_URLS: ${{ inputs.consistency_urls }}
       CONSISTENCY_TOKEN: ${{ inputs.consistency_token }}
+      CONSISTENCY_MODE: ${{ inputs.consistency_mode || 'pairwise' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -154,7 +159,7 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
-      - name: Compare integrity state
+      - name: Compare integrity matrix
         run: |
           node <<'NODE'
           const { spawnSync } = require('node:child_process')
@@ -168,6 +173,11 @@ jobs:
             console.error('[consistency-smoke] consistency_urls is required')
             process.exit(64)
           }
+          const mode = (process.env.CONSISTENCY_MODE || 'pairwise').trim().toLowerCase()
+          if (!['pairwise', 'all'].includes(mode)) {
+            console.error('[consistency-smoke] consistency_mode must be pairwise or all')
+            process.exit(64)
+          }
 
           const args = []
           for (const url of urls) {
@@ -176,8 +186,9 @@ jobs:
           if (process.env.CONSISTENCY_TOKEN) {
             args.push('--token', process.env.CONSISTENCY_TOKEN)
           }
+          args.push('--mode', mode)
 
-          const result = spawnSync('node', ['scripts/compare-integrity-state.js', ...args], {
+          const result = spawnSync('node', ['scripts/compare-integrity-matrix.js', ...args], {
             stdio: 'inherit',
             env: process.env,
           })
@@ -208,12 +219,20 @@ jobs:
         run: npm ci
       - name: Help: compare
         run: npm run ops:compare-integrity -- --help
+      - name: Help: compare matrix
+        run: npm run ops:compare-integrity-matrix -- --help
       - name: Help: attest
         run: npm run ops:attest-integrity -- --help
       - name: Help: export
         run: npm run ops:export-integrity-evidence -- --help
       - name: Help: validate
         run: npm run ops:validate-integrity-attestation -- --help
+      - name: Help: build exchange pack
+        run: npm run ops:build-attestation-exchange-pack -- --help
+      - name: Help: index bundles
+        run: npm run ops:index-evidence-bundles -- --help
+      - name: Help: suggest rate limits
+        run: npm run ops:suggest-ratelimit-overrides -- --help
       - name: Help: bundle check
         run: npm run ops:check-evidence-bundle -- --help
       - name: Help: latest bundle
@@ -288,6 +307,31 @@ jobs:
           )
           if ((checkResult.status ?? 1) !== 0) {
             process.exit(checkResult.status ?? 1)
+          }
+
+          const indexResult = spawnSync(
+            'node',
+            ['scripts/index-evidence-bundles.js', '--root', outDir, '--strict', '--format', 'json'],
+            {
+              stdio: 'inherit',
+              env: process.env,
+            },
+          )
+          if ((indexResult.status ?? 1) !== 0) {
+            process.exit(indexResult.status ?? 1)
+          }
+
+          const exchangeOut = `${outDir}/attestation-exchange-pack.json`
+          const exchangeResult = spawnSync(
+            'node',
+            ['scripts/build-attestation-exchange-pack.js', '--bundle', bundleDir, '--out', exchangeOut],
+            {
+              stdio: 'inherit',
+              env: process.env,
+            },
+          )
+          if ((exchangeResult.status ?? 1) !== 0) {
+            process.exit(exchangeResult.status ?? 1)
           }
 
           const repo = process.env.GITHUB_REPOSITORY || ''

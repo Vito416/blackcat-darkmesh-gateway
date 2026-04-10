@@ -154,6 +154,34 @@ Token handling:
 - if no `--token` is given, the helper falls back to `GATEWAY_INTEGRITY_STATE_TOKEN`
 - blank tokens are rejected so auth mistakes fail fast
 
+## Integrity matrix comparison
+
+`scripts/compare-integrity-matrix.js` extends consistency checks with two strategies:
+
+- `pairwise` (default): adjacent gateway checks `(1,2), (2,3), ...`
+- `all`: one combined matrix across all supplied URLs
+
+Exit codes:
+- `0` all runs pass
+- `3` one or more field mismatches
+- `2` fetch/payload failure
+- `64` usage/configuration error
+
+Usage:
+```bash
+GATEWAY_INTEGRITY_STATE_TOKEN=state-secret \
+  node scripts/compare-integrity-matrix.js \
+    --url https://gateway-a.example.com \
+    --url https://gateway-b.example.com \
+    --url https://gateway-c.example.com \
+    --mode pairwise
+
+npm run ops:compare-integrity-matrix -- \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com \
+  --mode all --json
+```
+
 ## Integrity attestation artifact
 
 `scripts/generate-integrity-attestation.js` fetches `/integrity/state` from multiple gateways, compares the attestation bootstrap fields, and writes a compact JSON artifact that you can archive with a release or incident bundle.
@@ -274,6 +302,57 @@ node scripts/latest-evidence-bundle.js --root ./artifacts/integrity-evidence --r
 npm run ops:latest-evidence-bundle -- --root ./artifacts/integrity-evidence --json --require-files
 ```
 
+## Evidence bundle index helper
+
+`scripts/index-evidence-bundles.js` scans timestamped evidence bundle directories and outputs a compact index (`json` or `csv`).
+
+Usage:
+```bash
+node scripts/index-evidence-bundles.js \
+  --root ./artifacts/integrity-evidence \
+  --strict \
+  --format json
+
+npm run ops:index-evidence-bundles -- \
+  --root ./artifacts/integrity-evidence \
+  --format csv \
+  --out ./artifacts/integrity-evidence/index.csv
+```
+
+## Attestation exchange pack helper
+
+`scripts/build-attestation-exchange-pack.js` builds a portable bundle-of-bundles file for cross-gateway exchange/review.
+
+Usage:
+```bash
+node scripts/build-attestation-exchange-pack.js \
+  --bundle ./artifacts/integrity-evidence/2026-04-10T12-34-56Z-1234-abcd12 \
+  --bundle ./artifacts/integrity-evidence/2026-04-11T12-00-01Z-5678-ef9012 \
+  --out ./artifacts/integrity-evidence/attestation-exchange-pack.json
+
+npm run ops:build-attestation-exchange-pack -- \
+  --bundle ./artifacts/integrity-evidence/2026-04-10T12-34-56Z-1234-abcd12 \
+  --out ./artifacts/integrity-evidence/attestation-exchange-pack.json \
+  --include-compare-log
+```
+
+## Rate-limit override suggestion helper
+
+`scripts/suggest-ratelimit-overrides.js` generates deterministic per-prefix `RATE_LIMIT_ROUTE_OVERRIDES` suggestions from route stats for `wedos_small`, `wedos_medium`, or `diskless` profiles.
+
+Usage:
+```bash
+node scripts/suggest-ratelimit-overrides.js \
+  --input ./tmp/rate-stats.json \
+  --profile wedos_small \
+  --floor 5 \
+  --ceiling 120
+
+npm run ops:suggest-ratelimit-overrides -- \
+  --input ./tmp/rate-stats.json \
+  --profile diskless
+```
+
 ## Consistency smoke dispatch helper
 
 `scripts/dispatch-consistency-smoke.js` sends a `workflow_dispatch` request to GitHub Actions for consistency/evidence smoke runs.
@@ -334,7 +413,24 @@ Pass: the bundle manifest and attestation validate cleanly, then the helper exit
 
 Fail: exit `3` means the bundle content does not line up; exit `64` means the command line or paths are invalid.
 
-### 3) Dispatch the smoke
+### 3) Index and package the evidence
+
+```bash
+node scripts/index-evidence-bundles.js \
+  --root ./artifacts/integrity-evidence \
+  --strict \
+  --format json
+
+node scripts/build-attestation-exchange-pack.js \
+  --bundle ./artifacts/integrity-evidence/<timestamp> \
+  --out ./artifacts/integrity-evidence/attestation-exchange-pack.json
+```
+
+Pass: index output contains expected bundle rows and exchange-pack generation exits `0`.
+
+Fail: exits `3` when strict validation fails or bundle data is malformed; exits `64` on invalid CLI usage.
+
+### 4) Dispatch the smoke
 
 ```bash
 GH_TOKEN="$GH_TOKEN" \

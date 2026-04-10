@@ -209,6 +209,7 @@ Progress notes:
   - `scripts/build-attestation-exchange-pack.js` for cross-gateway evidence exchange bundles.
   - `scripts/index-evidence-bundles.js` for strict/portable bundle indexing (JSON/CSV).
   - `scripts/suggest-ratelimit-overrides.js` for profile-aware rate-limit override suggestions from traffic stats.
+- CI wiring now exercises these helpers in `consistency-smoke` / `evidence-dry-run` (matrix compare + strict index + exchange-pack generation + help coverage).
 
 ## Suggested execution order
 
