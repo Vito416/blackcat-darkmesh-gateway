@@ -185,3 +185,42 @@ Operational interpretation:
 | `GatewayIntegrityIncidentNotifyFail` | Check the downstream notify target/provider health and keep manual triage active until forwarding recovers. |
 
 If checkpoint stale, audit lag, and audit anomaly all fire together, treat it as AO fetch/cadence drift first. If only one fires, start with the layer named in the matrix above.
+
+## 7) Cross-gateway attestation bootstrap
+
+Use this when you want to confirm multiple gateways are still aligned before promoting a shared integrity attestation set.
+
+### What to compare
+
+Compare the following fields across the candidate gateways:
+
+- `policy.paused`
+- `policy.activeRoot`
+- `policy.activePolicyHash`
+- `release.version`
+- `release.root`
+- `audit.seqTo`
+
+### Operator workflow
+
+1. Collect the base URLs of the gateways you want to compare.
+2. Reuse a single state token if the gateways share the same auth secret, or pass one token per URL if they do not.
+3. Run the comparison helper:
+
+```bash
+GATEWAY_INTEGRITY_STATE_TOKEN="$STATE_TOKEN" \
+  node scripts/compare-integrity-state.js \
+    --url https://gateway-a.example.com \
+    --url https://gateway-b.example.com
+```
+
+4. Treat exit code `0` as ready for attestation bootstrap.
+5. Treat exit code `3` as a consistency problem between gateways.
+6. Treat exit code `2` as a request or payload failure; re-check connectivity, auth, or the state endpoint.
+
+### Bootstrap guidance
+
+- Run the comparison before rolling a new shared root or policy hash.
+- If `policy.activeRoot` or `release.root` diverge, stop and reconcile the active release lineage first.
+- If `audit.seqTo` diverges while the policy and release roots match, compare the freshness of the AO snapshot path before promoting the attestation set.
+- Keep one operator note per comparison run so the attestation rollout has a clear audit trail.

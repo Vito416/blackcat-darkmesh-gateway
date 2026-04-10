@@ -27,6 +27,14 @@ on:
         description: Smoke request timeout in milliseconds
         required: false
         type: string
+      consistency_urls:
+        description: Comma-separated URLs for integrity consistency comparison
+        required: false
+        type: string
+      consistency_token:
+        description: Optional token for consistency comparison
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -116,3 +124,55 @@ jobs:
         run: npm ci
       - name: Incident smoke (optional)
         run: npm run smoke:integrity-incident
+
+  consistency-smoke:
+    name: Integrity consistency smoke
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+      - integrity-gate
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    env:
+      CONSISTENCY_URLS: ${{ inputs.consistency_urls }}
+      CONSISTENCY_TOKEN: ${{ inputs.consistency_token }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Compare integrity state
+        run: |
+          node <<'NODE'
+          const { spawnSync } = require('node:child_process')
+
+          const urls = (process.env.CONSISTENCY_URLS || '')
+            .split(',')
+            .map((url) => url.trim())
+            .filter(Boolean)
+
+          if (!urls.length) {
+            console.error('[consistency-smoke] consistency_urls is required')
+            process.exit(64)
+          }
+
+          const args = []
+          for (const url of urls) {
+            args.push('--url', url)
+          }
+          if (process.env.CONSISTENCY_TOKEN) {
+            args.push('--token', process.env.CONSISTENCY_TOKEN)
+          }
+
+          const result = spawnSync('node', ['scripts/compare-integrity-state.js', ...args], {
+            stdio: 'inherit',
+            env: process.env,
+          })
+
+          process.exit(result.status ?? 1)
+          NODE

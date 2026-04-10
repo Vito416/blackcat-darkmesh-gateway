@@ -112,6 +112,48 @@ Tip:
 - The helper prints a final `[SMOKE] PASS incident control smoke completed` line only after pause, blocked write, resume, and cleanup have all passed.
 - In CI, the incident smoke job is optional: it runs automatically only when the needed secrets are present, and it can also be triggered manually with `workflow_dispatch` inputs.
 
+## Integrity state comparison
+
+`scripts/compare-integrity-state.js` fetches `/integrity/state` from multiple gateways and compares the release/policy/audit fields that should stay in lockstep during attestation bootstrap:
+
+- `policy.paused`
+- `policy.activeRoot`
+- `policy.activePolicyHash`
+- `release.version`
+- `release.root`
+- `audit.seqTo`
+
+It prints a compact per-field consensus table and exits with:
+
+- `0` when all compared fields match
+- `3` when one or more fields mismatch
+- `2` when a request fails or a gateway returns an invalid state payload
+- `64` when arguments or token configuration are invalid
+
+Usage:
+```bash
+GATEWAY_INTEGRITY_STATE_TOKEN=state-secret \
+  node scripts/compare-integrity-state.js \
+    --url https://gateway-a.example.com \
+    --url https://gateway-b.example.com
+
+node scripts/compare-integrity-state.js \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com \
+  --token token-a \
+  --token token-b
+
+npm run ops:compare-integrity -- \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com
+```
+
+Token handling:
+- pass one `--token` to reuse the same state token for every URL
+- pass one `--token` per `--url` to compare gateways with different tokens
+- if no `--token` is given, the helper falls back to `GATEWAY_INTEGRITY_STATE_TOKEN`
+- blank tokens are rejected so auth mistakes fail fast
+
 ## Other helpers
 
 - `fetch-template.ts` — pull Arweave template, verify manifest signature.

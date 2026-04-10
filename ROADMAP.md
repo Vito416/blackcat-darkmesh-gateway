@@ -34,6 +34,8 @@
 - Admission control for envelopes (size/quota).
 - Template manifest allowlist/denylist; unsafe-template warnings.
 - Canary/shadow deploy of new PSP configs.
+- Mirror consistency checks and cross-gateway compare tools for integrity drift detection.
+- Adaptive per-prefix route rate limits for tenant-aware burst control.
 
 ## Phase 4 – PQC & Future-proofing
 - Hybrid PQC transport/signatures for gateway↔backend links (when libs stable).
@@ -44,6 +46,7 @@
 - Edge render option: inject AO public state into cached template for ultra-low TTFB.
 - Smart prefetch/early refresh for hot assets.
 - Adaptive rate limits per route based on error budgets.
+- Keep the compare-integrity path lightweight so operator checks stay cheap during normal traffic.
 
 ## Next TODO (crypto + worker alignment)
 - Adopt `blackcat-crypto` envelope/HMAC: browser/worker encrypt to admin pubkey; gateway stays secretless.

@@ -5,14 +5,45 @@ function positiveInt(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
+function parseOverrides(raw: string | undefined): Map<string, number> {
+  const overrides = new Map<string, number>()
+  if (!raw) return overrides
+
+  for (const entry of raw.split(',')) {
+    const trimmed = entry.trim()
+    if (!trimmed) continue
+
+    const separator = trimmed.indexOf('=')
+    if (separator <= 0 || separator === trimmed.length - 1) continue
+
+    const prefix = trimmed.slice(0, separator).trim()
+    const max = positiveInt(trimmed.slice(separator + 1).trim(), 0)
+    if (!prefix || max <= 0) continue
+
+    overrides.set(prefix, max)
+  }
+
+  return overrides
+}
+
 const WINDOW_MS = positiveInt(process.env.GATEWAY_RL_WINDOW_MS, 60000)
 const MAX_REQ = positiveInt(process.env.GATEWAY_RL_MAX, 120)
 const MAX_BUCKETS = positiveInt(process.env.GATEWAY_RL_MAX_BUCKETS, 10000)
+const PREFIX_OVERRIDES = parseOverrides(process.env.GATEWAY_RL_MAX_OVERRIDES)
 
 const buckets = new Map<string, { count: number; reset: number }>()
 
 gauge('gateway_ratelimit_max', MAX_REQ)
 gauge('gateway_ratelimit_max_buckets', MAX_BUCKETS)
+gauge('gateway_ratelimit_override_count', PREFIX_OVERRIDES.size)
+
+function effectiveMaxForKey(key: string): number {
+  const separator = key.indexOf(':')
+  if (separator <= 0) return MAX_REQ
+
+  const prefix = key.slice(0, separator)
+  return PREFIX_OVERRIDES.get(prefix) || MAX_REQ
+}
 
 function prune(now: number): number {
   let removed = 0
@@ -36,6 +67,8 @@ function prune(now: number): number {
 export function check(key: string): boolean {
   const now = Date.now()
   prune(now)
+  const max = effectiveMaxForKey(key)
+  gauge('gateway_ratelimit_effective_max_last', max)
 
   const b = buckets.get(key) || { count: 0, reset: now + WINDOW_MS }
   if (now >= b.reset) {
@@ -46,7 +79,7 @@ export function check(key: string): boolean {
   buckets.set(key, b)
   prune(now)
   gauge('gateway_ratelimit_buckets', buckets.size)
-  if (b.count > MAX_REQ) {
+  if (b.count > max) {
     inc('gateway_ratelimit_blocked')
     return false
   }

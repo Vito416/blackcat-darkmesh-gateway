@@ -5,6 +5,7 @@
 - Resource budgets and limited-hosting guidance: `ops/resource-budgets.md`.
 - Default alert thresholds: `ops/alerts.md` (targets `wedos_medium`).
 - Profile-specific alert thresholds and tuning notes: `ops/alerts-profiles.md`.
+- Compare-integrity operator tool: `npm run ops:compare-integrity` compares two gateway integrity snapshots for drift.
 - Key metrics:
   - Cache: `gateway_cache_hit_total`, `gateway_cache_miss_total`, `gateway_cache_expired_total`, `gateway_cache_store_reject_total`, `gateway_cache_store_reject_size_total`, `gateway_cache_store_reject_capacity_total`, `gateway_cache_size`.
   - Webhooks: `gateway_webhook_stripe_verify_fail_total`, `gateway_webhook_paypal_verify_fail_total`, `gateway_webhook_replay_total`, `gateway_webhook_cert_allow_fail_total`, `gateway_webhook_cert_pin_fail_total`, `gateway_webhook_cert_cache_size`.

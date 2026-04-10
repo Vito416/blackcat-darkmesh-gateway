@@ -258,6 +258,15 @@ function markReadonlyFallback(paused: boolean) {
   if (paused) inc('gateway_integrity_fallback_readonly')
 }
 
+function requestIp(req: Request): string {
+  return req.headers.get('CF-Connecting-IP') || 'unknown'
+}
+
+function rateLimitResponse(key: string): Response | null {
+  if (rateCheck(key)) return null
+  return respond('Too Many Requests', { status: 429 })
+}
+
 function readBearerToken(request: Request): string {
   const auth = request.headers.get('authorization') || ''
   if (/^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, '').trim()
@@ -396,9 +405,8 @@ async function wrapWebhook(provider: WebhookProvider, fn: () => Promise<Response
 }
 
 async function handleInbox(req: Request): Promise<Response> {
-  const ip = req.headers.get('CF-Connecting-IP') || 'unknown'
+  const ip = requestIp(req)
   if (!rateCheck(`inbox:${ip}`)) {
-    inc('gateway_ratelimit_blocked')
     return respond('Too Many Requests', { status: 429 })
   }
   inc('gateway_inbox_accept')
@@ -501,6 +509,9 @@ async function handleCache(
 async function handleTemplateCall(req: Request, paused: boolean): Promise<Response> {
   inc('gateway_template_call')
   if (req.method !== 'POST') return respond('method', { status: 405 })
+
+  const limited = rateLimitResponse(`template:${requestIp(req)}`)
+  if (limited) return limited
 
   const requiredToken = process.env.GATEWAY_TEMPLATE_TOKEN
   if (requiredToken) {
@@ -816,6 +827,8 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
   if (url.pathname === '/webhook/stripe') {
     if (integrityPaused) return policyPausedResponse()
+    const limited = rateLimitResponse(`webhook:stripe:${requestIp(request)}`)
+    if (limited) return limited
     return wrapWebhook('stripe', async () => {
       const body = await request.text()
       if (bodyExceedsLimit(body, readWebhookMaxBodyBytes())) {
@@ -835,6 +848,8 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
   if (url.pathname === '/webhook/paypal') {
     if (integrityPaused) return policyPausedResponse()
+    const limited = rateLimitResponse(`webhook:paypal:${requestIp(request)}`)
+    if (limited) return limited
     return wrapWebhook('paypal', async () => {
       const body = await request.text()
       if (bodyExceedsLimit(body, readWebhookMaxBodyBytes())) {

@@ -12,8 +12,10 @@ import {
   isTransientIntegrityFetchStatus,
   resolveIntegrityFetchControl,
   sleep,
+  type IntegrityFetchControl,
   type IntegrityFetchLike,
 } from './fetch-control.js'
+import { inc } from '../metrics.js'
 
 export type IntegrityErrorCode =
   | 'integrity_invalid_snapshot'
@@ -42,6 +44,11 @@ export type FetchIntegritySnapshotOptions = {
   timeoutMs?: number
   retryAttempts?: number
   retryBackoffMs?: number
+}
+
+type IntegrityMirrorSettings = {
+  urls: string[]
+  strict: boolean
 }
 
 type SnapshotInput = Record<string, unknown>
@@ -162,6 +169,18 @@ function normalizeTrustedRoot(value: string): string {
   return value.trim()
 }
 
+function parseMirrorSettings(): IntegrityMirrorSettings {
+  const urls = (process.env.AO_INTEGRITY_MIRROR_URLS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+
+  return {
+    urls,
+    strict: (process.env.AO_INTEGRITY_MIRROR_STRICT || '').trim() === '1',
+  }
+}
+
 function assertReleaseRootParity(release: IntegrityReleaseRecord, policy: IntegrityPolicyRecord): void {
   const releaseRoot = normalizeTrustedRoot(release.root)
   const activeRoot = normalizeTrustedRoot(policy.activeRoot)
@@ -242,23 +261,11 @@ function parseSnapshot(raw: unknown): IntegritySnapshot {
   return { release, policy, authority, audit }
 }
 
-export async function fetchIntegritySnapshot(opts: FetchIntegritySnapshotOptions = {}): Promise<IntegritySnapshot> {
-  const url = opts.url || process.env.AO_INTEGRITY_URL
-  if (!url) {
-    throw new IntegritySnapshotError('integrity_fetch_failed', 'AO_INTEGRITY_URL is not configured')
-  }
-
-  const fetchImpl = opts.fetchImpl || globalThis.fetch
-  if (typeof fetchImpl !== 'function') {
-    throw new IntegritySnapshotError('integrity_fetch_failed', 'fetch is not available')
-  }
-
-  const fetchControl = resolveIntegrityFetchControl({
-    timeoutMs: opts.timeoutMs,
-    retryAttempts: opts.retryAttempts,
-    retryBackoffMs: opts.retryBackoffMs,
-  })
-
+async function fetchSnapshotFromUrl(
+  url: string,
+  fetchImpl: IntegrityFetchLike,
+  fetchControl: IntegrityFetchControl,
+): Promise<IntegritySnapshot> {
   for (let attempt = 1; attempt <= fetchControl.retryAttempts; attempt++) {
     try {
       const response = await fetchWithTimeout(fetchImpl, url, fetchControl.timeoutMs)
@@ -297,4 +304,72 @@ export async function fetchIntegritySnapshot(opts: FetchIntegritySnapshotOptions
       throw new IntegritySnapshotError('integrity_fetch_failed', message)
     }
   }
+
+  throw new IntegritySnapshotError('integrity_fetch_failed', 'request failed')
+}
+
+function compareMirrorSnapshot(primary: IntegritySnapshot, mirror: IntegritySnapshot): string[] {
+  const mismatches: string[] = []
+
+  if (normalizeTrustedRoot(primary.release.root) !== normalizeTrustedRoot(mirror.release.root)) {
+    mismatches.push('release.root')
+  }
+
+  if (normalizeTrustedRoot(primary.policy.activeRoot) !== normalizeTrustedRoot(mirror.policy.activeRoot)) {
+    mismatches.push('policy.activeRoot')
+  }
+
+  if (primary.release.version !== mirror.release.version) {
+    mismatches.push('release.version')
+  }
+
+  return mismatches
+}
+
+export async function fetchIntegritySnapshot(opts: FetchIntegritySnapshotOptions = {}): Promise<IntegritySnapshot> {
+  const url = opts.url || process.env.AO_INTEGRITY_URL
+  if (!url) {
+    throw new IntegritySnapshotError('integrity_fetch_failed', 'AO_INTEGRITY_URL is not configured')
+  }
+
+  const fetchImpl = opts.fetchImpl || globalThis.fetch
+  if (typeof fetchImpl !== 'function') {
+    throw new IntegritySnapshotError('integrity_fetch_failed', 'fetch is not available')
+  }
+
+  const fetchControl = resolveIntegrityFetchControl({
+    timeoutMs: opts.timeoutMs,
+    retryAttempts: opts.retryAttempts,
+    retryBackoffMs: opts.retryBackoffMs,
+  })
+
+  const primary = await fetchSnapshotFromUrl(url, fetchImpl, fetchControl)
+  const mirrors = parseMirrorSettings()
+
+  if (mirrors.urls.length === 0) {
+    return primary
+  }
+
+  const issues: string[] = []
+
+  for (const mirrorUrl of mirrors.urls) {
+    try {
+      const mirror = await fetchSnapshotFromUrl(mirrorUrl, fetchImpl, fetchControl)
+      const mismatches = compareMirrorSnapshot(primary, mirror)
+      if (mismatches.length > 0) {
+        inc('gateway_integrity_mirror_mismatch')
+        issues.push(`${mirrorUrl}: ${mismatches.join(', ')}`)
+      }
+    } catch (error) {
+      inc('gateway_integrity_mirror_fetch_fail')
+      const detail = error instanceof Error ? error.message : 'request failed'
+      issues.push(`${mirrorUrl}: ${detail}`)
+    }
+  }
+
+  if (mirrors.strict && issues.length > 0) {
+    throw new IntegritySnapshotError('integrity_fetch_failed', `mirror consistency check failed: ${issues.join('; ')}`)
+  }
+
+  return primary
 }

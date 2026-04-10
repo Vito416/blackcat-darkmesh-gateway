@@ -79,6 +79,33 @@ describe('handler cache and shadow modes', () => {
     expect(res.status).toBe(202)
   })
 
+  it('keeps inbox rate limit blocked metric single-counted on a reject', async () => {
+    process.env.GATEWAY_RL_MAX = '1'
+    const { reset, snapshot } = await import('../src/metrics.js')
+    reset()
+    const { handleRequest } = await import('../src/handler.js')
+    const headers = { 'CF-Connecting-IP': '203.0.113.11', 'content-type': 'application/json' }
+
+    const first = await handleRequest(
+      new Request('http://gateway/inbox', {
+        method: 'POST',
+        body: '{}',
+        headers,
+      }),
+    )
+    expect(first.status).toBe(200)
+
+    const second = await handleRequest(
+      new Request('http://gateway/inbox', {
+        method: 'POST',
+        body: '{}',
+        headers,
+      }),
+    )
+    expect(second.status).toBe(429)
+    expect(snapshot().counters.gateway_ratelimit_blocked).toBe(1)
+  })
+
   it('returns 507 when cache admission limits reject PUT', async () => {
     process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '2'
     const metrics = await import('../src/metrics.js')

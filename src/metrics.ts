@@ -35,6 +35,8 @@ const help: Record<string, string> = {
   gateway_ratelimit_buckets: 'Active rate-limit buckets',
   gateway_ratelimit_max: 'Configured max requests per rate-limit window',
   gateway_ratelimit_max_buckets: 'Configured max rate-limit bucket count',
+  gateway_ratelimit_override_count: 'Configured per-prefix rate-limit overrides',
+  gateway_ratelimit_effective_max_last: 'Last effective rate-limit max selected for a checked key',
   gateway_metrics_auth_blocked_total: 'Unauthorized requests to /metrics',
   gateway_webhook_stripe_ok_total: 'Stripe webhooks verified',
   gateway_webhook_stripe_verify_fail_total: 'Stripe webhook verify failures',
@@ -76,6 +78,9 @@ const help: Record<string, string> = {
   gateway_integrity_incident_notify_ok_total: 'Integrity incident notifications forwarded successfully',
   gateway_integrity_incident_notify_fail_total: 'Integrity incident notification forwarding failures',
   gateway_integrity_state_read_total: 'Integrity state read requests served',
+  gateway_integrity_mirror_mismatch_total:
+    'Integrity mirror snapshots that disagree with the primary integrity snapshot',
+  gateway_integrity_mirror_fetch_fail_total: 'Integrity mirror snapshot fetch or validation failures',
 }
 
 const types: Record<string, 'counter' | 'gauge'> = {}

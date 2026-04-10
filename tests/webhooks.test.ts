@@ -21,6 +21,7 @@ async function metricValue(name: string) {
 }
 
 async function loadHandler() {
+  vi.resetModules()
   return import('../src/handler.js')
 }
 
@@ -46,6 +47,7 @@ afterEach(() => {
   delete process.env.PAYPAL_HTTP_TIMEOUT_MS
   delete process.env.PAYPAL_CLIENT_ID
   delete process.env.PAYPAL_CLIENT_SECRET
+  delete process.env.GATEWAY_RL_MAX
   vi.resetModules()
 })
 
@@ -350,5 +352,46 @@ describe('webhook verification', () => {
     const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
     expect(res.status).toBe(200)
     await expect(res.text()).resolves.toBe('ok')
+  })
+
+  it('rate limits stripe and paypal webhooks per IP before verification', async () => {
+    process.env.GATEWAY_RL_MAX = '1'
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
+    const { handleRequest } = await loadHandler()
+    const ipHeaders = { 'CF-Connecting-IP': '198.51.100.22' }
+
+    const stripeBody = JSON.stringify({ id: 'evt_rl', object: 'event' })
+    const stripeTs = Math.floor(Date.now() / 1000)
+    const stripeHeaders = new Headers({
+      ...ipHeaders,
+      'Stripe-Signature': stripeSig(stripeBody, stripeTs, stripeSecret),
+    })
+    const firstStripe = await handleRequest(
+      new Request('http://gateway/webhook/stripe', { method: 'POST', body: stripeBody, headers: stripeHeaders }),
+    )
+    expect(firstStripe.status).toBe(200)
+
+    const secondStripe = await handleRequest(
+      new Request('http://gateway/webhook/stripe', { method: 'POST', body: stripeBody, headers: stripeHeaders }),
+    )
+    expect(secondStripe.status).toBe(429)
+    await expect(secondStripe.text()).resolves.toBe('Too Many Requests')
+
+    const paypalBody = JSON.stringify({ id: 'WH-rl', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const paypalHeaders = new Headers({
+      ...ipHeaders,
+      'PayPal-Transmission-Sig': crypto.createHmac('sha256', 'ppsecret').update(paypalBody).digest('hex'),
+    })
+    const firstPaypal = await handleRequest(
+      new Request('http://gateway/webhook/paypal', { method: 'POST', body: paypalBody, headers: paypalHeaders }),
+    )
+    expect(firstPaypal.status).toBe(200)
+
+    const secondPaypal = await handleRequest(
+      new Request('http://gateway/webhook/paypal', { method: 'POST', body: paypalBody, headers: paypalHeaders }),
+    )
+    expect(secondPaypal.status).toBe(429)
+    await expect(secondPaypal.text()).resolves.toBe('Too Many Requests')
   })
 })

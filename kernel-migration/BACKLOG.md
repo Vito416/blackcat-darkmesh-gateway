@@ -193,6 +193,11 @@ Progress notes:
 - Cross-gateway attestation exchange.
 - Additional formal validation of integrity state transitions.
 
+### P3 execution layer
+- Mirror consistency checks across gateways to compare integrity snapshots and catch drift early.
+- Cross-gateway compare tooling for operator spot checks and escalation evidence.
+- Adaptive per-prefix route rate limits for tenant-aware burst control on hot paths.
+
 ## Suggested execution order
 
 1. P0.1 + P0.2

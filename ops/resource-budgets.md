@@ -40,6 +40,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_RL_WINDOW_MS=60000`
 - `GATEWAY_RL_MAX=120`
 - `GATEWAY_RL_MAX_BUCKETS=10000`
+- `GATEWAY_RL_MAX_OVERRIDES=inbox=80,webhook=240,template=120`
 - `GATEWAY_WEBHOOK_REPLAY_TTL_MS=600000`
 - `GATEWAY_WEBHOOK_REPLAY_MAX_KEYS=10000`
 - `GATEWAY_WEBHOOK_REPLAY_SWEEP_INTERVAL_MS=1000`
@@ -110,7 +111,10 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 ## Rate-limit budget
 - Watch `gateway_ratelimit_buckets` for cardinality drift.
 - Watch `gateway_ratelimit_pruned_total`; sustained growth indicates cap pressure or high key-cardinality churn.
+- Watch `gateway_ratelimit_override_count` to confirm the expected override set loaded at startup.
+- Watch `gateway_ratelimit_effective_max_last` when validating a hot path so you can see which ceiling the last request used.
 - Keep bucket keys coarse: route plus tenant/session/IP class, not per-request uniqueness.
+- Use `GATEWAY_RL_MAX_OVERRIDES` for narrow hot paths instead of raising the global `GATEWAY_RL_MAX`; prefix matches are resolved from the part before the first `:`.
 - If bucket count rises with traffic, collapse keys or reduce tenant fan-out before increasing the limit.
 
 ## Replay budget

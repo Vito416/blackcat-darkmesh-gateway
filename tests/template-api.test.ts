@@ -18,6 +18,11 @@ describe('template api policy gateway', () => {
     vi.restoreAllMocks()
   })
 
+  async function loadHandler() {
+    vi.resetModules()
+    return import('../src/handler.js')
+  }
+
   it('blocks unknown template action', async () => {
     const req = new Request('http://gateway/template/call', {
       method: 'POST',
@@ -65,6 +70,51 @@ describe('template api policy gateway', () => {
     expect(spy).toHaveBeenCalledTimes(1)
     const [url] = spy.mock.calls[0]
     expect(String(url)).toBe('https://ao.example/api/public/resolve-route')
+  })
+
+  it('rate limits template calls per IP before proxying', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_RL_MAX = '1'
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const { handleRequest: freshHandleRequest } = await loadHandler()
+    const headers = {
+      'content-type': 'application/json',
+      'CF-Connecting-IP': '203.0.113.9',
+    }
+
+    const first = await freshHandleRequest(
+      new Request('http://gateway/template/call', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          action: 'public.resolve-route',
+          requestId: 'req-rl-1',
+          payload: { host: 'example.com', path: '/shop' },
+        }),
+      }),
+    )
+    expect(first.status).toBe(200)
+
+    const second = await freshHandleRequest(
+      new Request('http://gateway/template/call', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          action: 'public.resolve-route',
+          requestId: 'req-rl-2',
+          payload: { host: 'example.com', path: '/shop' },
+        }),
+      }),
+    )
+    expect(second.status).toBe(429)
+    await expect(second.text()).resolves.toBe('Too Many Requests')
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(snapshot().counters.gateway_ratelimit_blocked).toBe(1)
   })
 
   it('rejects oversized template call bodies before upstream fetch', async () => {

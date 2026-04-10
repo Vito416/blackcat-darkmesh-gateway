@@ -28,6 +28,11 @@ npm run test:integrity-gate
 GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://localhost:8787}" GATEWAY_INTEGRITY_INCIDENT_TOKEN="${GATEWAY_INTEGRITY_INCIDENT_TOKEN}" GATEWAY_TEMPLATE_TOKEN="${GATEWAY_TEMPLATE_TOKEN}" node scripts/e2e-integrity-incident-smoke.js
 ```
 
+## P3 operator tools
+```bash
+npm run ops:compare-integrity -- --url ... --url ...
+```
+
 Key responsibilities
 - Fetch + cache site front-end from Arweave (verified via manifest of trusted templates).
 - API surface to browser: cart/checkout/session endpoints that forward to Write AO.
