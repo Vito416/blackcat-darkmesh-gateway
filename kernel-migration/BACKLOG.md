@@ -210,6 +210,9 @@ Progress notes:
   - `scripts/index-evidence-bundles.js` for strict/portable bundle indexing (JSON/CSV).
   - `scripts/suggest-ratelimit-overrides.js` for profile-aware rate-limit override suggestions from traffic stats.
 - CI wiring now exercises these helpers in `consistency-smoke` / `evidence-dry-run` (matrix compare + strict index + exchange-pack generation + help coverage).
+- `consistency-smoke` now captures matrix JSON, generates a profile-aware drift report (`build-drift-alert-summary`), appends it to the job summary, and uploads consistency artifacts.
+- `evidence-dry-run` now uploads its generated evidence directory as a CI artifact for offline review/sign-off.
+- Weekly scheduled consistency smoke is enabled in CI (requires `CONSISTENCY_URLS`; optional `CONSISTENCY_MODE` and `GATEWAY_RESOURCE_PROFILE`).
 
 ## Suggested execution order
 

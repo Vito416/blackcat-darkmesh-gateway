@@ -182,6 +182,24 @@ npm run ops:compare-integrity-matrix -- \
   --mode all --json
 ```
 
+## Multi-region drift alert summary
+
+`scripts/build-drift-alert-summary.js` converts matrix JSON into a compact drift report with profile-aware alert guidance.
+
+Usage:
+```bash
+node scripts/build-drift-alert-summary.js \
+  --matrix ./tmp/consistency-matrix.json \
+  --profile wedos_medium \
+  --out ./tmp/consistency-drift-report.md \
+  --json-out ./tmp/consistency-drift-summary.json
+
+npm run ops:build-drift-alert-summary -- \
+  --matrix ./tmp/consistency-matrix.json \
+  --profile diskless \
+  --json
+```
+
 ## Integrity attestation artifact
 
 `scripts/generate-integrity-attestation.js` fetches `/integrity/state` from multiple gateways, compares the attestation bootstrap fields, and writes a compact JSON artifact that you can archive with a release or incident bundle.

@@ -393,3 +393,18 @@ Weekly drill checklist:
 - `GH_TOKEN` or `GITHUB_TOKEN` is available for the dispatch step
 - `GATEWAY_ATTESTATION_HMAC_KEY` is set if the attestation export should be signed
 - archive the latest compare, attestation, and workflow run links with the release notes
+
+### 9.5 Weekly automation (CI schedule)
+
+`ci.yml` runs a weekly scheduled consistency smoke (Monday, `03:17` UTC) when `CONSISTENCY_URLS` is configured as a repository variable.
+
+Recommended repo-level config for scheduled runs:
+- variable: `CONSISTENCY_URLS` (comma-separated gateway URLs)
+- optional variable: `CONSISTENCY_MODE` (`pairwise` or `all`)
+- optional variable: `GATEWAY_RESOURCE_PROFILE` (`wedos_small|wedos_medium|diskless`)
+- secret: `GATEWAY_INTEGRITY_STATE_TOKEN` (if `/integrity/state` is protected)
+
+The scheduled run uploads:
+- matrix JSON output (`compare-integrity-matrix`)
+- markdown drift report (`build-drift-alert-summary`)
+- JSON drift summary (alert-oriented summary for automation)

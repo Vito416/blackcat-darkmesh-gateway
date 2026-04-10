@@ -5,6 +5,8 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  schedule:
+    - cron: '17 3 * * 1'
   workflow_dispatch:
     inputs:
       gateway_base_url:
@@ -37,6 +39,10 @@ on:
         type: string
       consistency_mode:
         description: Consistency comparison mode (pairwise|all)
+        required: false
+        type: string
+      consistency_profile:
+        description: Resource profile for drift-alert summary (wedos_small|wedos_medium|diskless)
         required: false
         type: string
       evidence_urls:
@@ -143,11 +149,15 @@ jobs:
     needs:
       - test
       - integrity-gate
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_urls != '' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.consistency_urls != '') || (github.event_name == 'schedule' && vars.CONSISTENCY_URLS != '') }}
     env:
-      CONSISTENCY_URLS: ${{ inputs.consistency_urls }}
-      CONSISTENCY_TOKEN: ${{ inputs.consistency_token }}
-      CONSISTENCY_MODE: ${{ inputs.consistency_mode || 'pairwise' }}
+      CONSISTENCY_URLS: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_urls || vars.CONSISTENCY_URLS }}
+      CONSISTENCY_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
+      CONSISTENCY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_mode || vars.CONSISTENCY_MODE || 'pairwise' }}
+      CONSISTENCY_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'wedos_medium' }}
+      CONSISTENCY_MATRIX_JSON: ${{ runner.temp }}/consistency-matrix.json
+      CONSISTENCY_REPORT_MD: ${{ runner.temp }}/consistency-drift-report.md
+      CONSISTENCY_REPORT_JSON: ${{ runner.temp }}/consistency-drift-summary.json
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -160,9 +170,12 @@ jobs:
       - name: Install
         run: npm ci
       - name: Compare integrity matrix
+        id: compare_matrix
+        continue-on-error: true
         run: |
           node <<'NODE'
           const { spawnSync } = require('node:child_process')
+          const { writeFileSync } = require('node:fs')
 
           const urls = (process.env.CONSISTENCY_URLS || '')
             .split(',')
@@ -186,15 +199,57 @@ jobs:
           if (process.env.CONSISTENCY_TOKEN) {
             args.push('--token', process.env.CONSISTENCY_TOKEN)
           }
-          args.push('--mode', mode)
+          args.push('--mode', mode, '--json')
 
           const result = spawnSync('node', ['scripts/compare-integrity-matrix.js', ...args], {
-            stdio: 'inherit',
+            encoding: 'utf8',
             env: process.env,
           })
+          if (result.stdout) {
+            process.stdout.write(result.stdout)
+            try {
+              writeFileSync(process.env.CONSISTENCY_MATRIX_JSON, result.stdout)
+            } catch (err) {
+              console.error(`[consistency-smoke] unable to write matrix output: ${err.message}`)
+            }
+          }
+          if (result.stderr) {
+            process.stderr.write(result.stderr)
+          }
 
           process.exit(result.status ?? 1)
           NODE
+      - name: Build drift alert summary
+        if: always()
+        run: |
+          node scripts/build-drift-alert-summary.js \
+            --matrix "$CONSISTENCY_MATRIX_JSON" \
+            --profile "$CONSISTENCY_PROFILE" \
+            --out "$CONSISTENCY_REPORT_MD" \
+            --json-out "$CONSISTENCY_REPORT_JSON"
+      - name: Append drift summary
+        if: always()
+        run: |
+          if [ -f "$CONSISTENCY_REPORT_MD" ]; then
+            cat "$CONSISTENCY_REPORT_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No drift report produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload consistency artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: consistency-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            ${{ env.CONSISTENCY_MATRIX_JSON }}
+            ${{ env.CONSISTENCY_REPORT_MD }}
+            ${{ env.CONSISTENCY_REPORT_JSON }}
+      - name: Enforce consistency result
+        if: ${{ steps.compare_matrix.outcome != 'success' }}
+        run: |
+          echo "Consistency comparison failed (see uploaded artifacts and job summary)."
+          exit 1
 
   evidence-dry-run:
     name: Evidence dry run
@@ -206,6 +261,7 @@ jobs:
     env:
       EVIDENCE_URLS: ${{ inputs.evidence_urls }}
       GATEWAY_INTEGRITY_STATE_TOKEN: ${{ inputs.evidence_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
+      EVIDENCE_OUT_DIR: ${{ runner.temp }}/integrity-evidence-dry-run
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -217,27 +273,27 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
-      - name: Help: compare
+      - name: "Help: compare"
         run: npm run ops:compare-integrity -- --help
-      - name: Help: compare matrix
+      - name: "Help: compare matrix"
         run: npm run ops:compare-integrity-matrix -- --help
-      - name: Help: attest
+      - name: "Help: attest"
         run: npm run ops:attest-integrity -- --help
-      - name: Help: export
+      - name: "Help: export"
         run: npm run ops:export-integrity-evidence -- --help
-      - name: Help: validate
+      - name: "Help: validate"
         run: npm run ops:validate-integrity-attestation -- --help
-      - name: Help: build exchange pack
+      - name: "Help: build exchange pack"
         run: npm run ops:build-attestation-exchange-pack -- --help
-      - name: Help: index bundles
+      - name: "Help: index bundles"
         run: npm run ops:index-evidence-bundles -- --help
-      - name: Help: suggest rate limits
+      - name: "Help: suggest rate limits"
         run: npm run ops:suggest-ratelimit-overrides -- --help
-      - name: Help: bundle check
+      - name: "Help: bundle check"
         run: npm run ops:check-evidence-bundle -- --help
-      - name: Help: latest bundle
+      - name: "Help: latest bundle"
         run: npm run ops:latest-evidence-bundle -- --help
-      - name: Help: dispatch
+      - name: "Help: dispatch"
         run: npm run ops:dispatch-consistency-smoke -- --help
       - name: Evidence export dry-run
         run: |
@@ -255,7 +311,7 @@ jobs:
             process.exit(64)
           }
 
-          const outDir = `${process.env.RUNNER_TEMP}/integrity-evidence-dry-run`
+          const outDir = process.env.EVIDENCE_OUT_DIR || `${process.env.RUNNER_TEMP}/integrity-evidence-dry-run`
           const exportArgs = ['scripts/export-integrity-evidence.js']
           for (const url of urls) {
             exportArgs.push('--url', url)
@@ -364,3 +420,11 @@ jobs:
 
           process.exit(dispatchResult.status ?? 1)
           NODE
+      - name: Upload evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-dry-run-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            ${{ env.EVIDENCE_OUT_DIR }}
