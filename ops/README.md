@@ -6,12 +6,13 @@
 - Default alert thresholds: `ops/alerts.md` (targets `wedos_medium`).
 - Profile-specific alert thresholds and tuning notes: `ops/alerts-profiles.md`.
 - Compare-integrity operator tool: `npm run ops:compare-integrity` compares two gateway integrity snapshots for drift.
+- Dashboard focus: `ops/dashboards/gateway-metrics.yml` now includes integrity mirror consistency, rate-limit tuning, and 429 pressure panels so you can spot drift and overload early.
 - Key metrics:
   - Cache: `gateway_cache_hit_total`, `gateway_cache_miss_total`, `gateway_cache_expired_total`, `gateway_cache_store_reject_total`, `gateway_cache_store_reject_size_total`, `gateway_cache_store_reject_capacity_total`, `gateway_cache_size`.
   - Webhooks: `gateway_webhook_stripe_verify_fail_total`, `gateway_webhook_paypal_verify_fail_total`, `gateway_webhook_replay_total`, `gateway_webhook_cert_allow_fail_total`, `gateway_webhook_cert_pin_fail_total`, `gateway_webhook_cert_cache_size`.
-  - Rate limit: `gateway_ratelimit_blocked_total`, `gateway_ratelimit_pruned_total`, `gateway_ratelimit_buckets`.
+  - Rate limit: `gateway_ratelimit_blocked_total`, `gateway_ratelimit_pruned_total`, `gateway_ratelimit_buckets`, `gateway_ratelimit_override_count`, `gateway_ratelimit_effective_max_last`.
   - Replay detector: `gateway_webhook_replay_pruned_total`, `gateway_webhook_replay_ttl_ms`, `gateway_webhook_replay_max_keys`.
-  - Integrity incidents/state: `gateway_integrity_incident_total`, `gateway_integrity_incident_duplicate_total`, `gateway_integrity_incident_auth_blocked_total`, `gateway_integrity_incident_role_blocked_total`, `gateway_integrity_incident_notify_fail_total`, `gateway_integrity_state_read_total`.
+  - Integrity incidents/state: `gateway_integrity_incident_total`, `gateway_integrity_incident_duplicate_total`, `gateway_integrity_incident_auth_blocked_total`, `gateway_integrity_incident_role_blocked_total`, `gateway_integrity_incident_notify_fail_total`, `gateway_integrity_state_read_total`, `gateway_integrity_mirror_mismatch_total`, `gateway_integrity_mirror_fetch_fail_total`.
   - Integrity audit tracking: `gateway_integrity_audit_seq_from`, `gateway_integrity_audit_seq_to`, `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `gateway_integrity_audit_stream_anomaly_total`.
 - WAL/DLQ (from Write export): see Write dashboards for `write.webhook.dlq_size` and `write.wal.bytes` to spot downstream backlog.
 - Cache purge: `/cache/forget` (POST) with `GATEWAY_FORGET_TOKEN` bearer; body `{subject?, key?}`; returns `{removed}`.

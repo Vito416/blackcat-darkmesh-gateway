@@ -249,6 +249,42 @@ describe('integrity incident and state endpoints', () => {
     expect(metrics.counters.gateway_integrity_incident_reject_size).toBe(1)
   })
 
+  it('keeps runtime paused state unchanged when incident auth or role checks fail', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF = '1'
+    process.env.GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS = 'sig-emergency'
+    process.env.GATEWAY_INTEGRITY_ROLE_REPORTER_REFS = 'sig-reporter'
+
+    const { handleRequest } = await loadHandler()
+
+    const initialState = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(initialState.status).toBe(200)
+    await expect(initialState.json()).resolves.toMatchObject({ policy: { paused: false } })
+
+    const unauthorizedPause = await handleRequest(
+      makeIncidentRequest({ event: 'manual-freeze', action: 'pause', severity: 'critical' }),
+    )
+    expect(unauthorizedPause.status).toBe(401)
+    await expect(unauthorizedPause.json()).resolves.toEqual({ error: 'unauthorized' })
+
+    const stateAfterUnauthorized = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(stateAfterUnauthorized.status).toBe(200)
+    await expect(stateAfterUnauthorized.json()).resolves.toMatchObject({ policy: { paused: false } })
+
+    const forbiddenResume = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-unfreeze', action: 'resume', severity: 'high' },
+        { 'x-incident-token': 'incident-secret', 'x-signature-ref': 'sig-not-allowed' },
+      ),
+    )
+    expect(forbiddenResume.status).toBe(403)
+    await expect(forbiddenResume.json()).resolves.toEqual({ error: 'forbidden_signature_ref' })
+
+    const stateAfterForbidden = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(stateAfterForbidden.status).toBe(200)
+    await expect(stateAfterForbidden.json()).resolves.toMatchObject({ policy: { paused: false } })
+  })
+
   it('applies pause/resume actions to runtime integrity policy', async () => {
     process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'

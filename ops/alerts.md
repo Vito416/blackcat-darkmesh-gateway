@@ -211,6 +211,33 @@ Treat these as early warnings, not hard caps; the matching budget ceilings live 
     summary: "Integrity audit stream anomaly detected"
     description: "AO audit sequence regressed or arrived out of order. Correlate with audit lag, checkpoint staleness, and the runbook first-response matrix before widening thresholds."
 
+- alert: GatewayIntegrityMirrorMismatch
+  expr: increase(gateway_integrity_mirror_mismatch_total[10m]) > 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Integrity mirror snapshots diverged"
+    description: "A mirror snapshot disagrees with the primary integrity snapshot. Verify AO mirror propagation, compare gateways with the integrity runbook workflow, and keep strict mode off until the source of truth is clear."
+
+- alert: GatewayIntegrityMirrorFetchFail
+  expr: increase(gateway_integrity_mirror_fetch_fail_total[10m]) > 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Integrity mirror fetch or validation failed"
+    description: "Mirror snapshot fetch/validation is failing. Check mirror URLs, TLS reachability, and AO snapshot freshness, then use the integrity runbook compare workflow before tightening alert windows."
+
+- alert: GatewayRatelimitOverridesMissing
+  expr: gateway_ratelimit_override_count == 0
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Expected rate-limit overrides are missing"
+    description: "Optional sanity check: enable only in deployments that are supposed to ship GATEWAY_RL_MAX_OVERRIDES. If this environment relies on prefix overrides and the count stays at zero, verify startup config and compare it against the resource budget profile."
+
 - alert: GatewayPSPBreakerOpenStripe
   expr: write_psp_stripe_breaker_open > 0
   for: 1m

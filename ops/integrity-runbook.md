@@ -224,3 +224,23 @@ GATEWAY_INTEGRITY_STATE_TOKEN="$STATE_TOKEN" \
 - If `policy.activeRoot` or `release.root` diverge, stop and reconcile the active release lineage first.
 - If `audit.seqTo` diverges while the policy and release roots match, compare the freshness of the AO snapshot path before promoting the attestation set.
 - Keep one operator note per comparison run so the attestation rollout has a clear audit trail.
+
+### Optional attestation artifact
+
+When you need a reviewable artifact for a release or incident packet, generate and archive a JSON attestation after the gateways agree:
+
+```bash
+GATEWAY_INTEGRITY_STATE_TOKEN="$STATE_TOKEN" \
+  node scripts/generate-integrity-attestation.js \
+    --url https://gateway-a.example.com \
+    --url https://gateway-b.example.com \
+    --out ./artifacts/integrity-attestation.json \
+    --hmac-env GATEWAY_ATTESTATION_HMAC_KEY
+```
+
+Operator notes:
+- archive the resulting JSON with the release or incident bundle
+- keep the HMAC key out of the archive; store it in the same secret system you use for the state token
+- if the script exits `3`, record the mismatch before archiving so the artifact has clear context
+- if the script exits `2`, treat the run as incomplete and regenerate after connectivity or payload issues are fixed
+- the helper mirrors the compare tool's exit codes, so `0` means aligned, `2` means incomplete, and `3` means drift

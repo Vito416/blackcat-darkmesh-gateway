@@ -1,14 +1,10 @@
 #!/usr/bin/env node
-
-const VALID_PROTOCOLS = new Set(['http:', 'https:'])
-const COMPARED_FIELDS = [
-  ['policy.paused', ['policy', 'paused']],
-  ['policy.activeRoot', ['policy', 'activeRoot']],
-  ['policy.activePolicyHash', ['policy', 'activePolicyHash']],
-  ['release.version', ['release', 'version']],
-  ['release.root', ['release', 'root']],
-  ['audit.seqTo', ['audit', 'seqTo']],
-]
+import {
+  COMPARED_FIELDS,
+  buildComparisonReport,
+  parseGatewayUrls,
+  resolveTokensForUrls,
+} from './lib/compare-integrity-state-core.js'
 
 function usage(exitCode = 0) {
   console.log(
@@ -75,41 +71,7 @@ function parseArgs(argv) {
     }
   }
 
-  if (args.urls.length < 2) die('at least two --url values are required')
-  for (const url of args.urls) {
-    validateUrl(url)
-  }
-
-  for (const token of args.tokens) {
-    if (typeof token !== 'string' || !token.trim()) die('--token values must not be blank')
-  }
-
-  if (args.tokens.length > 0 && args.tokens.length !== 1 && args.tokens.length !== args.urls.length) {
-    die('pass either one --token for all URLs or one --token per URL')
-  }
-
   return args
-}
-
-function validateUrl(value) {
-  let parsed
-  try {
-    parsed = new URL(value)
-  } catch (_) {
-    die(`invalid url: ${value}`)
-  }
-  if (!VALID_PROTOCOLS.has(parsed.protocol)) die(`unsupported url protocol: ${value}`)
-  return parsed.toString()
-}
-
-function resolveToken(args, index) {
-  if (args.tokens.length === args.urls.length) return args.tokens[index]
-  if (args.tokens.length === 1) return args.tokens[0]
-  const envToken = process.env.GATEWAY_INTEGRITY_STATE_TOKEN || ''
-  if (!envToken.trim()) {
-    die('missing token: set GATEWAY_INTEGRITY_STATE_TOKEN or pass --token')
-  }
-  return envToken
 }
 
 async function fetchState(url, token) {
@@ -131,22 +93,6 @@ async function fetchState(url, token) {
   }
   if (!json || typeof json !== 'object') throw new Error('response was not a JSON object')
   return json
-}
-
-function getField(snapshot, path) {
-  let current = snapshot
-  for (const key of path) {
-    if (!current || typeof current !== 'object' || !(key in current)) return { found: false }
-    current = current[key]
-  }
-  return { found: true, value: current }
-}
-
-function formatValue(value) {
-  if (value === null) return 'null'
-  if (typeof value === 'string') return JSON.stringify(value)
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return JSON.stringify(value)
 }
 
 function previewText(text, limit = 280) {
@@ -174,32 +120,18 @@ function printReport(results) {
   console.log(`${pad('Field', fieldWidth)}  ${pad('Status', statusWidth)}  Values`)
   console.log(`${'-'.repeat(fieldWidth)}  ${'-'.repeat(statusWidth)}  ${'-'.repeat(40)}`)
 
-  let mismatches = 0
-  let invalid = false
-  for (const [field, path] of COMPARED_FIELDS) {
-    const values = results.map((result) => getField(result.snapshot, path))
-    const missing = values.find((entry) => !entry.found)
-    if (missing) {
-      invalid = true
-      console.log(`${pad(field, fieldWidth)}  ${pad('INVALID', statusWidth)}  missing field in one or more snapshots`)
-      continue
-    }
-
-    const rendered = values.map((entry) => entry.value)
-    const consensus = rendered.every((value) => Object.is(value, rendered[0]))
-    if (!consensus) mismatches += 1
-    const status = consensus ? 'CONSENSUS' : 'MISMATCH'
-    const details = rendered.map((value, idx) => `${results[idx].label}=${formatValue(value)}`).join(' | ')
-    console.log(`${pad(field, fieldWidth)}  ${pad(status, statusWidth)}  ${details}`)
+  const report = buildComparisonReport(results, COMPARED_FIELDS)
+  for (const row of report.rows) {
+    console.log(`${pad(row.field, fieldWidth)}  ${pad(row.status, statusWidth)}  ${row.details}`)
   }
 
   console.log('')
-  if (invalid) {
-    console.log(`Result: INVALID (${mismatches}/${COMPARED_FIELDS.length} fields mismatched; one or more snapshots were incomplete)`)
+  if (report.invalid) {
+    console.log(`Result: INVALID (${report.mismatches}/${report.totalFields} fields mismatched; one or more snapshots were incomplete)`)
   } else {
-    console.log(`Result: ${mismatches === 0 ? 'CONSISTENT' : 'MISMATCHES'} (${mismatches}/${COMPARED_FIELDS.length} fields differ)`)
+    console.log(`Result: ${report.mismatches === 0 ? 'CONSISTENT' : 'MISMATCHES'} (${report.mismatches}/${report.totalFields} fields differ)`)
   }
-  return { mismatches, invalid }
+  return report
 }
 
 function pad(value, width) {
@@ -209,11 +141,13 @@ function pad(value, width) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2))
+  const urls = parseGatewayUrls(args.urls)
+  const tokens = resolveTokensForUrls(urls, args.tokens, process.env.GATEWAY_INTEGRITY_STATE_TOKEN || '')
 
   const results = []
-  for (let i = 0; i < args.urls.length; i += 1) {
-    const url = validateUrl(args.urls[i])
-    const token = resolveToken(args, i)
+  for (let i = 0; i < urls.length; i += 1) {
+    const url = urls[i]
+    const token = tokens[i]
     try {
       const snapshot = await fetchState(url, token)
       results.push({ url, label: formatGatewayLabel(url, i), snapshot })

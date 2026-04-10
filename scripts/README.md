@@ -154,6 +154,51 @@ Token handling:
 - if no `--token` is given, the helper falls back to `GATEWAY_INTEGRITY_STATE_TOKEN`
 - blank tokens are rejected so auth mistakes fail fast
 
+## Integrity attestation artifact
+
+`scripts/generate-integrity-attestation.js` fetches `/integrity/state` from multiple gateways, compares the attestation bootstrap fields, and writes a compact JSON artifact that you can archive with a release or incident bundle.
+
+The artifact includes:
+
+- the gateway URLs and raw snapshots
+- the compared field matrix
+- a timestamp
+- a stable script version tag
+- a deterministic `sha256` digest over the canonical JSON segment
+- an optional `hmacSha256` field when `--hmac-env` points to a populated secret
+
+Exit codes mirror the compare helper:
+
+- `0` when all compared fields match
+- `2` when a request fails or a snapshot is incomplete
+- `3` when one or more compared fields mismatch
+
+Usage:
+```bash
+GATEWAY_INTEGRITY_STATE_TOKEN=state-secret \
+  node scripts/generate-integrity-attestation.js \
+    --url https://gateway-a.example.com \
+    --url https://gateway-b.example.com \
+    --out ./artifacts/integrity-attestation.json
+
+node scripts/generate-integrity-attestation.js \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com \
+  --token token-a \
+  --token token-b \
+  --out ./artifacts/integrity-attestation.json \
+  --hmac-env GATEWAY_ATTESTATION_HMAC_KEY
+
+npm run ops:attest-integrity -- \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com \
+  --out ./artifacts/integrity-attestation.json
+```
+
+Archive tip:
+- keep the generated JSON alongside the release notes, operator notes, or incident bundle so the exact comparison input stays reviewable later.
+- if `hmacSha256` is present, store the signing secret separately from the artifact and rotate it on the same cadence as the attestation bootstrap workflow.
+
 ## Other helpers
 
 - `fetch-template.ts` — pull Arweave template, verify manifest signature.

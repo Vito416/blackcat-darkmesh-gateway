@@ -198,6 +198,9 @@ Progress notes:
 - Cross-gateway compare tooling for operator spot checks and escalation evidence.
 - Adaptive per-prefix route rate limits for tenant-aware burst control on hot paths.
 
+Progress notes:
+- P3 consistency tooling is now tracked end-to-end: compare output, attestation JSON, and manual smoke dispatch are the evidence targets; implementation is still in flight.
+
 ## Suggested execution order
 
 1. P0.1 + P0.2

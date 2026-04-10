@@ -36,6 +36,8 @@
 - Canary/shadow deploy of new PSP configs.
 - Mirror consistency checks and cross-gateway compare tools for integrity drift detection.
 - Adaptive per-prefix route rate limits for tenant-aware burst control.
+- Consistency smoke `workflow_dispatch` for manual operator spot checks and escalation evidence.
+- Attestation JSON generation for compare runs so drift checks leave a stable artifact trail.
 
 ## Phase 4 – PQC & Future-proofing
 - Hybrid PQC transport/signatures for gateway↔backend links (when libs stable).

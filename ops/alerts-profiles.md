@@ -22,6 +22,9 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 | `gateway_integrity_checkpoint_age_seconds` stale | `> 32400` | `> 64800` | `> 21600` |
 | `gateway_integrity_audit_lag_seconds` high | `> 1800` | `> 3600` | `> 1200` |
 | `increase(gateway_integrity_audit_stream_anomaly_total[15m])` | `> 0` | `> 0` | `> 0` |
+| `increase(gateway_integrity_mirror_mismatch_total[10m])` | `> 0` | `> 0` | `> 0` |
+| `increase(gateway_integrity_mirror_fetch_fail_total[10m])` | `> 0` | `> 0` | `> 0` |
+| `gateway_ratelimit_override_count` missing when expected | `0`* | `0`* | `0`* |
 
 ## Notes
 
@@ -39,4 +42,5 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 - Integrity fetch jitter (`AO_INTEGRITY_FETCH_RETRY_JITTER_MS`) helps smooth synchronized retries and reduce thundering-herd spikes; keep it near the default 25ms for normal hosts and only raise it if the AO snapshot endpoint is visibly getting bursty retries.
 - Mirror consistency checks are best treated as an early warning unless `AO_INTEGRITY_MIRROR_STRICT=1`; if mirror mismatch or fetch-fail counters start climbing, first verify regional snapshot propagation before tightening the alert threshold.
 - For strict mirror deployments, page on the first mismatch or fetch failure and keep the alert window short so you do not mask a multi-region divergence.
+- The override-count sanity row is optional: only turn it into an active alert in environments where `GATEWAY_RL_MAX_OVERRIDES` must be present; otherwise leave it as a documentation-only guard.
 - If your traffic is bursty, increase `for:` windows before increasing numeric thresholds.

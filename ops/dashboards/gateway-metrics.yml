@@ -1,4 +1,4 @@
-# Grafana dashboard (YAML) for gateway cache/webhook/PSP health
+# Grafana dashboard (YAML) for gateway cache/integrity/webhook health
 apiVersion: 1
 providers:
   - name: "gateway-metrics"
@@ -9,7 +9,7 @@ providers:
       path: /etc/grafana/dashboards/gateway-metrics.json
 
 dashboard:
-  title: "Gateway Cache & PSP"
+  title: "Gateway Cache, Integrity & PSP"
   tags: ["blackcat", "gateway"]
   timezone: browser
   panels:
@@ -29,6 +29,24 @@ dashboard:
       targets:
         - expr: gateway_cache_size
           legendFormat: cache_size
+    - title: "Integrity mirror consistency"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(gateway_integrity_mirror_mismatch_total[5m])
+          legendFormat: mirror_mismatch/s
+        - expr: rate(gateway_integrity_mirror_fetch_fail_total[5m])
+          legendFormat: mirror_fetch_fail/s
+    - title: "Rate limit tuning snapshot"
+      type: stat
+      datasource: Prometheus
+      targets:
+        - expr: gateway_ratelimit_effective_max_last
+          legendFormat: effective_max
+        - expr: gateway_ratelimit_override_count
+          legendFormat: override_count
+        - expr: gateway_ratelimit_buckets
+          legendFormat: active_buckets
     - title: "Webhook verify / replay"
       type: timeseries
       datasource: Prometheus
@@ -39,6 +57,14 @@ dashboard:
           legendFormat: paypal_verify_fail/s
         - expr: rate(gateway_webhook_replay_total[5m])
           legendFormat: replay/s
+    - title: "429 pressure"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(gateway_ratelimit_blocked_total[5m])
+          legendFormat: rate_limit_429/s
+        - expr: rate(gateway_template_call_blocked_total[5m])
+          legendFormat: template_blocked/s
     - title: "PSP breaker (write export)"
       type: timeseries
       datasource: Prometheus

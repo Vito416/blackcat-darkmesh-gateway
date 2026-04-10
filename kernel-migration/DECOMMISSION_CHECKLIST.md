@@ -32,6 +32,12 @@ Gateway-side implementation and test coverage are ahead of the AO-side registry/
 - [x] Alert thresholds are defined for integrity failures and paused mode.
 - [ ] Audit commitments (or equivalent immutable integrity proofs) are produced and queryable.
 
+### D.1 Cross-gateway consistency evidence
+
+- [ ] Compare run artifact captured from `npm run ops:compare-integrity`.
+- [ ] Attestation JSON archived for the compare run with snapshot ids and consensus result.
+- [ ] Manual consistency smoke `workflow_dispatch` link recorded with timestamp and operator.
+
 ## E. Test parity
 
 - [ ] Kernel-derived parity scenarios are ported into AO/gateway tests.
