@@ -10,12 +10,14 @@ export type CacheIntegrityMeta = {
 type CacheEntry = { value: ArrayBuffer; expiresAt: number; integrity?: CacheIntegrityMeta }
 type PutOptions = { subject?: string; integrity?: CacheIntegrityMeta }
 type FetchOptions = { requireVerified?: boolean }
+type AdmissionMode = 'reject' | 'evict_lru'
 export type CacheFetchResult =
   | { status: 'hit'; value: ArrayBuffer; integrity?: CacheIntegrityMeta }
   | { status: 'miss' | 'expired' | 'unverified' }
 
 const store = new Map<string, CacheEntry>()
 const subjects = new Map<string, Set<string>>()
+const keySubject = new Map<string, string>()
 const TTL_MS = readPositiveEnvInt(['GATEWAY_CACHE_TTL_MS'], 300000)
 const MAX_ENTRY_BYTES = readPositiveEnvInt(
   ['GATEWAY_CACHE_MAX_ENTRY_BYTES', 'GATEWAY_CACHE_ENTRY_MAX_BYTES'],
@@ -25,10 +27,12 @@ const MAX_ENTRIES = readPositiveEnvInt(
   ['GATEWAY_CACHE_MAX_ENTRIES', 'GATEWAY_CACHE_MAX_COUNT', 'GATEWAY_CACHE_ENTRY_LIMIT'],
   256,
 )
+const ADMISSION_MODE = readAdmissionMode()
 
 gauge('gateway_cache_ttl_ms', TTL_MS)
 gauge('gateway_cache_max_entry_bytes', MAX_ENTRY_BYTES)
 gauge('gateway_cache_max_entries', MAX_ENTRIES)
+gauge('gateway_cache_admission_mode', ADMISSION_MODE === 'evict_lru' ? 1 : 0)
 
 function readPositiveEnvInt(names: string[], fallback: number): number {
   for (const name of names) {
@@ -40,11 +44,45 @@ function readPositiveEnvInt(names: string[], fallback: number): number {
   return fallback
 }
 
+function readAdmissionMode(): AdmissionMode {
+  const raw = (process.env.GATEWAY_CACHE_ADMISSION_MODE || '').trim().toLowerCase()
+  if (raw === 'evict_lru') return 'evict_lru'
+  return 'reject'
+}
+
 function detachKeyFromSubjects(key: string) {
-  for (const [subj, set] of subjects.entries()) {
+  const subject = keySubject.get(key)
+  if (!subject) return
+  const set = subjects.get(subject)
+  if (set) {
     set.delete(key)
-    if (set.size === 0) subjects.delete(subj)
+    if (set.size === 0) subjects.delete(subject)
   }
+  keySubject.delete(key)
+}
+
+function attachKeyToSubject(key: string, subject: string) {
+  detachKeyFromSubjects(key)
+  const set = subjects.get(subject) || new Set<string>()
+  set.add(key)
+  subjects.set(subject, set)
+  keySubject.set(key, subject)
+}
+
+function touchKey(key: string) {
+  const entry = store.get(key)
+  if (!entry) return
+  store.delete(key)
+  store.set(key, entry)
+}
+
+function evictOldestKey(): boolean {
+  const oldest = store.keys().next().value as string | undefined
+  if (!oldest) return false
+  store.delete(oldest)
+  detachKeyFromSubjects(oldest)
+  inc('gateway_cache_evict_lru')
+  return true
 }
 
 export function put(key: string, value: ArrayBuffer, subjectOrOptions?: string | PutOptions): boolean {
@@ -60,17 +98,37 @@ export function put(key: string, value: ArrayBuffer, subjectOrOptions?: string |
     inc('gateway_cache_store_reject_size')
     return false
   }
-  if (!store.has(key) && store.size >= MAX_ENTRIES) {
-    inc('gateway_cache_store_reject')
-    inc('gateway_cache_store_reject_capacity')
-    return false
+  const existed = store.has(key)
+  if (!existed && store.size >= MAX_ENTRIES) {
+    if (ADMISSION_MODE === 'evict_lru') {
+      const evicted = evictOldestKey()
+      if (!evicted) {
+        inc('gateway_cache_store_reject')
+        inc('gateway_cache_store_reject_capacity')
+        return false
+      }
+    } else {
+      inc('gateway_cache_store_reject')
+      inc('gateway_cache_store_reject_capacity')
+      return false
+    }
   }
 
+  if (existed) {
+    store.delete(key)
+  }
   store.set(key, { value, expiresAt: Date.now() + TTL_MS, integrity: opts.integrity })
   if (opts.subject) {
-    const set = subjects.get(opts.subject) || new Set<string>()
-    set.add(key)
-    subjects.set(opts.subject, set)
+    attachKeyToSubject(key, opts.subject)
+  } else if (existed && keySubject.has(key)) {
+    // Keep the previous subject association if the caller only refreshed value.
+    const subject = keySubject.get(key)
+    if (subject) {
+      const set = subjects.get(subject) || new Set<string>()
+      set.add(key)
+      subjects.set(subject, set)
+      keySubject.set(key, subject)
+    }
   }
   gauge('gateway_cache_size', store.size)
   return true
@@ -84,6 +142,7 @@ export function fetchEntry(key: string, options: FetchOptions = {}): CacheFetchR
   }
   if (Date.now() > entry.expiresAt) {
     store.delete(key)
+    detachKeyFromSubjects(key)
     inc('gateway_cache_expired')
     gauge('gateway_cache_size', store.size)
     return { status: 'expired' }
@@ -92,6 +151,7 @@ export function fetchEntry(key: string, options: FetchOptions = {}): CacheFetchR
     inc('gateway_integrity_unverified_block')
     return { status: 'unverified' }
   }
+  touchKey(key)
   inc('gateway_cache_hit')
   return { status: 'hit', value: entry.value, integrity: entry.integrity }
 }
@@ -123,7 +183,10 @@ export function forgetSubject(subject: string): number {
   if (!set) return 0
   let removed = 0
   for (const key of set) {
-    if (store.delete(key)) removed = removed + 1
+    if (store.delete(key)) {
+      removed = removed + 1
+      keySubject.delete(key)
+    }
   }
   subjects.delete(subject)
   gauge('gateway_cache_size', store.size)

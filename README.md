@@ -15,6 +15,12 @@ Consolidation status
 - Crypto manifest policy snapshot lives in `security/crypto-manifests/` (see `security/crypto-manifests/SNAPSHOT.md`).
 - Template code remains intentionally separate in `blackcat-templates`; gateway enforces controlled backend access for deployed templates.
 
+Migration status
+- Active backlog and blocker split: `kernel-migration/BACKLOG.md`
+- Decommission evidence checklist: `kernel-migration/DECOMMISSION_CHECKLIST.md`
+- Integrity gate command: `npm run test:integrity-gate`
+- Current migration goal: keep the gateway slice evidence-complete while AO-side dependencies finish and the final decommission gate is cleared.
+
 Key responsibilities
 - Fetch + cache site front-end from Arweave (verified via manifest of trusted templates).
 - API surface to browser: cart/checkout/session endpoints that forward to Write AO.

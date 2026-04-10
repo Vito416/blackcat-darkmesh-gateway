@@ -8,6 +8,23 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 - Gateway-side implementation is largely complete for the current migration slice; the remaining blockers are mostly AO-side registry/authority lifecycle work and the final decommission evidence.
 
+## Open blockers
+
+### Gateway-side remaining work
+- No known functional blocker remains on the gateway slice for v1.4.0.
+- Keep the integrity gate and migration docs aligned with any late AO/API shape changes.
+
+### AO-side dependencies
+- Final AO registry actions for publish/revoke/query/pause state.
+- AO authority lifecycle completion for `root/upgrade/emergency/reporter`.
+- AO audit commitment sequencing/query surface and release-root parity in the snapshot API.
+
+### Evidence-only tasks before decommission
+- Recovery drill timestamps captured in the notes.
+- AO outage fallback drill artifact captured and linked.
+- Rollback proof captured for at least one failure scenario.
+- Final stakeholder sign-off recorded against the checklist.
+
 - [~] P0.1 AO integrity registry contract surface (AO PR in flight; registry authority/audit extensions underway)
 - [~] P0.2 Gateway artifact verifier (core verifier + cache enforcement landed; AO release-root parity still pending)
 - [~] P0.3 Policy pause + degraded mode (runtime gate landed; checkpoint restore/fallback coverage expanded)

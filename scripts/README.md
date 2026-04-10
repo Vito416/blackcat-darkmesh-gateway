@@ -53,6 +53,7 @@ It runs build first, then executes the integrity-focused Vitest slices in a fixe
 Usage:
 ```bash
 bash scripts/ci/integrity-gate.sh
+npm run test:integrity-fast
 npm run test:integrity-gate
 ```
 
@@ -60,6 +61,7 @@ Notes:
 - The gate checks `npm` and `npx` up front and fails with a clear message if either is unavailable.
 - Output is step-oriented (`>>> step`, `<<< step [ok]`) so the first failing slice is easy to spot.
 - The gate stops on the first failure and prints the failing step name in the error line.
+- CI runs this gate in its own dedicated `Integrity gate` job, separate from the core `build + full tests` job, so the final `SUCCESS 14/14 checks passed` line is easy to find in logs.
 
 ## Integrity incident smoke
 

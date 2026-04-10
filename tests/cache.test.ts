@@ -51,6 +51,37 @@ describe('cache TTL, budgets, and rate-limit', () => {
     expect(get('k2')).toBeNull()
   })
 
+  it('evicts the least recently used entry when evict_lru admission is enabled', async () => {
+    process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '32'
+    process.env.GATEWAY_CACHE_MAX_ENTRIES = '2'
+    process.env.GATEWAY_CACHE_ADMISSION_MODE = 'evict_lru'
+    const { put, get } = await loadCache()
+
+    expect(put('k1', bufferOf(2))).toBe(true)
+    expect(put('k2', bufferOf(2))).toBe(true)
+    expect(get('k1')).not.toBeNull()
+    expect(put('k3', bufferOf(2))).toBe(true)
+    expect(get('k1')).not.toBeNull()
+    expect(get('k2')).toBeNull()
+    expect(get('k3')).not.toBeNull()
+  })
+
+  it('keeps subject cleanup aligned with lru eviction', async () => {
+    process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '32'
+    process.env.GATEWAY_CACHE_MAX_ENTRIES = '2'
+    process.env.GATEWAY_CACHE_ADMISSION_MODE = 'evict_lru'
+    const { put, get, forgetSubject } = await loadCache()
+
+    expect(put('k1', bufferOf(2), { subject: 'subject-a' })).toBe(true)
+    expect(put('k2', bufferOf(2), { subject: 'subject-b' })).toBe(true)
+    expect(get('k1')).not.toBeNull()
+    expect(put('k3', bufferOf(2), { subject: 'subject-c' })).toBe(true)
+    expect(get('k2')).toBeNull()
+    expect(forgetSubject('subject-a')).toBe(1)
+    expect(get('k1')).toBeNull()
+    expect(forgetSubject('subject-b')).toBe(0)
+  })
+
   it('stores normal entries and still supports subject forget', async () => {
     process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '32'
     process.env.GATEWAY_CACHE_MAX_ENTRIES = '4'

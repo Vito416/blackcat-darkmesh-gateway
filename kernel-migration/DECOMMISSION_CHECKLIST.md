@@ -63,6 +63,16 @@ Gateway-side implementation and test coverage are ahead of the AO-side registry/
 - [ ] No open P0/P1 migration blockers remain in backlog.
 - [ ] The old repo has been dry-run archived or mirrored with a verified restore path before deletion.
 
+## H. Evidence log template
+
+Use one row per drill or proof item. Keep the artifact link stable and prefer the raw log, PR, or release note URL.
+
+| Drill name | Date/time UTC | Operator | Command/script | Artifact link | Status |
+| --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  | pending |
+|  |  |  |  |  | pending |
+|  |  |  |  |  | pending |
+
 ## Recommended deletion sequence
 
 1. Archive old repo (read-only) for a cooling-off period.

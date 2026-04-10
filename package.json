@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "test:integrity-gate": "bash scripts/ci/integrity-gate.sh",
+    "test:integrity-fast": "bash scripts/ci/integrity-gate.sh",
+    "test:integrity-gate": "npm run test:integrity-fast",
     "test:hardening": "vitest run tests/integrity-verifier.test.ts tests/resource-hardening.test.ts tests/budget-metrics.test.ts",
     "build": "tsc -p tsconfig.build.json",
     "smoke": "npm run build && node scripts/e2e-psp-smoke.js",

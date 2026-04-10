@@ -20,6 +20,14 @@ function makeIncidentRequest(body: Record<string, unknown>, headers: Record<stri
   })
 }
 
+function makeIncidentRawRequest(body: string, headers: Record<string, string> = {}) {
+  return new Request('http://gateway/integrity/incident', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body,
+  })
+}
+
 function makeTemplateWriteRequest() {
   return new Request('http://gateway/template/call', {
     method: 'POST',
@@ -215,6 +223,30 @@ describe('integrity incident and state endpoints', () => {
 
     const metrics = snapshot()
     expect(metrics.counters.gateway_integrity_incident_auth_blocked).toBe(1)
+  })
+
+  it('rejects oversized incident bodies before auth and validation', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_MAX_BODY_BYTES = '64'
+
+    const { handleRequest } = await loadHandler()
+    const oversized = makeIncidentRawRequest(
+      JSON.stringify({
+        event: 'manual-freeze',
+        action: 'pause',
+        details: 'x'.repeat(256),
+      }),
+    )
+
+    const res = await handleRequest(oversized)
+    expect(res.status).toBe(413)
+    await expect(res.json()).resolves.toEqual({
+      error: 'payload_too_large',
+      retryable: false,
+    })
+
+    const metrics = snapshot()
+    expect(metrics.counters.gateway_integrity_incident_reject_size).toBe(1)
   })
 
   it('applies pause/resume actions to runtime integrity policy', async () => {

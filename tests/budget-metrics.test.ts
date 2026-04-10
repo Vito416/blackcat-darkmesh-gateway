@@ -28,9 +28,27 @@ describe('budget metric instrumentation', () => {
     const state = metrics.snapshot()
     expect(state.gauges.gateway_cache_max_entry_bytes).toBe(2)
     expect(state.gauges.gateway_cache_max_entries).toBe(1)
+    expect(state.gauges.gateway_cache_admission_mode).toBe(0)
     expect(state.counters.gateway_cache_store_reject).toBe(2)
     expect(state.counters.gateway_cache_store_reject_size).toBe(1)
     expect(state.counters.gateway_cache_store_reject_capacity).toBe(1)
+  })
+
+  it('tracks lru admission mode gauge and eviction counter', async () => {
+    process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '8'
+    process.env.GATEWAY_CACHE_MAX_ENTRIES = '1'
+    process.env.GATEWAY_CACHE_ADMISSION_MODE = 'evict_lru'
+    const metrics = await import('../src/metrics.js')
+    metrics.reset()
+    const cache = await import('../src/cache.js')
+
+    expect(cache.put('k1', new Uint8Array([1]).buffer)).toBe(true)
+    expect(cache.put('k2', new Uint8Array([2]).buffer)).toBe(true)
+
+    const state = metrics.snapshot()
+    expect(state.gauges.gateway_cache_admission_mode).toBe(1)
+    expect(state.counters.gateway_cache_evict_lru).toBe(1)
+    expect(state.counters.gateway_cache_store_reject_capacity || 0).toBe(0)
   })
 
   it('tracks ratelimit configured gauges and prune count', async () => {

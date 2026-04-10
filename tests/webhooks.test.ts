@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { verifyStripe, verifyPayPal, noteCert } from '../src/webhooks.js'
 
 const stripeSecret = 'whsec_test'
@@ -20,8 +20,20 @@ async function metricValue(name: string) {
   return parseFloat(line.split(' ')[1]) || 0
 }
 
+async function loadHandler() {
+  return import('../src/handler.js')
+}
+
+beforeEach(async () => {
+  const { reset } = await import('../src/metrics.js')
+  reset()
+})
+
 afterEach(() => {
   vi.useRealTimers()
+  delete process.env.GATEWAY_WEBHOOK_MAX_BODY_BYTES
+  delete process.env.STRIPE_WEBHOOK_SECRET
+  delete process.env.PAYPAL_WEBHOOK_SECRET
   delete process.env.GW_CERT_PIN_SHA256
   delete process.env.GW_CERT_CACHE_MAX_SIZE
   delete process.env.GW_CERT_CACHE_TTL_MS
@@ -156,5 +168,71 @@ describe('webhook verification', () => {
     vi.setSystemTime(10)
     expect(nc('https://cert-2.example.com/b.pem', 'pin2')).toBe(true)
     expect(await metricValue('gateway_webhook_cert_cache_size')).toBe(2)
+  })
+
+  it('rejects oversized stripe webhook bodies before verification', async () => {
+    process.env.GATEWAY_WEBHOOK_MAX_BODY_BYTES = '64'
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    vi.resetModules()
+    const { handleRequest } = await loadHandler()
+
+    const body = JSON.stringify({
+      id: 'evt_big',
+      object: 'event',
+      details: 'x'.repeat(256),
+    })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({
+      'Stripe-Signature': stripeSig(body, ts, stripeSecret),
+    })
+    const res = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(413)
+    await expect(res.text()).resolves.toBe('payload too large')
+    expect(await metricValue('gateway_webhook_reject_size_total')).toBe(1)
+  })
+
+  it('rejects oversized paypal webhook bodies before verification', async () => {
+    process.env.GATEWAY_WEBHOOK_MAX_BODY_BYTES = '64'
+    process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
+    vi.resetModules()
+    const { handleRequest } = await loadHandler()
+
+    const body = JSON.stringify({
+      id: 'WH-big',
+      event_type: 'PAYMENT.CAPTURE.COMPLETED',
+      details: 'x'.repeat(256),
+    })
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': crypto.createHmac('sha256', 'ppsecret').update(body).digest('hex'),
+    })
+    const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(413)
+    await expect(res.text()).resolves.toBe('payload too large')
+    expect(await metricValue('gateway_webhook_reject_size_total')).toBe(1)
+  })
+
+  it('still accepts valid stripe webhook bodies under the size limit', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'evt_ok', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({ 'Stripe-Signature': stripeSig(body, ts, stripeSecret) })
+    const res = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('ok')
+  })
+
+  it('still accepts valid paypal webhook bodies under the size limit', async () => {
+    process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'WH-ok', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': crypto.createHmac('sha256', 'ppsecret').update(body).digest('hex'),
+    })
+    const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('ok')
   })
 })

@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   test:
+    name: Core build + full tests
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -23,14 +24,16 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
-      - name: Integrity gate
-        run: npm run test:integrity-gate
+      - name: Build
+        run: npm run build
+      - name: Full test suite
+        run: npm test
       - name: Unit + metrics auth
         run: npm test -- --run tests/metrics-auth.test.ts
 
-  smoke:
+  integrity-gate:
+    name: Integrity gate
     runs-on: ubuntu-24.04
-    needs: test
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -42,9 +45,25 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
-      - name: Integrity gate
-        run: npm run test:integrity-gate
-      - name: Test (full suite)
-        run: npm test
+      - name: Run integrity gate
+        run: npm run test:integrity-fast
+
+  smoke:
+    name: Smoke checks
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+      - integrity-gate
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
       - name: PSP smoke (built dist)
         run: npm run smoke

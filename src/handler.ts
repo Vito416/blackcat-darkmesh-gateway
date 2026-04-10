@@ -33,6 +33,8 @@ const templateReadActions = new Set(['public.resolve-route', 'public.get-page'])
 const templateWriteActions = new Set(['checkout.create-order', 'checkout.create-payment-intent'])
 const incidentSeverities = new Set<IntegrityIncidentSeverity>(['low', 'medium', 'high', 'critical'])
 const INTEGRITY_CACHE_DEFAULT_TTL_MS = 10_000
+const INTEGRITY_INCIDENT_MAX_BODY_DEFAULT_BYTES = 16_384
+const WEBHOOK_MAX_BODY_DEFAULT_BYTES = 262_144
 const incidentActionRoles: Record<string, IntegrityRole[]> = {
   report: ['reporter', 'emergency', 'root'],
   ack: ['reporter', 'emergency', 'root'],
@@ -113,6 +115,22 @@ function readIntegrityIncidentReplayCap(): number {
   const parsed = raw ? Number.parseInt(raw, 10) : INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP
   if (!Number.isFinite(parsed) || parsed <= 0) return INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP
   return parsed
+}
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+  return parsed
+}
+
+function readIntegrityIncidentMaxBodyBytes(): number {
+  return readPositiveIntEnv('GATEWAY_INTEGRITY_INCIDENT_MAX_BODY_BYTES', INTEGRITY_INCIDENT_MAX_BODY_DEFAULT_BYTES)
+}
+
+function readWebhookMaxBodyBytes(): number {
+  return readPositiveIntEnv('GATEWAY_WEBHOOK_MAX_BODY_BYTES', WEBHOOK_MAX_BODY_DEFAULT_BYTES)
 }
 
 function pruneIntegrityIncidentReplay(now = Date.now()) {
@@ -268,6 +286,40 @@ function basicCredentialsMatch(expectedUser: string, expectedPass: string, prese
   } catch (_) {
     return false
   }
+}
+
+function jsonErrorResponse(status: number, error: string, extra: Record<string, unknown> = {}): Response {
+  return new Response(JSON.stringify({ error, ...extra }), {
+    status,
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    },
+  })
+}
+
+function plainErrorResponse(status: number, message: string): Response {
+  return new Response(message, {
+    status,
+    headers: {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+    },
+  })
+}
+
+function bodyExceedsLimit(body: string, limitBytes: number): boolean {
+  return Buffer.byteLength(body, 'utf8') > limitBytes
+}
+
+function incidentBodyTooLargeResponse(): Response {
+  inc('gateway_integrity_incident_reject_size')
+  return jsonErrorResponse(413, 'payload_too_large', { retryable: false })
+}
+
+function webhookBodyTooLargeResponse(): Response {
+  inc('gateway_webhook_reject_size')
+  return plainErrorResponse(413, 'payload too large')
 }
 
 function splitRefsCsv(raw: string): string[] {
@@ -533,24 +585,28 @@ async function handleIntegrityState(req: Request, integrity: IntegrityContext): 
 async function handleIntegrityIncident(req: Request, integrity: IntegrityContext): Promise<Response> {
   if (req.method !== 'POST') return new Response('method', { status: 405 })
 
+  const bodyText = await req.text()
+  if (bodyExceedsLimit(bodyText, readIntegrityIncidentMaxBodyBytes())) {
+    return incidentBodyTooLargeResponse()
+  }
+
   const token = process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN || ''
   if (!token) {
     return new Response('incident_auth_not_configured', { status: 500 })
   }
   if (!checkToken(req, token, 'x-incident-token')) {
     inc('gateway_integrity_incident_auth_blocked')
-    return new Response(JSON.stringify({ error: 'unauthorized' }), {
-      status: 401,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(401, 'unauthorized')
   }
 
-  const body = await req.json().catch(() => null)
-  if (!body || typeof body !== 'object') {
-    return new Response(JSON.stringify({ error: 'invalid_json' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+  let body: unknown
+  try {
+    body = JSON.parse(bodyText)
+  } catch {
+    return jsonErrorResponse(400, 'invalid_json')
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jsonErrorResponse(400, 'invalid_json')
   }
 
   const event = String((body as any).event || '').trim()
@@ -563,51 +619,30 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
       : null
 
   if (!event || event.length > 128) {
-    return new Response(JSON.stringify({ error: 'event_required' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'event_required')
   }
   if (!source || source.length > 128) {
-    return new Response(JSON.stringify({ error: 'invalid_source' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'invalid_source')
   }
   if (!incidentSeverities.has(severityInput)) {
-    return new Response(JSON.stringify({ error: 'invalid_severity' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'invalid_severity')
   }
   if (!['report', 'ack', 'pause', 'resume'].includes(action)) {
-    return new Response(JSON.stringify({ error: 'invalid_action' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'invalid_action')
   }
   if (process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF === '1') {
     const { roles, refs } = collectAllowedIncidentRefs(action, integrity)
     if (roles.length === 0 || refs.length === 0) {
-      return new Response(JSON.stringify({ error: 'incident_ref_policy_not_configured' }), {
-        status: 500,
-        headers: { 'content-type': 'application/json' },
-      })
+      return jsonErrorResponse(500, 'incident_ref_policy_not_configured')
     }
     const presentedRef = readIncidentSignatureRef(req, body)
     if (!presentedRef || !refs.includes(presentedRef)) {
       inc('gateway_integrity_incident_role_blocked')
-      return new Response(JSON.stringify({ error: 'forbidden_signature_ref' }), {
-        status: 403,
-        headers: { 'content-type': 'application/json' },
-      })
+      return jsonErrorResponse(403, 'forbidden_signature_ref')
     }
   }
   if (providedIncidentId && providedIncidentId.length > 128) {
-    return new Response(JSON.stringify({ error: 'invalid_incident_id' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'invalid_incident_id')
   }
 
   const incidentId =
@@ -774,6 +809,9 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (integrityPaused) return policyPausedResponse()
     return wrapWebhook('stripe', async () => {
       const body = await request.text()
+      if (bodyExceedsLimit(body, readWebhookMaxBodyBytes())) {
+        return webhookBodyTooLargeResponse()
+      }
       const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), process.env.STRIPE_WEBHOOK_SECRET || '', parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE_MS || '300000', 10))
       if (!ok) {
         inc('gateway_webhook_stripe_verify_fail')
@@ -790,6 +828,9 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (integrityPaused) return policyPausedResponse()
     return wrapWebhook('paypal', async () => {
       const body = await request.text()
+      if (bodyExceedsLimit(body, readWebhookMaxBodyBytes())) {
+        return webhookBodyTooLargeResponse()
+      }
       const headers = request.headers
       const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
       const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
