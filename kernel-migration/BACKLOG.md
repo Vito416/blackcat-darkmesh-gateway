@@ -201,6 +201,7 @@ Progress notes:
 Progress notes:
 - P3 consistency tooling is now tracked end-to-end: compare output, attestation JSON, and manual smoke dispatch are the evidence targets; implementation is still in flight.
 - Preferred P3 operator path is now evidence export first, attestation validation second, then manual dispatch only when the bundle is complete.
+- CI `evidence-dry-run` now exercises the same export + validation chain to catch operator workflow drift before manual dispatch.
 
 ## Suggested execution order
 

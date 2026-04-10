@@ -237,6 +237,16 @@ npm run ops:export-integrity-evidence -- \
   --out-dir ./artifacts/integrity-evidence
 ```
 
+## Integrity attestation validation
+
+`scripts/validate-integrity-attestation.js` validates a generated attestation artifact and re-checks its digest before archival or operator sign-off.
+
+Usage:
+```bash
+node scripts/validate-integrity-attestation.js --file ./artifacts/integrity-attestation.json
+npm run ops:validate-integrity-attestation -- --file ./artifacts/integrity-attestation.json
+```
+
 ## Other helpers
 
 - `fetch-template.ts` — pull Arweave template, verify manifest signature.

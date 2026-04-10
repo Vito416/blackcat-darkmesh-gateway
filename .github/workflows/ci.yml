@@ -213,12 +213,14 @@ jobs:
       - name: Help: export
         run: npm run ops:export-integrity-evidence -- --help
       - name: Help: validate
-        run: node scripts/validate-integrity-attestation.js --help
+        run: npm run ops:validate-integrity-attestation -- --help
       - name: Evidence export dry-run
         run: |
           set -euo pipefail
           node <<'NODE'
           const { spawnSync } = require('node:child_process')
+          const fs = require('node:fs')
+          const path = require('node:path')
 
           const urls = (process.env.EVIDENCE_URLS || '')
             .split(',')
@@ -230,16 +232,50 @@ jobs:
             process.exit(64)
           }
 
+          const outDir = `${process.env.RUNNER_TEMP}/integrity-evidence-dry-run`
           const args = ['scripts/export-integrity-evidence.js']
           for (const url of urls) {
             args.push('--url', url)
           }
-          args.push('--out-dir', `${process.env.RUNNER_TEMP}/integrity-evidence-dry-run`)
+          args.push('--out-dir', outDir)
 
-          const result = spawnSync('node', args, {
+          const exportResult = spawnSync('node', args, {
             stdio: 'inherit',
             env: process.env,
           })
+          if ((exportResult.status ?? 1) !== 0) {
+            process.exit(exportResult.status ?? 1)
+          }
 
-          process.exit(result.status ?? 1)
+          if (!fs.existsSync(outDir)) {
+            console.error('[evidence-dry-run] expected output directory missing')
+            process.exit(1)
+          }
+
+          const bundleCandidates = fs
+            .readdirSync(outDir, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => {
+              const dirPath = path.join(outDir, entry.name)
+              const stat = fs.statSync(dirPath)
+              return { dirPath, mtimeMs: stat.mtimeMs }
+            })
+            .sort((left, right) => right.mtimeMs - left.mtimeMs)
+
+          if (!bundleCandidates.length) {
+            console.error('[evidence-dry-run] no bundle directory generated')
+            process.exit(1)
+          }
+
+          const attestationPath = path.join(bundleCandidates[0].dirPath, 'attestation.json')
+          const validateResult = spawnSync(
+            'node',
+            ['scripts/validate-integrity-attestation.js', '--file', attestationPath],
+            {
+              stdio: 'inherit',
+              env: process.env,
+            },
+          )
+
+          process.exit(validateResult.status ?? 1)
           NODE

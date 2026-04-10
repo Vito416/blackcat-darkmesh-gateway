@@ -9,6 +9,7 @@
     "ops:compare-integrity": "node scripts/compare-integrity-state.js",
     "ops:attest-integrity": "node scripts/generate-integrity-attestation.js",
     "ops:export-integrity-evidence": "node scripts/export-integrity-evidence.js",
+    "ops:validate-integrity-attestation": "node scripts/validate-integrity-attestation.js",
     "test:hardening": "vitest run tests/integrity-verifier.test.ts tests/resource-hardening.test.ts tests/budget-metrics.test.ts",
     "build": "tsc -p tsconfig.build.json",
     "smoke": "npm run build && node scripts/e2e-psp-smoke.js",
