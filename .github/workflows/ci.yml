@@ -131,7 +131,7 @@ jobs:
     needs:
       - test
       - integrity-gate
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_urls != '' }}
     env:
       CONSISTENCY_URLS: ${{ inputs.consistency_urls }}
       CONSISTENCY_TOKEN: ${{ inputs.consistency_token }}
