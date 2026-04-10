@@ -26,6 +26,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `AO_INTEGRITY_FETCH_TIMEOUT_MS=4000`
 - `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS=2`
 - `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS=75`
+- `AO_INTEGRITY_FETCH_RETRY_JITTER_MS=25`
 - `GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS=900000`
 - `GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP=128`
 - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS=43200`
@@ -53,6 +54,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `AO_INTEGRITY_FETCH_TIMEOUT_MS=5000`
 - `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS=3`
 - `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS=100`
+- `AO_INTEGRITY_FETCH_RETRY_JITTER_MS=25`
 - `GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS=1800000`
 - `GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP=256`
 - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS=86400`
@@ -61,6 +63,10 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_RESOURCE_PROFILE=diskless`
 - `GATEWAY_INTEGRITY_DISKLESS=1`
 - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`
+- `AO_INTEGRITY_FETCH_TIMEOUT_MS=4000`
+- `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS=2`
+- `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS=75`
+- `AO_INTEGRITY_FETCH_RETRY_JITTER_MS=25`
 - Keep incident replay dedupe bounded (`GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP`) to avoid memory growth on long-lived shared hosts.
 - Keep the rest aligned to Profile A or B.
 
@@ -78,11 +84,12 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 
 ## Fetch/retry precedence
 - Integrity fetch cadence is resolved in this order:
-  1. explicit call overrides (`fetchIntegritySnapshot({ timeoutMs, retryAttempts, retryBackoffMs })`)
+  1. explicit call overrides (`fetchIntegritySnapshot({ timeoutMs, retryAttempts, retryBackoffMs, retryJitterMs })`)
   2. env vars (`AO_INTEGRITY_FETCH_*`)
   3. profile defaults from `GATEWAY_RESOURCE_PROFILE`
   4. fallback default profile (`wedos_medium`)
 - Use `AO_INTEGRITY_FETCH_*` only when you need a profile-specific exception without changing the whole deployment profile.
+- Keep `AO_INTEGRITY_FETCH_RETRY_JITTER_MS` in the same family as timeout/backoff/attempts; if you adjust one knob for stability, check the others before declaring the profile tuned.
 
 ## Checkpoint policy
 - Restore a signed checkpoint only when it verifies and is within `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS`.
@@ -107,6 +114,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - If cache growth trends upward, shorten `GATEWAY_CACHE_TTL_MS` or tighten admission before scaling host memory.
 - Prefer a smaller stable cache over a large, bursty one on edge-class hosts.
 - If a tenant fans out heavily, lower `GATEWAY_CACHE_MAX_KEYS_PER_SUBJECT` before raising the global cache count so one subject cannot dominate the cache.
+- When retry bursts look noisy on `wedos_small` or `diskless`, prefer increasing `AO_INTEGRITY_FETCH_RETRY_JITTER_MS` before adding retry attempts; it smooths bursts without extending failure recovery too much.
 
 ## Rate-limit budget
 - Watch `gateway_ratelimit_buckets` for cardinality drift.

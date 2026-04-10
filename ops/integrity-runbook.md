@@ -244,3 +244,66 @@ Operator notes:
 - if the script exits `3`, record the mismatch before archiving so the artifact has clear context
 - if the script exits `2`, treat the run as incomplete and regenerate after connectivity or payload issues are fixed
 - the helper mirrors the compare tool's exit codes, so `0` means aligned, `2` means incomplete, and `3` means drift
+
+## 8) Export -> validate -> dispatch workflow
+
+Use this exact sequence for release evidence, incident packets, and decommission proof.
+
+### 8.1 Export compare + attestation bundle
+
+```bash
+mkdir -p ./artifacts/integrity-evidence
+GATEWAY_INTEGRITY_STATE_TOKEN="$STATE_TOKEN" \
+  node scripts/export-integrity-evidence.js \
+    --url https://gateway-a.example.com \
+    --url https://gateway-b.example.com \
+    --out-dir ./artifacts/integrity-evidence \
+    --hmac-env GATEWAY_ATTESTATION_HMAC_KEY
+```
+
+### 8.2 Validate the attestation artifact
+
+```bash
+node scripts/validate-integrity-attestation.js \
+  --file ./artifacts/integrity-evidence/<timestamp>/attestation.json
+```
+
+### 8.3 Dispatch the consistency smoke
+
+```bash
+GH_TOKEN="$GH_TOKEN" \
+  node scripts/dispatch-consistency-smoke.js \
+    --owner Vito416 \
+    --repo blackcat-darkmesh-gateway \
+    --workflow ci.yml \
+    --ref feat/gateway-p2-1-hardening-batch \
+    --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
+    --consistency-token "$STATE_TOKEN" \
+    --evidence-urls https://gateway-a.example.com,https://gateway-b.example.com \
+    --evidence-token "$STATE_TOKEN"
+```
+
+Add `--dry-run` first if you want to verify the payload before the live dispatch.
+
+### 8.4 Archive the evidence links
+
+Record these links in the release note, incident packet, or decommission checklist:
+
+- compare bundle path: `./artifacts/integrity-evidence/<timestamp>/compare.txt`
+- attestation path: `./artifacts/integrity-evidence/<timestamp>/attestation.json`
+- bundle manifest: `./artifacts/integrity-evidence/<timestamp>/manifest.json`
+- validation proof: terminal log showing `valid attestation`
+- workflow dispatch run URL: GitHub Actions run for the smoke job
+- final archive URL: release note, incident packet, or immutable storage link
+
+Pass criteria:
+- compare exits `0`
+- attestation export exits `0`
+- validation exits `0`
+- workflow dispatch is accepted and the smoke job finishes green
+
+Fail criteria:
+- compare exits non-zero
+- attestation export fails or produces a digest mismatch
+- validation returns non-zero
+- dispatch is rejected or the smoke job fails

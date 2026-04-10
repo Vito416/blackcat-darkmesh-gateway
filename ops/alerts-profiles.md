@@ -26,6 +26,28 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 | `increase(gateway_integrity_mirror_fetch_fail_total[10m])` | `> 0` | `> 0` | `> 0` |
 | `gateway_ratelimit_override_count` missing when expected | `0`* | `0`* | `0`* |
 
+## Tuning loop by profile
+
+Use this loop when you are deciding whether to change fetch cadence, alert windows, or both. Start from the profile defaults in `ops/resource-budgets.md`; only override them when the same failure mode survives one full alert window.
+
+| Profile | Watch first | Tune first | Roll back when |
+| --- | --- | --- | --- |
+| `wedos_small` | `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])`, `increase(gateway_webhook_replay_pruned_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS`; only then increase `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS` if the failures remain transient | Revert to the profile defaults if lag does not drop within one full alert window, or if replay prune / cache reject pressure rises faster than the failure rate falls |
+| `wedos_medium` | `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])`, `increase(gateway_cache_store_reject_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_JITTER_MS`; if the pattern is still bursty, raise `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS` before touching alert thresholds | Revert if the added jitter lowers fetch burstiness but increases checkpoint staleness, or if cache/replay pressure now outruns the retry failures |
+| `diskless` | `gateway_integrity_checkpoint_age_seconds`, `gateway_integrity_audit_lag_seconds`, `increase(gateway_integrity_mirror_mismatch_total[10m])`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_JITTER_MS`; keep `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS` low so diskless hosts do not accumulate long retry chains | Revert if the diskless host starts spending more time retrying than checkpointing, or if the mirror mismatch / fetch-fail signals stay flat while checkpoint age keeps climbing |
+
+## Anti-flap alert windows
+
+Use these as starter `for:` values when you need profile-specific alert rules. They reduce flapping without hiding a real regression. Do not widen all alerts at once; widen the noisiest signal first.
+
+| Signal family | WEDOS small (`wedos_small`) | WEDOS medium (`wedos_medium`) | Diskless (`diskless`) |
+| --- | --- | --- | --- |
+| Mirror mismatch / mirror fetch fail | `for: 2m` | `for: 1m` | `for: 1m` |
+| Audit lag | `for: 12m` | `for: 8m` | `for: 10m` |
+| Checkpoint stale | `for: 15m` | `for: 10m` | `for: 12m` |
+| Webhook replay pressure | `for: 5m` | `for: 5m` | `for: 3m` |
+| Role / auth / notify control-plane failures | keep the default short window; only widen after a confirmed retry storm | keep the default short window; only widen after a confirmed retry storm | keep the default short window; only widen after a confirmed retry storm |
+
 ## Notes
 
 - Keep thresholds below the hard caps from `ops/resource-budgets.md` so alerts fire before exhaustion.
@@ -39,7 +61,7 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 - Audit lag should stay comfortably below the alert threshold; if it climbs, check AO fetch cadence, checkpoint restore freshness, and queue backpressure.
 - Audit stream anomalies should page on the first regression, but tune them together with audit lag and checkpoint staleness: if all three move together, treat it as fetch/cadence drift; if anomaly fires alone, inspect stream ordering or a bad seq transition before widening the window.
 - Integrity role-blocked, state-auth-blocked, and notify-fail alerts are profile-agnostic control-plane signals; keep their thresholds stable across profiles and use the runbook for the first operator action.
-- Integrity fetch jitter (`AO_INTEGRITY_FETCH_RETRY_JITTER_MS`) helps smooth synchronized retries and reduce thundering-herd spikes; keep it near the default 25ms for normal hosts and only raise it if the AO snapshot endpoint is visibly getting bursty retries.
+- Integrity fetch jitter (`AO_INTEGRITY_FETCH_RETRY_JITTER_MS`) helps smooth synchronized retries and reduce thundering-herd spikes; keep it near the default 25ms for normal hosts, and raise it before increasing retry attempts when a profile is noisy.
 - Mirror consistency checks are best treated as an early warning unless `AO_INTEGRITY_MIRROR_STRICT=1`; if mirror mismatch or fetch-fail counters start climbing, first verify regional snapshot propagation before tightening the alert threshold.
 - For strict mirror deployments, page on the first mismatch or fetch failure and keep the alert window short so you do not mask a multi-region divergence.
 - The override-count sanity row is optional: only turn it into an active alert in environments where `GATEWAY_RL_MAX_OVERRIDES` must be present; otherwise leave it as a documentation-only guard.

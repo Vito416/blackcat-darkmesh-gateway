@@ -139,6 +139,7 @@ Progress notes:
 - Metrics added: incident accepted/auth-blocked/notify ok/notify fail + state read/auth-blocked.
 - Coverage added in `tests/integrity-incident.test.ts`.
 - Replay/idempotency dedupe and the smoke helper are in place; remaining work is operator automation and final staging evidence.
+- Operator automation now includes helper scripts for evidence export/validation/bundle checks plus workflow dispatch dry-run (`dispatch-consistency-smoke`, `latest-evidence-bundle`, `check-evidence-bundle`).
 
 ## P2 - Performance and platform polish (WEDOS-first)
 
@@ -202,6 +203,7 @@ Progress notes:
 - P3 consistency tooling is now tracked end-to-end: compare output, attestation JSON, and manual smoke dispatch are the evidence targets; implementation is still in flight.
 - Preferred P3 operator path is now evidence export first, attestation validation second, then manual dispatch only when the bundle is complete.
 - CI `evidence-dry-run` now exercises the same export + validation chain to catch operator workflow drift before manual dispatch.
+- CI `evidence-dry-run` also exercises latest-bundle selection, strict bundle checks, and workflow dispatch payload dry-run to keep the full operator chain regression-safe.
 
 ## Suggested execution order
 

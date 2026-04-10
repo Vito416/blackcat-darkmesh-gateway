@@ -39,10 +39,27 @@ Gateway-side implementation and test coverage are ahead of the AO-side registry/
   - Attestation JSON archived for the compare run with snapshot ids and consensus result.
   - Validation result showing the attestation artifact passed schema/consistency checks.
   - Manual consistency smoke `workflow_dispatch` link and log recorded with timestamp and operator.
+  - Bundle manifest with the export command, URLs, and artifact paths.
+  - Stable archive link for the final evidence bundle or release note.
+
+Pass criteria:
+- compare exits `0` and shows no drift
+- attestation export exits `0`
+- validation exits `0`
+- manual smoke dispatch is accepted and the workflow run ends green
+- archive links resolve to the exact bundle used for review
+
+Fail criteria:
+- any compare/attestation/validation command returns non-zero
+- the smoke dispatch is rejected or ends red
+- any required artifact is missing, overwritten, or only exists as a local note
 
 - [ ] Compare run artifact captured from `npm run ops:compare-integrity`.
 - [ ] Attestation JSON archived for the compare run with snapshot ids and consensus result.
+- [ ] Validation log captured for `npm run ops:validate-integrity-attestation`.
 - [ ] Manual consistency smoke `workflow_dispatch` link recorded with timestamp and operator.
+- [ ] Bundle manifest archived with exact command, URLs, and artifact paths.
+- [ ] Stable archive link recorded for the final evidence bundle.
 
 ## E. Test parity
 

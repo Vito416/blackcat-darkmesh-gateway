@@ -214,13 +214,17 @@ jobs:
         run: npm run ops:export-integrity-evidence -- --help
       - name: Help: validate
         run: npm run ops:validate-integrity-attestation -- --help
+      - name: Help: bundle check
+        run: npm run ops:check-evidence-bundle -- --help
+      - name: Help: latest bundle
+        run: npm run ops:latest-evidence-bundle -- --help
+      - name: Help: dispatch
+        run: npm run ops:dispatch-consistency-smoke -- --help
       - name: Evidence export dry-run
         run: |
           set -euo pipefail
           node <<'NODE'
           const { spawnSync } = require('node:child_process')
-          const fs = require('node:fs')
-          const path = require('node:path')
 
           const urls = (process.env.EVIDENCE_URLS || '')
             .split(',')
@@ -233,13 +237,13 @@ jobs:
           }
 
           const outDir = `${process.env.RUNNER_TEMP}/integrity-evidence-dry-run`
-          const args = ['scripts/export-integrity-evidence.js']
+          const exportArgs = ['scripts/export-integrity-evidence.js']
           for (const url of urls) {
-            args.push('--url', url)
+            exportArgs.push('--url', url)
           }
-          args.push('--out-dir', outDir)
+          exportArgs.push('--out-dir', outDir)
 
-          const exportResult = spawnSync('node', args, {
+          const exportResult = spawnSync('node', exportArgs, {
             stdio: 'inherit',
             env: process.env,
           })
@@ -247,35 +251,72 @@ jobs:
             process.exit(exportResult.status ?? 1)
           }
 
-          if (!fs.existsSync(outDir)) {
-            console.error('[evidence-dry-run] expected output directory missing')
-            process.exit(1)
-          }
-
-          const bundleCandidates = fs
-            .readdirSync(outDir, { withFileTypes: true })
-            .filter((entry) => entry.isDirectory())
-            .map((entry) => {
-              const dirPath = path.join(outDir, entry.name)
-              const stat = fs.statSync(dirPath)
-              return { dirPath, mtimeMs: stat.mtimeMs }
-            })
-            .sort((left, right) => right.mtimeMs - left.mtimeMs)
-
-          if (!bundleCandidates.length) {
-            console.error('[evidence-dry-run] no bundle directory generated')
-            process.exit(1)
-          }
-
-          const attestationPath = path.join(bundleCandidates[0].dirPath, 'attestation.json')
-          const validateResult = spawnSync(
+          const latestResult = spawnSync(
             'node',
-            ['scripts/validate-integrity-attestation.js', '--file', attestationPath],
+            ['scripts/latest-evidence-bundle.js', '--root', outDir, '--json', '--require-files'],
+            {
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'inherit'],
+              env: process.env,
+            },
+          )
+          if ((latestResult.status ?? 1) !== 0) {
+            process.exit(latestResult.status ?? 1)
+          }
+
+          let latest
+          try {
+            latest = JSON.parse(latestResult.stdout || '{}')
+          } catch (err) {
+            console.error(`[evidence-dry-run] unable to parse latest bundle output: ${err.message}`)
+            process.exit(1)
+          }
+
+          const bundleDir = latest.bundleDir
+          if (!bundleDir) {
+            console.error('[evidence-dry-run] missing bundleDir from latest bundle output')
+            process.exit(1)
+          }
+
+          const checkResult = spawnSync(
+            'node',
+            ['scripts/check-evidence-bundle.js', '--dir', bundleDir, '--strict'],
             {
               stdio: 'inherit',
               env: process.env,
             },
           )
+          if ((checkResult.status ?? 1) !== 0) {
+            process.exit(checkResult.status ?? 1)
+          }
 
-          process.exit(validateResult.status ?? 1)
+          const repo = process.env.GITHUB_REPOSITORY || ''
+          const [owner, repoName] = repo.split('/')
+          if (!owner || !repoName) {
+            console.error('[evidence-dry-run] unable to resolve owner/repo from GITHUB_REPOSITORY')
+            process.exit(1)
+          }
+
+          const dispatchArgs = [
+            'scripts/dispatch-consistency-smoke.js',
+            '--owner',
+            owner,
+            '--repo',
+            repoName,
+            '--workflow',
+            'ci.yml',
+            '--ref',
+            process.env.GITHUB_REF_NAME || 'main',
+            '--consistency-urls',
+            urls.join(','),
+            '--evidence-urls',
+            urls.join(','),
+            '--dry-run',
+          ]
+          const dispatchResult = spawnSync('node', dispatchArgs, {
+            stdio: 'inherit',
+            env: process.env,
+          })
+
+          process.exit(dispatchResult.status ?? 1)
           NODE

@@ -247,6 +247,59 @@ node scripts/validate-integrity-attestation.js --file ./artifacts/integrity-atte
 npm run ops:validate-integrity-attestation -- --file ./artifacts/integrity-attestation.json
 ```
 
+## Evidence bundle check
+
+`scripts/check-evidence-bundle.js` verifies a generated evidence bundle directory and re-runs attestation validation as part of the check.
+
+Usage:
+```bash
+node scripts/check-evidence-bundle.js --dir ./artifacts/integrity-evidence/2026-04-10T12-34-56Z-1234-abcd12
+npm run ops:check-evidence-bundle -- \
+  --dir ./artifacts/integrity-evidence/2026-04-10T12-34-56Z-1234-abcd12 \
+  --strict
+```
+
+`--strict` additionally requires:
+- `manifest.status === "ok"`
+- `manifest.compare.exitCode === 0`
+- `manifest.attestation.exitCode === 0`
+
+## Latest evidence bundle helper
+
+`scripts/latest-evidence-bundle.js` selects the newest timestamped bundle directory under a root path and prints resolved artifact paths.
+
+Usage:
+```bash
+node scripts/latest-evidence-bundle.js --root ./artifacts/integrity-evidence --require-files
+npm run ops:latest-evidence-bundle -- --root ./artifacts/integrity-evidence --json --require-files
+```
+
+## Consistency smoke dispatch helper
+
+`scripts/dispatch-consistency-smoke.js` sends a `workflow_dispatch` request to GitHub Actions for consistency/evidence smoke runs.
+
+Usage:
+```bash
+GH_TOKEN="$GH_TOKEN" \
+  node scripts/dispatch-consistency-smoke.js \
+    --owner Vito416 \
+    --repo blackcat-darkmesh-gateway \
+    --workflow ci.yml \
+    --ref feat/gateway-p2-1-hardening-batch \
+    --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
+    --consistency-token "$STATE_TOKEN" \
+    --evidence-urls https://gateway-a.example.com,https://gateway-b.example.com \
+    --evidence-token "$STATE_TOKEN"
+
+# Dry-run payload preview (no API call)
+node scripts/dispatch-consistency-smoke.js \
+  --owner Vito416 \
+  --repo blackcat-darkmesh-gateway \
+  --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
+  --evidence-urls https://gateway-a.example.com,https://gateway-b.example.com \
+  --dry-run
+```
+
 ## Other helpers
 
 - `fetch-template.ts` — pull Arweave template, verify manifest signature.
