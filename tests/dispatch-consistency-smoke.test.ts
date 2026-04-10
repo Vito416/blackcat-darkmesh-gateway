@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildInputs,
   buildDispatchUrl,
   dispatchWorkflow,
   parseArgs,
@@ -43,9 +44,51 @@ describe('dispatch-consistency-smoke.js', () => {
       dryRun: false,
       consistencyUrls: 'https://gw-a.example,https://gw-b.example',
       consistencyToken: 'cons-token',
+      consistencyMode: undefined,
+      consistencyProfile: undefined,
       evidenceUrls: 'https://ev-a.example',
       evidenceToken: 'ev-token',
     })
+  })
+
+  it('accepts consistency mode/profile and rejects invalid values', () => {
+    const args = parseArgs(
+      [
+        '--owner',
+        'Vito416',
+        '--repo',
+        'blackcat-darkmesh-gateway',
+        '--consistency-mode',
+        'all',
+        '--consistency-profile',
+        'diskless',
+      ],
+      { GITHUB_REF_NAME: 'main' },
+      () => 'main',
+    )
+
+    expect(args.consistencyMode).toBe('all')
+    expect(args.consistencyProfile).toBe('diskless')
+    expect(buildInputs(args)).toMatchObject({
+      consistency_mode: 'all',
+      consistency_profile: 'diskless',
+    })
+
+    expect(() =>
+      parseArgs(
+        ['--owner', 'Vito416', '--repo', 'blackcat-darkmesh-gateway', '--consistency-mode', 'weird'],
+        { GITHUB_REF_NAME: 'main' },
+        () => 'main',
+      ),
+    ).toThrow('unsupported consistency mode')
+
+    expect(() =>
+      parseArgs(
+        ['--owner', 'Vito416', '--repo', 'blackcat-darkmesh-gateway', '--consistency-profile', 'huge'],
+        { GITHUB_REF_NAME: 'main' },
+        () => 'main',
+      ),
+    ).toThrow('unsupported consistency profile')
   })
 
   it('rejects blank and malformed csv inputs', () => {
@@ -105,6 +148,8 @@ describe('dispatch-consistency-smoke.js', () => {
       inputs: {
         consistency_urls: 'https://gw-a.example,https://gw-b.example',
         consistency_token: 'secret-cons',
+        consistency_mode: 'all',
+        consistency_profile: 'wedos_medium',
         evidence_urls: 'https://ev-a.example',
         evidence_token: 'secret-ev',
       },
@@ -134,6 +179,8 @@ describe('dispatch-consistency-smoke.js', () => {
       inputs: {
         consistency_urls: 'https://gw-a.example,https://gw-b.example',
         consistency_token: 'secret-cons',
+        consistency_mode: 'all',
+        consistency_profile: 'wedos_medium',
         evidence_urls: 'https://ev-a.example',
         evidence_token: 'secret-ev',
       },

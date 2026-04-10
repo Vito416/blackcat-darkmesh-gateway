@@ -384,6 +384,8 @@ GH_TOKEN="$GH_TOKEN" \
     --workflow ci.yml \
     --ref feat/gateway-p2-1-hardening-batch \
     --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
+    --consistency-mode all \
+    --consistency-profile wedos_medium \
     --consistency-token "$STATE_TOKEN" \
     --evidence-urls https://gateway-a.example.com,https://gateway-b.example.com \
     --evidence-token "$STATE_TOKEN"

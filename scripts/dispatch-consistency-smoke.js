@@ -6,11 +6,13 @@ import { pathToFileURL } from 'node:url'
 const API_BASE = 'https://api.github.com'
 const DEFAULT_WORKFLOW = 'ci.yml'
 const VALID_PROTOCOLS = new Set(['http:', 'https:'])
+const VALID_CONSISTENCY_MODES = new Set(['pairwise', 'all'])
+const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
 
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/dispatch-consistency-smoke.js --owner <org> --repo <name> [--workflow <file>] [--ref <branch>] [--consistency-urls <csv>] [--consistency-token <value>] [--evidence-urls <csv>] [--evidence-token <value>] [--dry-run]',
+    '  node scripts/dispatch-consistency-smoke.js --owner <org> --repo <name> [--workflow <file>] [--ref <branch>] [--consistency-urls <csv>] [--consistency-token <value>] [--consistency-mode pairwise|all] [--consistency-profile wedos_small|wedos_medium|diskless] [--evidence-urls <csv>] [--evidence-token <value>] [--dry-run]',
     '',
     'Options:',
     '  --owner <ORG>               GitHub owner/org (required)',
@@ -19,6 +21,8 @@ function usageText() {
     '  --ref <REF>                 Git ref to dispatch (default: current branch or main)',
     '  --consistency-urls <CSV>    Comma-separated integrity consistency URLs',
     '  --consistency-token <VALUE> Consistency token passed to the workflow',
+    '  --consistency-mode <MODE>   Consistency comparison mode (pairwise|all)',
+    '  --consistency-profile <P>   Profile for drift summary (wedos_small|wedos_medium|diskless)',
     '  --evidence-urls <CSV>       Comma-separated evidence URLs',
     '  --evidence-token <VALUE>    Evidence token passed to the workflow',
     '  --dry-run                   Print the payload and skip the API call',
@@ -90,6 +94,26 @@ function parseOptionalToken(raw, flagName) {
   return raw
 }
 
+function parseConsistencyMode(raw) {
+  if (typeof raw === 'undefined') return undefined
+  if (!isNonEmptyString(raw)) throw new CliError('--consistency-mode must not be blank')
+  const mode = raw.trim().toLowerCase()
+  if (!VALID_CONSISTENCY_MODES.has(mode)) {
+    throw new CliError(`unsupported consistency mode: ${raw}`)
+  }
+  return mode
+}
+
+function parseConsistencyProfile(raw) {
+  if (typeof raw === 'undefined') return undefined
+  if (!isNonEmptyString(raw)) throw new CliError('--consistency-profile must not be blank')
+  const profile = raw.trim().toLowerCase()
+  if (!VALID_PROFILES.has(profile)) {
+    throw new CliError(`unsupported consistency profile: ${raw}`)
+  }
+  return profile
+}
+
 function resolveDefaultRef({ env = process.env, execGit = defaultGitBranch } = {}) {
   const refName = env.GITHUB_REF_NAME || env.GITHUB_HEAD_REF || ''
   if (isNonEmptyString(refName)) return refName.trim()
@@ -125,6 +149,8 @@ function parseArgs(argv, env = process.env, execGit = defaultGitBranch) {
     dryRun: false,
     consistencyUrls: undefined,
     consistencyToken: undefined,
+    consistencyMode: undefined,
+    consistencyProfile: undefined,
     evidenceUrls: undefined,
     evidenceToken: undefined,
   }
@@ -164,6 +190,12 @@ function parseArgs(argv, env = process.env, execGit = defaultGitBranch) {
       case '--consistency-token':
         args.consistencyToken = readValue()
         break
+      case '--consistency-mode':
+        args.consistencyMode = readValue()
+        break
+      case '--consistency-profile':
+        args.consistencyProfile = readValue()
+        break
       case '--evidence-urls':
         args.evidenceUrls = readValue()
         break
@@ -189,6 +221,8 @@ function parseArgs(argv, env = process.env, execGit = defaultGitBranch) {
   }
 
   args.consistencyToken = parseOptionalToken(args.consistencyToken, '--consistency-token')
+  args.consistencyMode = parseConsistencyMode(args.consistencyMode)
+  args.consistencyProfile = parseConsistencyProfile(args.consistencyProfile)
   args.evidenceToken = parseOptionalToken(args.evidenceToken, '--evidence-token')
 
   return args
@@ -204,6 +238,8 @@ function buildInputs(args) {
   const inputs = {}
   if (typeof args.consistencyUrls !== 'undefined') inputs.consistency_urls = args.consistencyUrls
   if (typeof args.consistencyToken !== 'undefined') inputs.consistency_token = args.consistencyToken
+  if (typeof args.consistencyMode !== 'undefined') inputs.consistency_mode = args.consistencyMode
+  if (typeof args.consistencyProfile !== 'undefined') inputs.consistency_profile = args.consistencyProfile
   if (typeof args.evidenceUrls !== 'undefined') inputs.evidence_urls = args.evidenceUrls
   if (typeof args.evidenceToken !== 'undefined') inputs.evidence_token = args.evidenceToken
   return inputs

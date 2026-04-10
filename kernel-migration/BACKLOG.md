@@ -213,6 +213,7 @@ Progress notes:
 - `consistency-smoke` now captures matrix JSON, generates a profile-aware drift report (`build-drift-alert-summary`), appends it to the job summary, and uploads consistency artifacts.
 - `evidence-dry-run` now uploads its generated evidence directory as a CI artifact for offline review/sign-off.
 - Weekly scheduled consistency smoke is enabled in CI (requires `CONSISTENCY_URLS`; optional `CONSISTENCY_MODE` and `GATEWAY_RESOURCE_PROFILE`).
+- Dispatch helper now supports `--consistency-mode` and `--consistency-profile` so manual operator runs can match scheduled profile behavior.
 
 ## Suggested execution order
 

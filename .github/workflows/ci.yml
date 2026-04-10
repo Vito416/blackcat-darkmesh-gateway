@@ -262,6 +262,8 @@ jobs:
       EVIDENCE_URLS: ${{ inputs.evidence_urls }}
       GATEWAY_INTEGRITY_STATE_TOKEN: ${{ inputs.evidence_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
       EVIDENCE_OUT_DIR: ${{ runner.temp }}/integrity-evidence-dry-run
+      CONSISTENCY_MODE: ${{ inputs.consistency_mode || vars.CONSISTENCY_MODE || 'pairwise' }}
+      CONSISTENCY_PROFILE: ${{ inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'wedos_medium' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -409,6 +411,10 @@ jobs:
             process.env.GITHUB_REF_NAME || 'main',
             '--consistency-urls',
             urls.join(','),
+            '--consistency-mode',
+            process.env.CONSISTENCY_MODE || 'pairwise',
+            '--consistency-profile',
+            process.env.CONSISTENCY_PROFILE || 'wedos_medium',
             '--evidence-urls',
             urls.join(','),
             '--dry-run',

@@ -6,7 +6,10 @@
 - Default alert thresholds: `ops/alerts.md` (targets `wedos_medium`).
 - Profile-specific alert thresholds and tuning notes: `ops/alerts-profiles.md`.
 - Compare-integrity operator tool: `npm run ops:compare-integrity` compares two gateway integrity snapshots for drift.
+- Multi-gateway matrix compare: `npm run ops:compare-integrity-matrix` supports `pairwise` and `all` drift checks.
+- Drift summary helper: `npm run ops:build-drift-alert-summary` turns matrix JSON into a profile-aware alert report.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
+- Bundle indexing/exchange pack: `npm run ops:index-evidence-bundles` and `npm run ops:build-attestation-exchange-pack` for portable review artifacts.
 - Schema validation: keep attestation payloads aligned with `ops/schemas/integrity-attestation.schema.json` before archiving the bundle.
 - Dashboard focus: `ops/dashboards/gateway-metrics.yml` now includes integrity mirror consistency, rate-limit tuning, and 429 pressure panels so you can spot drift and overload early.
 - Key metrics:
@@ -22,6 +25,7 @@
 - PSP certs: allowlist prefixes `PAYPAL_CERT_ALLOW_PREFIXES`, pins `GW_CERT_PIN_SHA256`, TTL `GW_CERT_CACHE_TTL_MS`; cert cache size exported.
 - Diskless mode: `GATEWAY_INTEGRITY_DISKLESS=1` (or `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`) disables checkpoint file IO and keeps integrity state memory-only.
 - Checkpoint age: compare `gateway_integrity_checkpoint_age_seconds` against your max-age policy; stale checkpoints should be treated as absent.
+- Scheduled CI consistency smoke: set repo variable `CONSISTENCY_URLS` (optional `CONSISTENCY_MODE`, `GATEWAY_RESOURCE_PROFILE`) and secret `GATEWAY_INTEGRITY_STATE_TOKEN` when state auth is enabled.
 
 ## Production guardrails
 - Cache: keep `gateway_cache_size` below the host memory budget with a clear ceiling per deployment tier.
