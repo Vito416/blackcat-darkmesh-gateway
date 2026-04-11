@@ -32,6 +32,7 @@
     "ops:build-release-evidence-ledger": "node scripts/build-release-evidence-ledger.js",
     "ops:build-decommission-evidence-log": "node scripts/build-decommission-evidence-log.js",
     "ops:run-decommission-closeout": "node scripts/run-decommission-closeout.js",
+    "ops:check-decommission-manual-proofs": "node scripts/check-decommission-manual-proofs.js",
     "ops:check-release-drill-artifacts": "node scripts/check-release-drill-artifacts.js",
     "ops:check-decommission-readiness": "node scripts/check-decommission-readiness.js",
     "ops:check-ao-gate-evidence": "node scripts/check-ao-gate-evidence.js",

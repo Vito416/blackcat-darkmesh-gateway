@@ -289,6 +289,7 @@ describe('run-decommission-closeout.js', () => {
     expect(result.stdout).toContain('validate final migration summary')
     expect(result.stdout).toContain('validate signoff record')
     expect(result.stdout).toContain('build decommission evidence log')
+    expect(result.stdout).toContain('check decommission manual proofs')
     expect(result.stdout).toContain('decommission-evidence-log.json')
     expect(result.stderr).toBe('')
   })
@@ -389,9 +390,33 @@ describe('run-decommission-closeout.js', () => {
             status: 'complete',
             release: '1.4.0',
             presence: { complete: true, requiredCount: 12, requiredPresentCount: 12, requiredMissingCount: 0 },
+            manualProofs: [
+              { key: 'recoveryDrillLink', label: 'Recovery drill proof', link: 'https://example.com/recovery' },
+              { key: 'aoFallbackLink', label: 'AO fallback proof', link: 'https://example.com/fallback' },
+              { key: 'rollbackProofLink', label: 'Rollback proof', link: 'https://example.com/rollback' },
+              { key: 'approvalsLink', label: 'Approvals / sign-off', link: 'https://example.com/approvals' },
+            ],
           })
           return spawnResult('# Decommission Evidence Log\n')
         }
+        case 'check-decommission-manual-proofs.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'decommission-evidence-log.json'),
+                status: 'complete',
+                requiredCount: 4,
+                providedCount: 4,
+                missingCount: 0,
+                missingProofKeys: [],
+                missingProofLabels: [],
+                blockers: [],
+                warnings: [],
+              },
+              null,
+              2,
+            ),
+          )
         default:
           throw new Error(`unexpected script: ${scriptName(args)}`)
       }
@@ -437,8 +462,9 @@ describe('run-decommission-closeout.js', () => {
     expect(result.exitCode).toBe(0)
     expect(payload.status).toBe('ready')
     expect(payload.exitCode).toBe(0)
-    expect(payload.steps).toHaveLength(6)
+    expect(payload.steps).toHaveLength(7)
     expect(payload.steps.map((step: { status: string }) => step.status)).toEqual([
+      'passed',
       'passed',
       'passed',
       'passed',
@@ -448,9 +474,10 @@ describe('run-decommission-closeout.js', () => {
     ])
     expect(payload.validations.finalMigrationSummary.status).toBe('complete')
     expect(payload.validations.signoffRecord.status).toBe('complete')
+    expect(payload.validations.manualProofs.status).toBe('complete')
     expect(payload.steps[5].log.status).toBe('complete')
     expect(payload.artifacts.decommissionEvidenceLogJson).toContain('decommission-evidence-log.json')
-    expect(spawnSyncFn).toHaveBeenCalledTimes(6)
+    expect(spawnSyncFn).toHaveBeenCalledTimes(7)
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'check-ao-gate-evidence.js',
       'check-decommission-readiness.js',
@@ -458,6 +485,7 @@ describe('run-decommission-closeout.js', () => {
       'validate-final-migration-summary.js',
       'validate-signoff-record.js',
       'build-decommission-evidence-log.js',
+      'check-decommission-manual-proofs.js',
     ])
   })
 
@@ -536,9 +564,33 @@ describe('run-decommission-closeout.js', () => {
             status: 'complete',
             release: '1.4.0',
             presence: { complete: true, requiredCount: 12, requiredPresentCount: 12, requiredMissingCount: 0 },
+            manualProofs: [
+              { key: 'recoveryDrillLink', label: 'Recovery drill proof', link: 'https://example.com/recovery' },
+              { key: 'aoFallbackLink', label: 'AO fallback proof', link: 'https://example.com/fallback' },
+              { key: 'rollbackProofLink', label: 'Rollback proof', link: 'https://example.com/rollback' },
+              { key: 'approvalsLink', label: 'Approvals / sign-off', link: 'https://example.com/approvals' },
+            ],
           })
           return spawnResult('# Decommission Evidence Log\n')
         }
+        case 'check-decommission-manual-proofs.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'decommission-evidence-log.json'),
+                status: 'complete',
+                requiredCount: 4,
+                providedCount: 4,
+                missingCount: 0,
+                missingProofKeys: [],
+                missingProofLabels: [],
+                blockers: [],
+                warnings: [],
+              },
+              null,
+              2,
+            ),
+          )
         default:
           throw new Error(`unexpected script: ${scriptName(args)}`)
       }
@@ -576,14 +628,16 @@ describe('run-decommission-closeout.js', () => {
       'passed',
       'passed',
       'passed',
+      'passed',
     ])
-    expect(payload.blockers.some((blocker: string) => blocker.includes('decommission readiness has blockers'))).toBe(true)
+    expect(payload.blockers.some((blocker: string) => blocker.includes('readiness: release-readiness.json status is warning'))).toBe(true)
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'check-ao-gate-evidence.js',
       'check-decommission-readiness.js',
       'validate-final-migration-summary.js',
       'validate-signoff-record.js',
       'build-decommission-evidence-log.js',
+      'check-decommission-manual-proofs.js',
     ])
   })
 })

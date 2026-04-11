@@ -16,6 +16,7 @@
 - Release-drill artifact completeness check: `npm run ops:check-release-drill-artifacts -- --dir <drill-dir> --strict --json` verifies the final mandatory artifact set and strict cross-file consistency.
 - Release evidence ledger generator: `npm run ops:build-release-evidence-ledger -- --dir <drill-dir> --decision pending [--strict]` emits `release-evidence-ledger.md/.json` with artifact hashes and overall ready/blocked status.
 - Decommission evidence log generator: `npm run ops:build-decommission-evidence-log -- --dir <drill-dir> --decision pending [--strict]` emits `decommission-evidence-log.md/.json` including manual-proof link fields and a separate automation/AO-manual state split.
+- Decommission manual-proof checker: `npm run ops:check-decommission-manual-proofs -- --file <drill-dir>/decommission-evidence-log.json [--strict] [--json]` validates recovery/fallback/rollback/approvals links and returns `pending` (non-strict) vs hard failure (strict).
 - Decommission readiness summary: `npm run ops:check-decommission-readiness -- --dir <drill-dir> --ao-gate kernel-migration/ao-dependency-gate.json [--strict] [--json]` emits `automationState`, `aoManualState`, and `closeoutState` so automation-complete and AO/manual-pending are not conflated.
 - AO gate evidence quality check: `npm run ops:check-ao-gate-evidence -- --file kernel-migration/ao-dependency-gate.json [--strict] [--json]`.
 - Final migration summary validator: `npm run ops:validate-final-migration-summary -- --file kernel-migration/FINAL_MIGRATION_SUMMARY.md [--strict] [--json]`.

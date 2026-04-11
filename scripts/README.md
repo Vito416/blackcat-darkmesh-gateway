@@ -500,6 +500,25 @@ node scripts/build-decommission-evidence-log.js \
 
 Strict mode exits non-zero if any mandatory machine artifact is missing from the drill directory.
 
+## Decommission manual-proof check
+
+`scripts/check-decommission-manual-proofs.js` validates that `decommission-evidence-log.json` contains all required manual proof links:
+
+- recovery drill proof
+- AO fallback proof
+- rollback proof
+- approvals / sign-off
+
+Usage:
+```bash
+npm run ops:check-decommission-manual-proofs -- \
+  --file ./tmp/release-drill/decommission-evidence-log.json \
+  --json \
+  --strict
+```
+
+In non-strict mode, missing links return `pending` with exit code `0` so operators can track outstanding AO/manual work without breaking machine-only runs. In strict mode, missing proofs exit with code `3`.
+
 ## AO gate evidence quality check
 
 `scripts/check-ao-gate-evidence.js` validates the AO dependency gate for closeout quality (required IDs, status shape, evidence refs on closed checks, release/timestamp sanity).

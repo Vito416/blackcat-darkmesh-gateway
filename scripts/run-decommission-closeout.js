@@ -20,6 +20,7 @@ const STEP_SCRIPTS = {
   validateFinalMigrationSummary: resolve(SCRIPT_DIR, 'validate-final-migration-summary.js'),
   validateSignoffRecord: resolve(SCRIPT_DIR, 'validate-signoff-record.js'),
   buildDecommissionEvidenceLog: resolve(SCRIPT_DIR, 'build-decommission-evidence-log.js'),
+  checkDecommissionManualProofs: resolve(SCRIPT_DIR, 'check-decommission-manual-proofs.js'),
 }
 
 class CliError extends Error {
@@ -70,6 +71,7 @@ function usageText() {
     '  4) validate final migration summary',
     '  5) validate signoff record',
     '  6) build decommission evidence log',
+    '  7) check manual proof links from decommission log',
     '',
     'Exit codes:',
     '  0   success or dry run',
@@ -258,6 +260,14 @@ function stepStatusFromResult(stepId, exitCode, parsed) {
     return exitCode === 0 ? 'passed' : 'failed'
   }
 
+  if (stepId === 'check-decommission-manual-proofs') {
+    const status = normalizeTrimmed(parsed?.status).toLowerCase()
+    if (status === 'complete') return 'passed'
+    if (status === 'pending') return 'blocked'
+    if (status === 'blocked') return 'failed'
+    return exitCode === 0 ? 'passed' : 'failed'
+  }
+
   return exitCode === 0 ? 'passed' : 'failed'
 }
 
@@ -387,9 +397,20 @@ function buildCloseoutPlan(options = {}) {
       parseJson: false,
       outputFiles: [decommissionEvidenceLogMd, decommissionEvidenceLogJson],
     },
+    {
+      id: 'check-decommission-manual-proofs',
+      index: 7,
+      label: 'check decommission manual proofs',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.checkDecommissionManualProofs,
+      displayScriptPath: asRelativePath(STEP_SCRIPTS.checkDecommissionManualProofs),
+      args: () => ['--file', decommissionEvidenceLogJson, '--json', ...(strict ? ['--strict'] : [])],
+      displayArgs: () => ['--file', decommissionEvidenceLogJson, '--json', ...(strict ? ['--strict'] : [])],
+      parseJson: true,
+    },
   ]
 
-  const activeSteps = profile ? steps : [steps[0], steps[1], steps[3], steps[4], steps[5]]
+  const activeSteps = profile ? steps : [steps[0], steps[1], steps[3], steps[4], steps[5], steps[6]]
   const plannedSteps = profile
     ? steps
     : steps.map((step) => (step.id === 'validate-wedos-readiness' ? { ...step, skipped: true } : step))
@@ -525,6 +546,14 @@ function reduceStepResult(step, spawnResult, plan) {
       result.warnings = parsed.warnings.slice()
     }
     result.status = stepStatusFromResult(step.id, exitCode, parsed)
+  } else if (step.id === 'check-decommission-manual-proofs') {
+    if (parsed && Array.isArray(parsed.blockers) && parsed.blockers.length > 0) {
+      result.blockers = parsed.blockers.slice()
+    }
+    if (parsed && Array.isArray(parsed.warnings) && parsed.warnings.length > 0) {
+      result.warnings = parsed.warnings.slice()
+    }
+    result.status = stepStatusFromResult(step.id, exitCode, parsed)
   } else if (step.id === 'build-decommission-evidence-log') {
     const logJsonPath = plan.artifacts.decommissionEvidenceLogJson
     if (existsSync(logJsonPath)) {
@@ -588,6 +617,7 @@ function runCloseout(options = {}, deps = {}) {
             validations: {
               finalMigrationSummary: null,
               signoffRecord: null,
+              manualProofs: null,
             },
           },
           null,
@@ -612,6 +642,7 @@ function runCloseout(options = {}, deps = {}) {
       validations: {
         finalMigrationSummary: null,
         signoffRecord: null,
+        manualProofs: null,
       },
     }
   }
@@ -619,9 +650,12 @@ function runCloseout(options = {}, deps = {}) {
   mkdirSync(plan.outDir, { recursive: true })
 
   const stepResults = []
-  const blockers = []
+  const automationBlockers = []
+  const aoManualBlockers = []
   const warnings = []
-  let readinessBlocked = false
+  let automationBlocked = false
+  let aoManualBlocked = false
+  let aoManualPending = false
   let logFailed = false
   const stdoutChunks = []
   const stderrChunks = []
@@ -653,9 +687,12 @@ function runCloseout(options = {}, deps = {}) {
     }
 
     if (step.id === 'check-ao-gate-evidence') {
-      if (reduced.status !== 'passed') {
-        readinessBlocked = true
-        blockers.push(`AO gate evidence check is ${reduced.status}`)
+      if (reduced.status === 'failed') {
+        automationBlocked = true
+        automationBlockers.push('AO gate evidence check failed')
+      } else if (reduced.status === 'warning') {
+        aoManualPending = true
+        aoManualBlockers.push('AO gate evidence check has warnings/open evidence')
       }
       if (Array.isArray(reduced.payload?.warnings) && reduced.payload.warnings.length > 0) {
         warnings.push(...reduced.payload.warnings.map((warning) => `AO gate: ${warning}`))
@@ -663,25 +700,60 @@ function runCloseout(options = {}, deps = {}) {
     }
 
     if (step.id === 'check-decommission-readiness') {
-      if (reduced.status !== 'passed') {
-        readinessBlocked = true
-        blockers.push('decommission readiness has blockers')
+      if (reduced.status === 'failed') {
+        automationBlocked = true
+        automationBlockers.push('decommission readiness check failed')
       }
-      if (Array.isArray(reduced.payload?.blockers) && reduced.payload.blockers.length > 0) {
-        blockers.push(...reduced.payload.blockers.map((item) => `readiness: ${item}`))
+
+      const readinessAutomationState = normalizeTrimmed(reduced.payload?.automationState).toLowerCase()
+      const readinessAoManualState = normalizeTrimmed(reduced.payload?.aoManualState).toLowerCase()
+      const hasSplitStates = isNonEmptyString(readinessAutomationState) || isNonEmptyString(readinessAoManualState)
+
+      if (!hasSplitStates && reduced.status === 'blocked') {
+        automationBlocked = true
+        if (Array.isArray(reduced.payload?.blockers) && reduced.payload.blockers.length > 0) {
+          automationBlockers.push(...reduced.payload.blockers.map((item) => `readiness: ${item}`))
+        } else {
+          automationBlockers.push('decommission readiness reports blockers')
+        }
+      }
+
+      if (readinessAutomationState === 'blocked') {
+        automationBlocked = true
+        if (Array.isArray(reduced.payload?.automationBlockers) && reduced.payload.automationBlockers.length > 0) {
+          automationBlockers.push(...reduced.payload.automationBlockers.map((item) => `readiness: ${item}`))
+        } else {
+          automationBlockers.push('decommission readiness reports automation blockers')
+        }
+      }
+
+      if (readinessAoManualState === 'blocked') {
+        aoManualBlocked = true
+        if (Array.isArray(reduced.payload?.aoManualBlockers) && reduced.payload.aoManualBlockers.length > 0) {
+          aoManualBlockers.push(...reduced.payload.aoManualBlockers.map((item) => `readiness: ${item}`))
+        } else {
+          aoManualBlockers.push('decommission readiness reports AO/manual blockers')
+        }
+      } else if (readinessAoManualState === 'pending') {
+        aoManualPending = true
+        if (Array.isArray(reduced.payload?.aoManualBlockers) && reduced.payload.aoManualBlockers.length > 0) {
+          aoManualBlockers.push(...reduced.payload.aoManualBlockers.map((item) => `readiness: ${item}`))
+        } else {
+          aoManualBlockers.push('decommission readiness reports AO/manual items pending')
+        }
       }
     }
 
     if (step.id === 'validate-wedos-readiness') {
       if (reduced.status === 'failed') {
-        readinessBlocked = true
-        blockers.push('WEDOS readiness validation failed')
+        automationBlocked = true
+        automationBlockers.push('WEDOS readiness validation failed')
       }
       if (Array.isArray(reduced.payload?.issues)) {
         for (const issue of reduced.payload.issues) {
           if (issue && issue.severity === 'critical') {
-            readinessBlocked = true
-            blockers.push(`WEDOS: ${issue.message}`)
+            automationBlocked = true
+            automationBlockers.push(`WEDOS: ${issue.message}`)
           } else if (issue && issue.severity === 'warning') {
             warnings.push(`WEDOS: ${issue.message}`)
           }
@@ -691,24 +763,24 @@ function runCloseout(options = {}, deps = {}) {
 
     if (step.id === 'validate-final-migration-summary') {
       if (reduced.status !== 'passed') {
-        readinessBlocked = true
-        blockers.push('final migration summary validation has blockers')
+        automationBlocked = true
+        automationBlockers.push('final migration summary validation has blockers')
       }
       if (Array.isArray(reduced.payload?.issues) && reduced.payload.issues.length > 0) {
-        blockers.push(...reduced.payload.issues.map((item) => `summary: ${item?.message || String(item)}`))
+        automationBlockers.push(...reduced.payload.issues.map((item) => `summary: ${item?.message || String(item)}`))
       }
       if (Array.isArray(reduced.payload?.blockers) && reduced.payload.blockers.length > 0) {
-        blockers.push(...reduced.payload.blockers.map((item) => `summary: ${item}`))
+        automationBlockers.push(...reduced.payload.blockers.map((item) => `summary: ${item}`))
       }
     }
 
     if (step.id === 'validate-signoff-record') {
       if (reduced.status !== 'passed') {
-        readinessBlocked = true
-        blockers.push('signoff record validation has blockers')
+        automationBlocked = true
+        automationBlockers.push('signoff record validation has blockers')
       }
       if (Array.isArray(reduced.payload?.blockers) && reduced.payload.blockers.length > 0) {
-        blockers.push(...reduced.payload.blockers.map((item) => `signoff: ${item}`))
+        automationBlockers.push(...reduced.payload.blockers.map((item) => `signoff: ${item}`))
       }
     }
 
@@ -720,17 +792,19 @@ function runCloseout(options = {}, deps = {}) {
           log = readJsonFile(logJsonPath)
         } catch (err) {
           logFailed = true
-          blockers.push(`unable to read decommission log JSON: ${err instanceof Error ? err.message : String(err)}`)
+          automationBlocked = true
+          automationBlockers.push(`unable to read decommission log JSON: ${err instanceof Error ? err.message : String(err)}`)
         }
       } else {
         logFailed = true
-        blockers.push('decommission evidence log JSON was not created')
+        automationBlocked = true
+        automationBlockers.push('decommission evidence log JSON was not created')
       }
 
       if (log) {
         if (log.status !== 'complete') {
-          readinessBlocked = true
-          blockers.push('decommission evidence log is blocked')
+          automationBlocked = true
+          automationBlockers.push('decommission evidence log is blocked')
         }
         reduced.log = {
           status: log.status,
@@ -741,19 +815,51 @@ function runCloseout(options = {}, deps = {}) {
       }
     }
 
+    if (step.id === 'check-decommission-manual-proofs') {
+      if (reduced.status === 'failed') {
+        automationBlocked = true
+        automationBlockers.push('decommission manual proof check failed')
+      } else if (reduced.status === 'blocked') {
+        aoManualPending = true
+      }
+
+      if (Array.isArray(reduced.payload?.blockers) && reduced.payload.blockers.length > 0) {
+        aoManualBlocked = true
+        aoManualBlockers.push(...reduced.payload.blockers.map((item) => `manual-proofs: ${item}`))
+      }
+      if (Array.isArray(reduced.payload?.missingProofLabels) && reduced.payload.missingProofLabels.length > 0) {
+        aoManualPending = true
+        aoManualBlockers.push(
+          ...reduced.payload.missingProofLabels.map((item) => `manual-proofs: missing ${item}`),
+        )
+      }
+      if (Array.isArray(reduced.payload?.warnings) && reduced.payload.warnings.length > 0) {
+        warnings.push(...reduced.payload.warnings.map((item) => `manual-proofs: ${item}`))
+      }
+    }
+
     stepResults.push(reduced)
 
     if (reduced.exitCode !== 0 && step.id === 'build-decommission-evidence-log') {
       logFailed = true
-      blockers.push('decommission evidence log step failed')
+      automationBlocked = true
+      automationBlockers.push('decommission evidence log step failed')
     }
   }
 
-  const status = logFailed
-    ? 'failed'
-    : blockers.length > 0 || readinessBlocked
-      ? 'blocked'
-      : 'ready'
+  const automationState = automationBlocked ? 'blocked' : 'complete'
+  const aoManualState = aoManualBlocked ? 'blocked' : aoManualPending ? 'pending' : 'complete'
+  const closeoutState =
+    automationState === 'complete'
+      ? aoManualState === 'complete'
+        ? 'ready'
+        : aoManualState === 'pending'
+          ? 'ao-manual-pending'
+          : 'ao-manual-blocked'
+      : 'automation-blocked'
+
+  const blockers = [...automationBlockers, ...aoManualBlockers]
+  const status = logFailed ? 'failed' : closeoutState === 'ready' ? 'ready' : 'blocked'
 
   const exitCode = logFailed || (plan.strict && status === 'blocked') ? 3 : 0
 
@@ -776,14 +882,20 @@ function runCloseout(options = {}, deps = {}) {
             strict: plan.strict,
             dryRun: false,
             status,
+            closeoutState,
+            automationState,
+            aoManualState,
             exitCode,
             blockers,
+            automationBlockers,
+            aoManualBlockers,
             warnings,
             steps: stepResults,
             artifacts: plan.artifacts,
             validations: {
               finalMigrationSummary: stepResults.find((step) => step.id === 'validate-final-migration-summary')?.payload || null,
               signoffRecord: stepResults.find((step) => step.id === 'validate-signoff-record')?.payload || null,
+              manualProofs: stepResults.find((step) => step.id === 'check-decommission-manual-proofs')?.payload || null,
             },
           },
           null,
@@ -802,13 +914,19 @@ function runCloseout(options = {}, deps = {}) {
             notes: plan.notes,
             strict: plan.strict,
             status,
+            closeoutState,
+            automationState,
+            aoManualState,
             blockers,
+            automationBlockers,
+            aoManualBlockers,
             warnings,
             steps: stepResults,
             artifacts: plan.artifacts,
             validations: {
               finalMigrationSummary: stepResults.find((step) => step.id === 'validate-final-migration-summary')?.payload || null,
               signoffRecord: stepResults.find((step) => step.id === 'validate-signoff-record')?.payload || null,
+              manualProofs: stepResults.find((step) => step.id === 'check-decommission-manual-proofs')?.payload || null,
             },
           })
           return `${stdoutChunks.join('')}${body}`
@@ -817,11 +935,17 @@ function runCloseout(options = {}, deps = {}) {
     plan,
     steps: stepResults,
     blockers,
+    automationBlockers,
+    aoManualBlockers,
     warnings,
     status,
+    closeoutState,
+    automationState,
+    aoManualState,
     validations: {
       finalMigrationSummary: stepResults.find((step) => step.id === 'validate-final-migration-summary')?.payload || null,
       signoffRecord: stepResults.find((step) => step.id === 'validate-signoff-record')?.payload || null,
+      manualProofs: stepResults.find((step) => step.id === 'check-decommission-manual-proofs')?.payload || null,
     },
   }
 }
@@ -840,14 +964,23 @@ function renderHumanResult(summary) {
   lines.push(`- Decision: \`${summary.decision}\``)
   lines.push(`- Strict: ${summary.strict ? 'yes' : 'no'}`)
   lines.push(`- Status: \`${summary.status}\``)
+  if (isNonEmptyString(summary.closeoutState)) lines.push(`- Closeout state: \`${summary.closeoutState}\``)
+  if (isNonEmptyString(summary.automationState)) lines.push(`- Automation state: \`${summary.automationState}\``)
+  if (isNonEmptyString(summary.aoManualState)) lines.push(`- AO/manual state: \`${summary.aoManualState}\``)
   lines.push('')
   lines.push('## Steps')
   for (const step of summary.steps) {
     lines.push(`- [${step.index}] ${step.label}: \`${step.status}\` (exit ${typeof step.exitCode === 'number' ? step.exitCode : 'n/a'})`)
   }
   lines.push('')
+  lines.push('## Validation targets')
   lines.push(`- Final summary: \`${summary.validations?.finalMigrationSummary?.path || 'n/a'}\``)
   lines.push(`- Signoff record: \`${summary.validations?.signoffRecord?.path || 'n/a'}\``)
+  if (summary.validations?.manualProofs) {
+    lines.push(
+      `- Manual proofs: ${summary.validations.manualProofs.providedCount || 0}/${summary.validations.manualProofs.requiredCount || 0} (\`${summary.validations.manualProofs.status || 'unknown'}\`)`,
+    )
+  }
   lines.push(`- Evidence log markdown: \`${summary.artifacts.decommissionEvidenceLogMd}\``)
   lines.push(`- Evidence log JSON: \`${summary.artifacts.decommissionEvidenceLogJson}\``)
 
