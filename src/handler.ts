@@ -15,7 +15,6 @@ import {
   getGoPayWebhookIdempotencyPolicy,
   verifyGoPayWebhook,
 } from './runtime/payments/gopayWebhook.js'
-import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
 import { parseJsonObject } from './runtime/core/index.js'
 import {
   basicCredentialsMatch,
@@ -25,6 +24,19 @@ import {
   tokenEquals,
 } from './runtime/auth/httpAuth.js'
 import { requireAuthorizedSignatureRef } from './runtime/auth/policy.js'
+import {
+  readForgetToken,
+  readHandlerEnvString,
+  readHandlerStrictEnabledFlag,
+  readIntegrityIncidentAuthConfig,
+  readIntegrityStateToken,
+  readMetricsAuthConfig,
+  readPositiveIntEnv,
+  readTemplateToken,
+  readWebhookConfig,
+  readWorkerNotifyConfig,
+  resolveWorkerNotifyBreakerKey,
+} from './runtime/config/handlerConfig.js'
 import type { IntegritySnapshot } from './integrity/types.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
@@ -73,17 +85,6 @@ const integrityRuntime: IntegrityRuntimeCache = {
   snapshot: null,
 }
 
-function readEnvString(name: string): string | undefined {
-  const loaded = loadStringConfig(name)
-  if (!loaded.ok) return undefined
-  const value = typeof loaded.value === 'string' ? loaded.value.trim() : ''
-  return value.length > 0 ? value : undefined
-}
-
-function readStrictEnabledFlag(name: string): boolean {
-  return readEnvString(name) === '1'
-}
-
 function respond(body?: BodyInit | null, init?: ResponseInit): Response {
   return applySecurityHeaders(new Response(body, init))
 }
@@ -115,8 +116,8 @@ function updateIntegrityAuditGauges(snapshot: IntegritySnapshot | null) {
 }
 
 function readEnvIntegrityPolicyState(): IntegrityPolicyState {
-  const fallbackPaused = readStrictEnabledFlag('GATEWAY_INTEGRITY_POLICY_PAUSED')
-  const raw = readEnvString('GATEWAY_INTEGRITY_POLICY_JSON')
+  const fallbackPaused = readHandlerStrictEnabledFlag('GATEWAY_INTEGRITY_POLICY_PAUSED')
+  const raw = readHandlerEnvString('GATEWAY_INTEGRITY_POLICY_JSON')
   if (!raw) return { paused: fallbackPaused, source: 'env' }
 
   const parsed = parseJsonObject(raw)
@@ -140,19 +141,8 @@ function readIntegrityIncidentReplayCap(): number {
   return readPositiveIntEnv('GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP', INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP)
 }
 
-function readPositiveIntEnv(name: string, fallback: number): number {
-  const loaded = loadIntegerConfig(name, { fallbackValue: fallback })
-  if (!loaded.ok) return fallback
-  if (!Number.isFinite(loaded.value) || loaded.value <= 0) return fallback
-  return Math.floor(loaded.value)
-}
-
 function readIntegrityIncidentMaxBodyBytes(): number {
   return readPositiveIntEnv('GATEWAY_INTEGRITY_INCIDENT_MAX_BODY_BYTES', INTEGRITY_INCIDENT_MAX_BODY_DEFAULT_BYTES)
-}
-
-function readWebhookMaxBodyBytes(): number {
-  return readPositiveIntEnv('GATEWAY_WEBHOOK_MAX_BODY_BYTES', WEBHOOK_MAX_BODY_DEFAULT_BYTES)
 }
 
 function pruneIntegrityIncidentReplay(now = Date.now()) {
@@ -209,7 +199,7 @@ async function resolveIntegrityContext(): Promise<IntegrityContext> {
 }
 
 function requireVerifiedCache(): boolean {
-  return readStrictEnabledFlag('GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE')
+  return readHandlerStrictEnabledFlag('GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE')
 }
 
 function collectTrustedRoots(snapshot: IntegritySnapshot): string[] {
@@ -314,15 +304,8 @@ function webhookBodyTooLargeResponse(): Response {
   return plainErrorResponse(413, 'payload too large')
 }
 
-function splitRefsCsv(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-}
-
 function readIncidentSignatureRef(req: Request, body: unknown): string {
-  const customHeaderName = (process.env.GATEWAY_INTEGRITY_INCIDENT_REF_HEADER || 'x-signature-ref').trim()
+  const customHeaderName = readIntegrityIncidentAuthConfig().refHeaderName
   const headerRef = customHeaderName ? readHeaderToken(req, customHeaderName) : ''
   if (headerRef) return headerRef
   if (body && typeof body === 'object' && typeof (body as any).signatureRef === 'string') {
@@ -332,13 +315,7 @@ function readIncidentSignatureRef(req: Request, body: unknown): string {
 }
 
 function readRoleRefsFromEnv(role: IntegrityRole): string[] {
-  const envByRole: Record<IntegrityRole, string> = {
-    root: process.env.GATEWAY_INTEGRITY_ROLE_ROOT_REFS || '',
-    upgrade: process.env.GATEWAY_INTEGRITY_ROLE_UPGRADE_REFS || '',
-    emergency: process.env.GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS || '',
-    reporter: process.env.GATEWAY_INTEGRITY_ROLE_REPORTER_REFS || '',
-  }
-  return splitRefsCsv(envByRole[role])
+  return readIntegrityIncidentAuthConfig().roleRefs[role]
 }
 
 function collectRoleRefs(role: IntegrityRole, integrity: IntegrityContext): { activeRefs: string[]; overlapRefs: string[] } {
@@ -494,7 +471,7 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
   const limited = rateLimitResponse(`template:${requestIp(req)}`)
   if (limited) return limited
 
-  const requiredToken = process.env.GATEWAY_TEMPLATE_TOKEN
+  const requiredToken = readTemplateToken()
   if (requiredToken) {
     const presented = (req.headers.get('x-template-token') || '').trim()
     if (!tokenEquals(requiredToken, presented)) {
@@ -556,7 +533,7 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
 async function handleIntegrityState(req: Request, integrity: IntegrityContext): Promise<Response> {
   if (req.method !== 'GET') return respond('method', { status: 405 })
 
-  const token = process.env.GATEWAY_INTEGRITY_STATE_TOKEN || ''
+  const token = readIntegrityStateToken()
   if (token && !checkToken(req, token, 'x-integrity-token')) {
     inc('gateway_integrity_state_auth_blocked')
     return respond(JSON.stringify({ error: 'unauthorized' }), {
@@ -592,7 +569,8 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
     return incidentBodyTooLargeResponse()
   }
 
-  const token = process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN || ''
+  const incidentAuth = readIntegrityIncidentAuthConfig()
+  const token = incidentAuth.token
   if (!token) {
     return respond('incident_auth_not_configured', { status: 500 })
   }
@@ -632,7 +610,7 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
   if (!['report', 'ack', 'pause', 'resume'].includes(action)) {
     return jsonErrorResponse(400, 'invalid_action')
   }
-  if (process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF === '1') {
+  if (incidentAuth.requireSignatureRef) {
     const { roles, activeRefs, overlapRefs } = collectAllowedIncidentRefs(action, integrity)
     if (roles.length === 0 || (activeRefs.length === 0 && overlapRefs.length === 0)) {
       return jsonErrorResponse(500, 'incident_ref_policy_not_configured')
@@ -698,10 +676,10 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
     pruneIntegrityIncidentReplay()
   }
 
-  const notifyUrl = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_URL || '').trim()
+  const notifyUrl = incidentAuth.notify.url
   if (notifyUrl) {
-    const notifyToken = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_TOKEN || '').trim()
-    const notifyHmac = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_HMAC || '').trim()
+    const notifyToken = incidentAuth.notify.token || ''
+    const notifyHmac = incidentAuth.notify.hmac || ''
     const bodyRaw = JSON.stringify(incident)
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -752,7 +730,7 @@ export async function handleRequest(request: Request): Promise<Response> {
   if (url.pathname.startsWith('/cache/forget')) {
     if (request.method !== 'POST') return respond('method', { status: 405 })
     if (integrityPaused) return policyPausedResponse()
-    const token = process.env.GATEWAY_FORGET_TOKEN
+    const token = readForgetToken()
     if (token) {
       const auth = request.headers.get('authorization') || ''
       const bearer = readBearerToken(request)
@@ -782,25 +760,23 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
   if (url.pathname === '/metrics') {
     markReadonlyFallback(integrityPaused)
-    const needBasic = !!(process.env.METRICS_BASIC_USER && process.env.METRICS_BASIC_PASS)
-    const needBearer = !!process.env.METRICS_BEARER_TOKEN
-    const mustGuard = process.env.GATEWAY_REQUIRE_METRICS_AUTH !== '0'
-    if (!needBasic && !needBearer && mustGuard) {
+    const metricsAuth = readMetricsAuthConfig()
+    if (!metricsAuth.needBasic && !metricsAuth.needBearer && metricsAuth.mustGuard) {
       return respond('metrics_auth_not_configured', { status: 500 })
     }
-    if (needBasic || needBearer || mustGuard) {
+    if (metricsAuth.needBasic || metricsAuth.needBearer || metricsAuth.mustGuard) {
       const auth = request.headers.get('authorization') || ''
       const bearer = readBearerToken(request)
       const alt = readHeaderToken(request, 'x-metrics-token')
       let authed = false
-      if (needBearer && auth) {
-        authed = tokenEquals(process.env.METRICS_BEARER_TOKEN || '', bearer)
+      if (metricsAuth.needBearer && auth) {
+        authed = tokenEquals(metricsAuth.bearerToken, bearer)
       }
-      if (needBearer && !authed && alt) {
-        authed = tokenEquals(process.env.METRICS_BEARER_TOKEN || '', alt)
+      if (metricsAuth.needBearer && !authed && alt) {
+        authed = tokenEquals(metricsAuth.bearerToken, alt)
       }
-      if (!authed && needBasic) {
-        authed = basicCredentialsMatch(process.env.METRICS_BASIC_USER || '', process.env.METRICS_BASIC_PASS || '', auth)
+      if (!authed && metricsAuth.needBasic) {
+        authed = basicCredentialsMatch(metricsAuth.basicUser, metricsAuth.basicPass, auth)
       }
       if (!authed) {
         inc('gateway_metrics_auth_blocked')
@@ -815,15 +791,15 @@ export async function handleRequest(request: Request): Promise<Response> {
     const limited = rateLimitResponse(`webhook:stripe:${requestIp(request)}`)
     if (limited) return limited
     return wrapWebhook('stripe', async () => {
+      const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
       const body = await request.text()
-      if (bodyExceedsLimit(body, readWebhookMaxBodyBytes())) {
+      if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
         return webhookBodyTooLargeResponse()
       }
-      const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), process.env.STRIPE_WEBHOOK_SECRET || '', parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE_MS || '300000', 10))
+      const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), webhookConfig.stripeSecret, webhookConfig.stripeToleranceMs)
       if (!ok) {
         inc('gateway_webhook_stripe_verify_fail')
-        const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
-        return respond('sig invalid', { status: shadow ? 202 : 401 })
+        return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
       }
       const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
       if (id && markAndCheck(`stripe:${id}`)) return respond('replay', { status: 200 })
@@ -836,17 +812,17 @@ export async function handleRequest(request: Request): Promise<Response> {
     const limited = rateLimitResponse(`webhook:paypal:${requestIp(request)}`)
     if (limited) return limited
     return wrapWebhook('paypal', async () => {
+      const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
       const body = await request.text()
-      if (bodyExceedsLimit(body, readWebhookMaxBodyBytes())) {
+      if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
         return webhookBodyTooLargeResponse()
       }
       const headers = request.headers
       const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
-      const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
+      const ok = await verifyPayPal(body, headers, webhookConfig.paypalWebhookSecret)
       if (!ok || !certOk) {
         inc('gateway_webhook_paypal_verify_fail')
-        const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
-        return respond('sig invalid', { status: shadow ? 202 : 401 })
+        return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
       }
       const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
       if (replayKey && markAndCheck(`paypal:${replayKey}`)) return respond('replay', { status: 200 })
@@ -859,16 +835,16 @@ export async function handleRequest(request: Request): Promise<Response> {
     const limited = rateLimitResponse(`webhook:gopay:${requestIp(request)}`)
     if (limited) return limited
     return wrapWebhook('gopay', async () => {
+      const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
       const body = await request.text()
-      if (bodyExceedsLimit(body, readWebhookMaxBodyBytes())) {
+      if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
         return webhookBodyTooLargeResponse()
       }
       const signatureHeader = request.headers.get('x-gopay-signature') || request.headers.get('gopay-signature')
-      const ok = verifyGoPayWebhook(body, signatureHeader, process.env.GOPAY_WEBHOOK_SECRET || '')
+      const ok = verifyGoPayWebhook(body, signatureHeader, webhookConfig.gopayWebhookSecret)
       if (!ok) {
         inc('gateway_webhook_gopay_verify_fail')
-        const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
-        return respond('sig invalid', { status: shadow ? 202 : 401 })
+        return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
       }
       const replayMode = getGoPayWebhookIdempotencyPolicy()
       const idempotency = classifyGoPayWebhookIdempotency(request.headers.get('x-gopay-event-id'), body, replayMode)
@@ -886,9 +862,7 @@ export async function handleRequest(request: Request): Promise<Response> {
 
   if (url.pathname === '/webhook/demo-forward') {
     if (integrityPaused) return policyPausedResponse()
-    const target = process.env.WORKER_NOTIFY_URL || 'http://localhost:8787/notify'
-    const token = process.env.WORKER_AUTH_TOKEN || process.env.WORKER_NOTIFY_TOKEN || 'test-notify'
-    const hmacSecret = process.env.WORKER_NOTIFY_HMAC || ''
+    const workerNotify = readWorkerNotifyConfig()
     const body = await request.text()
 
     // Pick breaker key by provider (query/header/body) with per-PSP overrides, fallback to generic.
@@ -904,23 +878,18 @@ export async function handleRequest(request: Request): Promise<Response> {
       return undefined
     })()
 
-    const breakerKey = (() => {
-      if (provider === 'stripe' && process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE) return process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE
-      if (provider === 'paypal' && process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL) return process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL
-      if (provider === 'gopay' && process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY) return process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY
-      return process.env.WORKER_NOTIFY_BREAKER_KEY || provider || 'gateway'
-    })()
+    const breakerKey = resolveWorkerNotifyBreakerKey(workerNotify, provider)
 
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${workerNotify.token}`,
       'content-type': 'application/json',
       'x-breaker-key': breakerKey,
     }
-    if (hmacSecret) {
-      const sig = crypto.createHmac('sha256', hmacSecret).update(body).digest('hex')
+    if (workerNotify.hmacSecret) {
+      const sig = crypto.createHmac('sha256', workerNotify.hmacSecret).update(body).digest('hex')
       headers['X-Signature'] = sig
     }
-    const resp = await fetch(target, { method: 'POST', headers, body })
+    const resp = await fetch(workerNotify.target, { method: 'POST', headers, body })
     if (resp.ok) return respond('forwarded', { status: 200 })
     return respond('notify_failed', { status: 502 })
   }

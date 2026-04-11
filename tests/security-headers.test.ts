@@ -49,7 +49,7 @@ describe('security headers helper', () => {
   })
 
   it('applies csp from env even when the response already has one', () => {
-    process.env.GATEWAY_SECURITY_HEADERS_CSP = "default-src 'self'"
+    process.env.GATEWAY_SECURITY_HEADERS_CSP = "  default-src 'self'  "
 
     const input = new Response('csp', {
       headers: {
@@ -59,5 +59,15 @@ describe('security headers helper', () => {
     const output = applySecurityHeaders(input)
 
     expect(output.headers.get('content-security-policy')).toBe("default-src 'self'")
+  })
+
+  it('treats any enable value other than exact 0 as enabled', () => {
+    process.env.GATEWAY_SECURITY_HEADERS_ENABLE = 'false'
+
+    const input = new Response('enabled', { headers: { 'x-frame-options': 'SAMEORIGIN' } })
+    const output = applySecurityHeaders(input)
+
+    expect(output.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(output.headers.get('x-frame-options')).toBe('SAMEORIGIN')
   })
 })

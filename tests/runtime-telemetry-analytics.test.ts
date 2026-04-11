@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { NormalizedAnalyticsEvent } from '../src/runtime/telemetry/analyticsEvent.js'
 import { validateAnalyticsEvent } from '../src/runtime/telemetry/analyticsPolicy.js'
 import { evaluateAnalyticsSink, sinkAnalyticsEvent } from '../src/runtime/telemetry/sink.js'
 
@@ -181,6 +182,81 @@ describe('runtime telemetry analytics policy helpers', () => {
       stored: false,
     })
     expect(emit).not.toHaveBeenCalled()
+    expect(store).not.toHaveBeenCalled()
+  })
+
+  it('drops analytics events with invalid timestamps before emission', async () => {
+    const event = {
+      name: 'gateway.request.accepted',
+      timestamp: 'not-a-real-timestamp',
+      tags: {
+        region: 'eu-central-1',
+      },
+      metadata: {},
+    } as NormalizedAnalyticsEvent
+
+    const emit = vi.fn()
+    const store = vi.fn()
+
+    const decision = evaluateAnalyticsSink(event, {
+      now: Date.parse('2026-01-01T00:10:00.000Z'),
+    })
+
+    expect(decision).toEqual({
+      ok: false,
+      action: 'drop',
+      reason: 'invalid-timestamp',
+      event,
+      retainedForMs: null,
+    })
+
+    const result = await sinkAnalyticsEvent(event, {
+      now: Date.parse('2026-01-01T00:10:00.000Z'),
+      emit,
+      store,
+    })
+
+    expect(result).toEqual({
+      ...decision,
+      emitted: false,
+      stored: false,
+    })
+    expect(emit).not.toHaveBeenCalled()
+    expect(store).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when emission rejects and never reaches the store handler', async () => {
+    const fixedNow = Date.parse('2026-01-01T00:10:00.000Z')
+    const validated = validateAnalyticsEvent(
+      {
+        event: 'gateway.request.accepted',
+        timestamp: '2026-01-01T00:00:00.000Z',
+        tags: {
+          region: 'eu-central-1',
+        },
+      },
+      {
+        now: fixedNow,
+      },
+    )
+
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+
+    const emit = vi.fn().mockRejectedValue(new Error('emit failed'))
+    const store = vi.fn()
+
+    await expect(
+      sinkAnalyticsEvent(validated.value, {
+        retainForMs: 15 * 60 * 1000,
+        now: fixedNow,
+        emit,
+        store,
+      }),
+    ).rejects.toThrow('emit failed')
+
+    expect(emit).toHaveBeenCalledTimes(1)
+    expect(emit).toHaveBeenCalledWith(validated.value)
     expect(store).not.toHaveBeenCalled()
   })
 })

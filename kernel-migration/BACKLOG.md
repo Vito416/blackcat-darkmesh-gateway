@@ -6,7 +6,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 - Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 
-- Gateway-side implementation is largely complete for the current migration slice; the remaining blockers are mostly AO-side registry/authority lifecycle work and the final decommission evidence.
+- Gateway-side implementation is complete for the current migration slice; the remaining blockers are AO-side registry/authority lifecycle work plus the final decommission evidence.
 - Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.
 - Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, strict manifest validation log, and drill artifact check JSON as one drill bundle.
 - Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness`, but the final state is still **automation complete, awaiting AO/manual proofs**.
@@ -31,29 +31,28 @@ This workstream is gateway-owned and can progress against the snapshot inventory
   - `src/runtime/telemetry/analyticsEvent.ts` + `src/runtime/telemetry/analyticsPolicy.ts`
 - [x] Do-not-port rules are documented for runtime in `libs/legacy/MIGRATION_PLAN.md`.
 - [x] Decommission conditions are now tracked per module in `libs/legacy/MIGRATION_PLAN.md`.
-- [~] `blackcat-config`: finish full config loader extraction (profile + secret source contract), then add decommission proof with passing config/profile tests.
+- [~] `blackcat-config`: keep the gateway-owned config loader/profile contract aligned with request-path usage, then capture decommission proof once the removal evidence is archived.
   - Progress note: typed config loader with source metadata now lives in `src/runtime/config/loader.ts` and is covered by `tests/runtime-config-loader.test.ts`.
-  - Progress note: loader wiring is now active in request-path modules (`src/templateApi.ts`, `src/handler.ts`, `src/webhooks.ts`, `src/ratelimit.ts`, `src/replay.ts`).
-  - Progress note: config loader contract now exists in `src/runtime/config/loader.ts` with deterministic typed parsing/result metadata and focused coverage in `tests/runtime-config-loader.test.ts`.
-- [~] `blackcat-core`: groundwork exists (`src/runtime/core/bytes.ts`, `tests/runtime-core-bytes.test.ts`); next is expanding `src/runtime/core/` primitive coverage and keeping template helper contract aligned with `tests/template-api.test.ts`.
+  - Progress note: loader wiring is active in request-path modules (`src/templateApi.ts`, `src/handler.ts`, `src/webhooks.ts`, `src/ratelimit.ts`, `src/replay.ts`).
+- [~] `blackcat-core`: groundwork exists (`src/runtime/core/bytes.ts`, `tests/runtime-core-bytes.test.ts`); next is expanding `src/runtime/core/` primitive coverage and keeping the template helper contract aligned with `tests/template-api.test.ts`.
   - Progress note: JSON-safe core parsing helpers landed in `src/runtime/core/json.ts` with focused tests in `tests/runtime-core-json.test.ts`.
-- [~] `blackcat-crypto`: expand from safe-compare helpers to full runtime crypto boundary (verification/signing key handling), then add module decommission proof.
+- [~] `blackcat-crypto`: expand from safe-compare and signature-ref helpers to the full runtime crypto boundary (verification/signing key handling), then add module decommission proof.
   - Progress note: signature-ref normalization/validation helpers now live in `src/runtime/crypto/signatureRefs.ts` with focused coverage in `tests/runtime-crypto-signatureRefs.test.ts`; the verification boundary stays independent from wallet/private-key logic.
-- [~] `blackcat-auth`: extend from HTTP auth helpers to gateway-owned token/policy service and remove remaining auth-policy drift points.
+- [~] `blackcat-auth`: keep the HTTP auth and role/signature policy helpers aligned with request-path modules, then capture the removal proof once the snapshot stays unused.
   - Progress note: shared role/signature-ref policy helpers now live in `src/runtime/auth/policy.ts` and are reused by template + integrity paths.
-- [~] `blackcat-sessions`: extend from replay store helper to full session lifecycle boundary (create/read/rotate/revoke) with deterministic failure semantics.
+- [~] `blackcat-sessions`: keep the replay store and session lifecycle boundary aligned with request-path usage, then capture removal proof once the snapshot is unused.
   - Progress note: lifecycle helper is now available in `src/runtime/sessions/lifecycle.ts` with create/read/rotate/revoke semantics and focused tests.
-- [~] `blackcat-auth-js`: client boundary exists under `src/clients/auth-sdk/client.ts` with focused tests (`tests/clients-auth-sdk.test.ts`); next is hardening + ownership docs before any decommission status change.
-  - Progress note: client hardening now enforces URL safety + optional host allowlist and deterministic response parsing behavior.
-- [~] `blackcat-crypto-js`: client boundary exists under `src/clients/crypto-sdk/client.ts` with focused tests (`tests/clients-crypto-sdk.test.ts`); next is hardening + ownership docs before any decommission status change.
+- [~] `blackcat-auth-js`: client boundary exists under `src/clients/auth-sdk/client.ts` with focused tests (`tests/clients-auth-sdk.test.ts`); next is ownership documentation and removal evidence before any decommission status change.
+  - Progress note: client hardening enforces URL safety + optional host allowlist and deterministic response parsing behavior.
+- [~] `blackcat-crypto-js`: client boundary exists under `src/clients/crypto-sdk/client.ts` with focused tests (`tests/clients-crypto-sdk.test.ts`); next is ownership documentation and removal evidence before any decommission status change.
   - Progress note: client boundary now enforces URL safety and optional host allowlists with deterministic body parsing.
   - Progress note: client hardening now enforces URL safety + optional host allowlist and deterministic response parsing behavior.
-- [~] `blackcat-mailing`: queue/transport groundwork exists (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`), but runtime wiring + focused queue/transport/delivery tests are still required before decommission.
+- [~] `blackcat-mailing`: queue/transport/delivery groundwork exists (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`, `src/runtime/mailing/delivery.ts`); the remaining open item is the final gateway-owned vs worker-owned dispatch decision before decommission.
   - Progress note: delivery outcome states, deterministic retry cadence/backoff, and a delivery orchestrator helper now exist (`src/runtime/mailing/delivery.ts`, `tests/runtime-mailing-delivery.test.ts`).
-- [~] `blackcat-gopay`: provider/validator helpers now have webhook groundwork (`src/runtime/payments/gopayWebhook.ts`, `/webhook/gopay` in `src/handler.ts`, `tests/handler-gopay-webhook.test.ts`), with idempotency adapter extraction now landed and duplicate/conflict test coverage in place.
-- [~] `blackcat-analytics`: sink/export boundary now has a runtime retention/drop helper; keep tightening policy coverage and record decommission evidence once accepted/dropped paths stay deterministic.
+- [~] `blackcat-gopay`: provider/validator helpers now have webhook verification and idempotency groundwork (`src/runtime/payments/gopayWebhook.ts`, `src/runtime/payments/webhookIdempotency.ts`, `/webhook/gopay` in `src/handler.ts`, `tests/handler-gopay-webhook.test.ts`); the remaining open item is the final payment-boundary decommission evidence.
+- [~] `blackcat-analytics`: sink/export boundary now has a runtime retention/drop helper and coverage; keep the final destination decision and decommission evidence aligned once accepted/dropped paths stay deterministic.
 - [~] `blackcat-installer`: keep installer logic ops-only (`ops/` + `scripts/`), and enforce zero request-path imports from installer snapshot.
-  - Progress note: runtime boundary check now exists via `scripts/check-installer-runtime-boundary.js` with coverage in `tests/check-installer-runtime-boundary.test.ts`.
+  - Progress note: runtime boundary check exists via `scripts/check-installer-runtime-boundary.js` with coverage in `tests/check-installer-runtime-boundary.test.ts`.
 
 ### Current wave next actions (core + client boundaries + mailing/GoPay)
 
@@ -63,15 +62,15 @@ This workstream is gateway-owned and can progress against the snapshot inventory
   - Add/retain focused tests for core byte helpers (`tests/runtime-core-bytes.test.ts`) and ensure template body-limit behavior stays covered in `tests/template-api.test.ts`.
   - Extend `libs/legacy/MIGRATION_PLAN.md` primitive mapping notes for every newly extracted core helper before decommission state changes.
 - [~] auth-js/crypto-js client boundaries:
-  - Harden and merge current client boundary stubs (`src/clients/auth-sdk/client.ts`, `src/clients/crypto-sdk/client.ts`) with explicit ownership notes and zero request-path runtime coupling.
+  - Harden and merge the current client boundaries (`src/clients/auth-sdk/client.ts`, `src/clients/crypto-sdk/client.ts`) with explicit ownership notes and zero request-path runtime coupling.
   - Keep and expand boundary contract coverage (`tests/clients-auth-sdk.test.ts`, `tests/clients-crypto-sdk.test.ts`) before any legacy JS snapshot removal decision.
   - Wire docs so map/plan/decommission files all point to the same boundary paths and status (`in progress`, not done).
 - [~] mailing queue + transport progression:
-  - Finalize runtime queue/transport boundary (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`) and document configuration contract (endpoint/token/timeout).
+  - Finalize the runtime queue/transport boundary (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`) and document the configuration contract (endpoint/token/timeout).
   - Keep and expand focused queue/transport coverage (`tests/runtime-mailing-transport.test.ts`) plus one delivery-path integration assertion.
   - Decide and document whether dispatch remains gateway-owned or delegated to worker-only path before decommissioning `blackcat-mailing`.
 - [~] GoPay webhook + idempotency adapter progression:
-  - Keep `/webhook/gopay` verification path on runtime-owned helper (`src/runtime/payments/gopayWebhook.ts`) with focused route tests (`tests/handler-gopay-webhook.test.ts`).
+  - Keep `/webhook/gopay` verification path on the runtime-owned helper (`src/runtime/payments/gopayWebhook.ts`) with focused route tests (`tests/handler-gopay-webhook.test.ts`).
   - [~] Extract provider-agnostic webhook idempotency adapter under `src/runtime/payments/` and use it for GoPay duplicate-write defense.
   - Added explicit idempotency tests (duplicate event id / missing id / conflicting payload) to keep GoPay migration evidence moving.
 

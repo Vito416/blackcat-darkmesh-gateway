@@ -1,3 +1,5 @@
+import { loadStringConfig } from './runtime/config/loader.js'
+
 const DEFAULT_SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
@@ -6,11 +8,15 @@ const DEFAULT_SECURITY_HEADERS = {
 } as const
 
 function isSecurityHeadersEnabled(): boolean {
-  return process.env.GATEWAY_SECURITY_HEADERS_ENABLE !== '0'
+  const loaded = loadStringConfig('GATEWAY_SECURITY_HEADERS_ENABLE')
+  if (!loaded.ok) return true
+  return loaded.value !== '0'
 }
 
 function readCspDirective(): string {
-  return (process.env.GATEWAY_SECURITY_HEADERS_CSP || '').trim()
+  const loaded = loadStringConfig('GATEWAY_SECURITY_HEADERS_CSP')
+  if (!loaded.ok) return ''
+  return typeof loaded.value === 'string' ? loaded.value.trim() : ''
 }
 
 export function applySecurityHeaders(response: Response): Response {

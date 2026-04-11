@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { loadStringConfig } from './runtime/config/loader.js'
 
 export type TemplateContractAction = {
   name: string
@@ -33,7 +34,12 @@ function asString(v: unknown): string {
 }
 
 function readContractPath(): string {
-  return resolve(process.env.GATEWAY_TEMPLATE_CONTRACT_FILE || DEFAULT_CONTRACT_PATH)
+  const loaded = loadStringConfig('GATEWAY_TEMPLATE_CONTRACT_FILE')
+  const contractPath =
+    loaded.ok && typeof loaded.value === 'string' && loaded.value.length > 0
+      ? loaded.value
+      : DEFAULT_CONTRACT_PATH
+  return resolve(contractPath)
 }
 
 function parseAction(v: unknown): TemplateContractAction | null {
@@ -111,4 +117,3 @@ export function resetTemplateContractCacheForTests() {
   cachePath = ''
   cacheContract = null
 }
-
