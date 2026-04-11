@@ -17,6 +17,7 @@
 - Decommission evidence log generator: `npm run ops:build-decommission-evidence-log -- --dir <drill-dir> --decision pending [--strict]` emits `decommission-evidence-log.md/.json` including manual-proof link fields.
 - Decommission readiness summary: `npm run ops:check-decommission-readiness -- --dir <drill-dir> --ao-gate kernel-migration/ao-dependency-gate.json [--strict] [--json]`.
 - AO gate evidence quality check: `npm run ops:check-ao-gate-evidence -- --file kernel-migration/ao-dependency-gate.json [--strict] [--json]`.
+- Decommission closeout one-shot: `node scripts/run-decommission-closeout.js --dir <drill-dir> --ao-gate kernel-migration/ao-dependency-gate.json [--operator ...] [--decision pending|go|no-go] [--strict]` assembles the final machine closeout log, but AO/manual proofs may still be open and must be recorded separately.
 - WEDOS profile readiness validator: `npm run ops:validate-wedos-readiness -- --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--strict]`.
 - AO dependency gate source: `kernel-migration/ao-dependency-gate.json` provides machine-readable P0.1/P1.1/P1.2 status for release gating.
 - AO dependency gate validation: `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json` checks gate structure and closed-check evidence references.

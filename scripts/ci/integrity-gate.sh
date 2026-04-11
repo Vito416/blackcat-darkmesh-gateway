@@ -64,6 +64,9 @@ fi
 if [[ -f tests/build-decommission-evidence-log.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
+if [[ -f tests/run-decommission-closeout.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
 if [[ -f tests/check-decommission-readiness.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
@@ -143,6 +146,11 @@ fi
 if [[ -f tests/build-decommission-evidence-log.test.ts ]]; then
   CURRENT_STEP="build-decommission-evidence-log"
   run_step "$CURRENT_STEP" npx vitest run tests/build-decommission-evidence-log.test.ts
+fi
+
+if [[ -f tests/run-decommission-closeout.test.ts ]]; then
+  CURRENT_STEP="run-decommission-closeout"
+  run_step "$CURRENT_STEP" npx vitest run tests/run-decommission-closeout.test.ts
 fi
 
 if [[ -f tests/check-decommission-readiness.test.ts ]]; then

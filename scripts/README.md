@@ -396,6 +396,26 @@ npm run ops:check-decommission-readiness -- \
   --json
 ```
 
+## Decommission closeout one-shot
+
+`scripts/run-decommission-closeout.js` is the final operator entrypoint for decommission closeout. It is intended to combine the machine checks, evidence log generation, and AO-gate/readiness summaries into one run. The automation can complete while AO checks or manual proofs are still pending, so treat this as the closeout bundle step rather than the final approval itself.
+
+Usage:
+```bash
+node scripts/run-decommission-closeout.js \
+  --dir ./tmp/release-drill \
+  --ao-gate ./kernel-migration/ao-dependency-gate.json \
+  --operator ops-user \
+  --decision pending \
+  --strict \
+  --json
+```
+
+Failure triage:
+- If the JSON summary still shows open AO checks, the automation is complete but the closeout is not yet decommission-ready.
+- If the manual-proof fields are empty, fill in the recovery, fallback, rollback, and approvals links before retrying.
+- If the drill artifacts are missing, re-run the release drill bundle and `check-decommission-readiness` first.
+
 ## WEDOS readiness validator
 
 `scripts/validate-wedos-readiness.js` validates constrained-hosting env settings against `wedos_small`, `wedos_medium`, or `diskless` budget envelopes.

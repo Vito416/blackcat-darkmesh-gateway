@@ -4,7 +4,7 @@ Do not archive/delete the old repo until all checks below are complete.
 
 Gateway-side implementation and test coverage are ahead of the AO-side registry/authority lifecycle, so the remaining deletion gate is still blocked on the AO API and rollout evidence.
 
-Machine-validated release evidence can now be generated, but it does not close the AO-side blockers by itself. Keep the AO registry/authority items open until the underlying APIs and lifecycle flows are actually complete.
+Machine-validated release evidence can now be generated, but it does not close the AO-side blockers by itself. The closeout automation is complete, awaiting AO/manual proofs, so keep the AO registry/authority items open until the underlying APIs and lifecycle flows are actually complete.
 
 ## A. Knowledge preservation
 
@@ -16,6 +16,7 @@ Machine-validated release evidence can now be generated, but it does not close t
 ## B. Functional parity
 
 - [ ] Trusted release registry logic is available via AO APIs.
+- [ ] Closeout automation is complete, awaiting AO/manual proofs (AO gate may still be open).
 - [ ] Revoke semantics are enforced by gateway verifier.
 - [x] Pause/degraded mode policy is enforced in gateway runtime.
 - [ ] Upgrade lifecycle equivalent (`propose/activate/cancel`) is implemented in AO/write flows.
@@ -112,6 +113,7 @@ Manual evidence still required separately:
 - [ ] Stakeholder sign-off: architecture (`1` documented approval, target state and decommission scope match the approved design).
 - [x] P0 integrity rollout complete with `npm test` + focused integrity tests green on the current branch.
 - [ ] Final migration summary committed in gateway + AO notes with date, scope, and rollback reference.
+- [ ] Final decommission closeout log recorded from `run-decommission-closeout` with manual proof links attached.
 - [ ] Rollback plan documented and tested in staging for at least one failure scenario.
 - [ ] No open P0/P1 migration blockers remain in backlog.
 - [ ] The old repo has been dry-run archived or mirrored with a verified restore path before deletion.
@@ -122,10 +124,11 @@ Latest machine verification snapshot (UTC: `2026-04-11`):
 - `npm run test:integrity-fast` → `SUCCESS 26/26 checks passed`
 - `npm test` → `51 files, 329 tests passed`
 
-Use one row per drill or proof item. Keep the artifact link stable and prefer the raw log, PR, or release note URL.
+Use one row per drill or proof item. Keep the artifact link stable and prefer the raw log, PR, or release note URL. The closeout automation can be complete even when AO/manual proofs are still pending; record that status explicitly in the log.
 
 | Drill name | Date/time UTC | Operator | Command/script | Artifact link | Status |
 | --- | --- | --- | --- | --- | --- |
+| Decommission closeout automation |  |  | `run-decommission-closeout` |  | automation complete, awaiting AO/manual proofs |
 |  |  |  |  |  | pending |
 |  |  |  |  |  | pending |
 |  |  |  |  |  | pending |

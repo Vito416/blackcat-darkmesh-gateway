@@ -320,6 +320,33 @@ Expected output:
 Artifacts:
 - none
 
+## 14) Run the decommission closeout one-shot
+
+Use the final closeout orchestrator after the drill bundle is complete. This step automates the machine checks and evidence-log assembly, but it does **not** close the AO gate by itself and it does **not** replace the remaining manual proofs.
+
+```bash
+node scripts/run-decommission-closeout.js \
+  --dir "$DRILL_DIR" \
+  --ao-gate kernel-migration/ao-dependency-gate.json \
+  --operator "$OPERATOR_NAME" \
+  --decision pending \
+  --strict \
+  --json
+```
+
+Expected output:
+- JSON closeout summary with AO gate status, readiness blockers, and manual-proof fields
+- `decommission-evidence-log.md` and `decommission-evidence-log.json` written into the drill directory
+- Exit code `0` only when the machine checks are clean; AO/manual proofs may still remain open
+
+Artifacts:
+- `$DRILL_DIR/decommission-evidence-log.md`
+- `$DRILL_DIR/decommission-evidence-log.json`
+
+Notes:
+- If the AO gate still has open required checks, treat the result as automation-complete-but-not-decommission-ready.
+- Manual evidence is still required for recovery drill proof, AO fallback proof, rollback proof, and stakeholder approval.
+
 ## Failure triage matrix
 
 | Failing script | Likely cause | First check |
@@ -340,6 +367,7 @@ Artifacts:
 | `ops:check-release-drill-artifacts` | Required drill artifacts are missing or release metadata is inconsistent across files | Inspect `release-drill-check.json`, then compare pack/readiness/manifest release fields and validation log |
 | `ops:build-release-evidence-ledger` | Final archive set is present but one or more strict ledger checks are not `ready` | Inspect `release-evidence-ledger.json` check flags and re-validate AO gate/manifest/readiness outputs |
 | `ops:check-decommission-readiness` | Final archive set or AO gate is not ready for decommission | Inspect the JSON blockers list; it names the missing artifacts, non-ready statuses, and open AO checks directly |
+| `ops:run-decommission-closeout` | AO gate is still open, required drill artifacts are missing, or manual-proof links are not supplied yet | Inspect the JSON summary, then re-run `ops:check-decommission-readiness` and `ops:check-ao-gate-evidence` before filling the manual-proof fields |
 
 ## Final sign-off mapping
 
@@ -358,5 +386,6 @@ Artifacts:
 
 - Confirm the release pack status is `ready`
 - Confirm the readiness check returns exit code `0`
+- Confirm the decommission closeout log says the automation is complete, but the AO gate and manual proofs are still tracked separately if they have not been closed yet
 - Attach the evidence bundle, archive manifest, consistency report, release pack, checklist, and release evidence ledger to the release review
 - Record the exact bundle paths in the release note

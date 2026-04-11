@@ -9,8 +9,8 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Gateway-side implementation is largely complete for the current migration slice; the remaining blockers are mostly AO-side registry/authority lifecycle work and the final decommission evidence.
 - Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.
 - Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, strict manifest validation log, and drill artifact check JSON as one drill bundle.
-- Closeout helpers now include `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness` for repeatable operator evidence and pre-decommission gating.
-- Treat that output as machine-checked evidence only; manual evidence still needs separate drill logs, rollback proof, and human sign-off before decommission.
+- Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness`, but the final state is still **automation complete, awaiting AO/manual proofs**.
+- Treat that output as machine-checked evidence only; AO gate closure and manual evidence still need separate drill logs, rollback proof, and human sign-off before decommission.
 
 ## This week execution
 
@@ -227,6 +227,8 @@ Progress notes:
 
 Use this checklist before merge/release sign-off.
 
+- Automation complete, awaiting AO/manual proofs: the closeout helpers can build the final evidence bundle, but AO gate closure and manual proof links still need to be recorded before decommission sign-off.
+
 - [ ] AO registry/authority lifecycle items are complete (`publish/revoke/query/pause`, `root/upgrade/emergency/reporter`, audit sequence surface).
 - [ ] `kernel-migration/ao-dependency-gate.json` required checks are updated to `closed` with evidence links.
 - [ ] Gateway `main` CI is green on full tests, integrity gate, and smoke jobs.
@@ -236,7 +238,7 @@ Use this checklist before merge/release sign-off.
   - [ ] `GATEWAY_RESOURCE_PROFILE` (optional, `wedos_small|wedos_medium|diskless`)
   - [ ] `GATEWAY_INTEGRITY_STATE_TOKEN` secret (required unless `CONSISTENCY_ALLOW_ANON=1`)
 - [ ] Latest consistency-smoke artifacts are archived (`consistency-matrix.json`, drift report `.md`, drift summary `.json`).
-- [ ] Latest machine-validated release evidence is archived (`release-evidence-pack.md`, `release-evidence-pack.json`, `build-release-signoff-checklist` output, `check-release-readiness --json` output, `ao-dependency-gate.validation.txt`, drift report `.md`, drift summary `.json`, `release-drill-manifest.json`, `release-drill-check.json`, `release-evidence-ledger.md`, `release-evidence-ledger.json`).
+- [ ] Latest machine-validated release evidence is archived (`release-evidence-pack.md`, `release-evidence-pack.json`, `build-release-signoff-checklist` output, `check-release-readiness --json` output, `ao-dependency-gate.validation.txt`, drift report `.md`, drift summary `.json`, `release-drill-manifest.json`, `release-drill-check.json`, `release-evidence-ledger.md`, `release-evidence-ledger.json`) and the closeout log shows automation complete, awaiting AO/manual proofs.
 - [ ] Preferred operator drill path is `scripts/run-release-drill.js`; archive the matrix, drift report/summary, `ao-dependency-gate.validation.txt`, release pack, signoff checklist, readiness JSON, `release-drill-manifest.json`, `release-drill-check.json`, and release evidence ledger (`.md` + `.json`) from one run.
 - [ ] Archived drill bundle includes `release-drill-manifest.json`, strict validation output, `release-drill-check.json`, and release evidence ledger (`release-evidence-ledger.md` + `release-evidence-ledger.json`).
 - [ ] Latest evidence-dry-run artifact bundle is archived and strict bundle checks are passing.
