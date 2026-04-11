@@ -235,9 +235,9 @@ Use this checklist before merge/release sign-off.
   - [ ] `GATEWAY_RESOURCE_PROFILE` (optional, `wedos_small|wedos_medium|diskless`)
   - [ ] `GATEWAY_INTEGRITY_STATE_TOKEN` secret (required unless `CONSISTENCY_ALLOW_ANON=1`)
 - [ ] Latest consistency-smoke artifacts are archived (`consistency-matrix.json`, drift report `.md`, drift summary `.json`).
-- [ ] Latest machine-validated release evidence is archived (`release-evidence-pack.md`, `release-evidence-pack.json`, `build-release-signoff-checklist` output, `check-release-readiness --json` output, `ao-dependency-gate.validation.txt`, drift report `.md`, drift summary `.json`, `release-drill-manifest.json`, `release-drill-check.json`).
-- [ ] Preferred operator drill path is `scripts/run-release-drill.js`; archive the matrix, drift report/summary, `ao-dependency-gate.validation.txt`, release pack, signoff checklist, readiness JSON, `release-drill-manifest.json`, and `release-drill-check.json` from one run.
-- [ ] Archived drill bundle includes `release-drill-manifest.json`, strict validation output, and `release-drill-check.json`.
+- [ ] Latest machine-validated release evidence is archived (`release-evidence-pack.md`, `release-evidence-pack.json`, `build-release-signoff-checklist` output, `check-release-readiness --json` output, `ao-dependency-gate.validation.txt`, drift report `.md`, drift summary `.json`, `release-drill-manifest.json`, `release-drill-check.json`, `release-evidence-ledger.md`, `release-evidence-ledger.json`).
+- [ ] Preferred operator drill path is `scripts/run-release-drill.js`; archive the matrix, drift report/summary, `ao-dependency-gate.validation.txt`, release pack, signoff checklist, readiness JSON, `release-drill-manifest.json`, `release-drill-check.json`, and release evidence ledger (`.md` + `.json`) from one run.
+- [ ] Archived drill bundle includes `release-drill-manifest.json`, strict validation output, `release-drill-check.json`, and release evidence ledger (`release-evidence-ledger.md` + `release-evidence-ledger.json`).
 - [ ] Latest evidence-dry-run artifact bundle is archived and strict bundle checks are passing.
 - [ ] Manual evidence is archived separately from machine validation: recovery drill timestamp, AO fallback drill proof, rollback proof, and stakeholder sign-off.
 - [ ] Recovery drill timestamp, AO fallback drill proof, and rollback proof are linked in release notes.

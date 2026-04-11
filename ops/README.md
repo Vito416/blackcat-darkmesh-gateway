@@ -13,6 +13,7 @@
 - Release sign-off helper: `npm run ops:build-release-evidence-pack` consolidates consistency + evidence artifacts into one release pack.
 - Release-drill archive manifest: `npm run ops:build-release-drill-manifest -- --dir <drill-dir> --out <release-drill-manifest.json>` plus `npm run ops:validate-release-drill-manifest -- --file <release-drill-manifest.json> --strict` writes and validates the machine-checked drill archive manifest used in sign-off.
 - Release-drill artifact completeness check: `npm run ops:check-release-drill-artifacts -- --dir <drill-dir> --strict --json` verifies the final mandatory artifact set and strict cross-file consistency.
+- Release evidence ledger generator: `npm run ops:build-release-evidence-ledger -- --dir <drill-dir> --decision pending [--strict]` emits `release-evidence-ledger.md/.json` with artifact hashes and overall ready/blocked status.
 - AO dependency gate source: `kernel-migration/ao-dependency-gate.json` provides machine-readable P0.1/P1.1/P1.2 status for release gating.
 - AO dependency gate validation: `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json` checks gate structure and closed-check evidence references.
 - AO dependency gate validation artifact: archive `ao-dependency-gate.validation.txt` from drills as the machine output proof for gate checks.
@@ -39,7 +40,7 @@
 - Checkpoint age: compare `gateway_integrity_checkpoint_age_seconds` against your max-age policy; stale checkpoints should be treated as absent.
 - Scheduled CI consistency smoke: set repo variable `CONSISTENCY_URLS` (optional `CONSISTENCY_MODE`, `GATEWAY_RESOURCE_PROFILE`) and secret `GATEWAY_INTEGRITY_STATE_TOKEN` when state auth is enabled.
 - Scheduled consistency preflight: CI now fails fast on missing/invalid `CONSISTENCY_*` config and reports issues in job summary; for public state endpoints only, set `CONSISTENCY_ALLOW_ANON=1`.
-- CI release artifact: workflow job `release-evidence-pack` now downloads consistency/evidence artifacts and uploads `release-evidence-pack` (`.md` + `.json`) for sign-off.
+- CI release artifact: workflow job `release-evidence-pack` now downloads consistency/evidence artifacts and uploads the sign-off bundle (`release-evidence-pack`, AO gate validation, drill manifest/check, and release evidence ledger).
 
 ## Release drill flow
 See `ops/release-drill-runbook.md` for the canonical step-by-step release drill, expected artifacts, and triage matrix.

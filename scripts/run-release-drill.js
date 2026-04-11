@@ -29,6 +29,7 @@ const STEP_SCRIPTS = {
   buildDrillManifest: resolve(SCRIPT_DIR, 'build-release-drill-manifest.js'),
   validateDrillManifest: resolve(SCRIPT_DIR, 'validate-release-drill-manifest.js'),
   checkDrillArtifacts: resolve(SCRIPT_DIR, 'check-release-drill-artifacts.js'),
+  buildLedger: resolve(SCRIPT_DIR, 'build-release-evidence-ledger.js'),
 }
 
 class CliError extends Error {
@@ -74,6 +75,7 @@ function usageText() {
     '  11) build release drill manifest',
     '  12) validate release drill manifest',
     '  13) check release drill artifacts',
+    '  14) build release evidence ledger',
     '',
     'Exit codes:',
     '  0   success',
@@ -224,6 +226,8 @@ function buildDrillPlan({
   const drillManifestJson = join(resolvedOutDir, 'release-drill-manifest.json')
   const drillManifestValidation = join(resolvedOutDir, 'release-drill-manifest.validation.txt')
   const drillCheckJson = join(resolvedOutDir, 'release-drill-check.json')
+  const ledgerMd = join(resolvedOutDir, 'release-evidence-ledger.md')
+  const ledgerJson = join(resolvedOutDir, 'release-evidence-ledger.json')
 
   const preflightArgs = ['--urls', urlsCsv, '--mode', mode, '--profile', profile]
   if (isNonEmptyString(token)) preflightArgs.push('--token', token)
@@ -407,6 +411,21 @@ function buildDrillPlan({
       displayArgs: ['--dir', resolvedOutDir, '--strict', '--json'],
       outputFile: drillCheckJson,
     },
+    {
+      id: 'build-ledger',
+      index: 14,
+      label: 'build release evidence ledger',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.buildLedger,
+      displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.buildLedger),
+      args: strict
+        ? ['--dir', resolvedOutDir, '--decision', 'pending', '--out', ledgerMd, '--json-out', ledgerJson, '--strict']
+        : ['--dir', resolvedOutDir, '--decision', 'pending', '--out', ledgerMd, '--json-out', ledgerJson],
+      displayArgs: strict
+        ? ['--dir', resolvedOutDir, '--decision', 'pending', '--out', ledgerMd, '--json-out', ledgerJson, '--strict']
+        : ['--dir', resolvedOutDir, '--decision', 'pending', '--out', ledgerMd, '--json-out', ledgerJson],
+      outputFiles: [ledgerMd, ledgerJson],
+    },
   ]
 
   return {
@@ -432,6 +451,8 @@ function buildDrillPlan({
       drillManifestJson,
       drillManifestValidation,
       drillCheckJson,
+      ledgerMd,
+      ledgerJson,
       aoGateFile: DEFAULT_AO_GATE_FILE,
     },
     steps,
@@ -583,6 +604,10 @@ function runReleaseDrill(options = {}, deps = {}) {
       if (step.id === 'build-drill-manifest') ensureFile(plan.artifacts.drillManifestJson, step.label)
       if (step.id === 'validate-drill-manifest') ensureFile(plan.artifacts.drillManifestValidation, step.label)
       if (step.id === 'check-drill-artifacts') ensureFile(plan.artifacts.drillCheckJson, step.label)
+      if (step.id === 'build-ledger') {
+        ensureFile(plan.artifacts.ledgerMd, step.label)
+        ensureFile(plan.artifacts.ledgerJson, step.label)
+      }
     } catch (err) {
       stderr.push(`${stepLine} failed: ${err instanceof Error ? err.message : String(err)}\n`)
       return { exitCode: 3, stdout: stdout.join(''), stderr: stderr.join(''), plan, artifacts: plan.artifacts }

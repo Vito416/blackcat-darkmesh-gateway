@@ -58,6 +58,9 @@ fi
 if [[ -f tests/check-release-drill-artifacts.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
+if [[ -f tests/build-release-evidence-ledger.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
 
 echo "[integrity-gate] starting ${STEPS_TOTAL} checks"
 
@@ -118,6 +121,11 @@ fi
 if [[ -f tests/check-release-drill-artifacts.test.ts ]]; then
   CURRENT_STEP="check-release-drill-artifacts"
   run_step "$CURRENT_STEP" npx vitest run tests/check-release-drill-artifacts.test.ts
+fi
+
+if [[ -f tests/build-release-evidence-ledger.test.ts ]]; then
+  CURRENT_STEP="build-release-evidence-ledger"
+  run_step "$CURRENT_STEP" npx vitest run tests/build-release-evidence-ledger.test.ts
 fi
 
 CURRENT_STEP="fetch-control"

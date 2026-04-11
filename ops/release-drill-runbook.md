@@ -276,6 +276,31 @@ Expected output:
 Artifacts:
 - `$DRILL_DIR/release-drill-check.json`
 
+## 12) Build release evidence ledger
+
+Generate the final machine-readable release ledger from the completed drill directory.
+
+```bash
+LEDGER_MD="$DRILL_DIR/release-evidence-ledger.md"
+LEDGER_JSON="$DRILL_DIR/release-evidence-ledger.json"
+
+npm run ops:build-release-evidence-ledger -- \
+  --dir "$DRILL_DIR" \
+  --decision pending \
+  --out "$LEDGER_MD" \
+  --json-out "$LEDGER_JSON" \
+  --strict
+```
+
+Expected output:
+- `release-evidence-ledger.md` and `release-evidence-ledger.json` are written
+- JSON includes `overallStatus`, per-check booleans, and SHA-256 hashes for archived artifacts
+- Exit code `0` only when strict ledger checks resolve to `ready`
+
+Artifacts:
+- `$DRILL_DIR/release-evidence-ledger.md`
+- `$DRILL_DIR/release-evidence-ledger.json`
+
 ## Failure triage matrix
 
 | Failing script | Likely cause | First check |
@@ -294,6 +319,7 @@ Artifacts:
 | `ops:build-release-drill-manifest` | Drill artifact directory is incomplete or release/status cannot be derived | Verify all required drill artifacts exist in `$DRILL_DIR` |
 | `ops:validate-release-drill-manifest` | Manifest schema/content mismatch in strict mode | Inspect path uniqueness, sha256 format/casing, and artifact metadata |
 | `ops:check-release-drill-artifacts` | Required drill artifacts are missing or release metadata is inconsistent across files | Inspect `release-drill-check.json`, then compare pack/readiness/manifest release fields and validation log |
+| `ops:build-release-evidence-ledger` | Final archive set is present but one or more strict ledger checks are not `ready` | Inspect `release-evidence-ledger.json` check flags and re-validate AO gate/manifest/readiness outputs |
 
 ## Final sign-off mapping
 
@@ -304,6 +330,7 @@ Artifacts:
 | Confirm AO dependency gate is acceptable | `ops:validate-ao-dependency-gate` | `kernel-migration/ao-dependency-gate.json` with all required checks closed + `$DRILL_DIR/ao-dependency-gate.validation.txt` |
 | Confirm archive manifest is acceptable | `ops:build-release-drill-manifest`, `ops:validate-release-drill-manifest` | `$DRILL_DIR/release-drill-manifest.json` and `$DRILL_DIR/release-drill-manifest.validation.txt` |
 | Confirm drill artifact completeness is acceptable | `ops:check-release-drill-artifacts` | `$DRILL_DIR/release-drill-check.json` |
+| Confirm final machine ledger is acceptable | `ops:build-release-evidence-ledger` | `$DRILL_DIR/release-evidence-ledger.md`, `$DRILL_DIR/release-evidence-ledger.json` |
 | Review blockers and warnings | `ops:build-release-evidence-pack`, `ops:check-release-readiness` | `release-evidence-pack.md`, `release-evidence-pack.json`, readiness output, and drill manifest artifacts |
 | Produce the operator checklist | `ops:build-release-signoff-checklist` | `release-signoff-checklist.md` |
 
@@ -311,5 +338,5 @@ Artifacts:
 
 - Confirm the release pack status is `ready`
 - Confirm the readiness check returns exit code `0`
-- Attach the evidence bundle, archive manifest, consistency report, release pack, and checklist to the release review
+- Attach the evidence bundle, archive manifest, consistency report, release pack, checklist, and release evidence ledger to the release review
 - Record the exact bundle paths in the release note

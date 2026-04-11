@@ -345,6 +345,14 @@ jobs:
           else
             echo "ops:check-release-drill-artifacts is not defined in package.json; skipping help check."
           fi
+      - name: "Help: build release evidence ledger"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:build-release-evidence-ledger'] ? 0 : 1)"; then
+            npm run ops:build-release-evidence-ledger -- --help
+          else
+            echo "ops:build-release-evidence-ledger is not defined in package.json; skipping help check."
+          fi
       - name: "Help: validate AO dependency gate"
         run: npm run ops:validate-ao-dependency-gate -- --help
       - name: "Help: export consistency report"
@@ -519,6 +527,8 @@ jobs:
       RELEASE_DRILL_MANIFEST_JSON: ${{ runner.temp }}/release-pack/release-drill-manifest.json
       RELEASE_DRILL_MANIFEST_VALIDATE: ${{ runner.temp }}/release-pack/release-drill-manifest.validation.txt
       RELEASE_DRILL_CHECK_JSON: ${{ runner.temp }}/release-pack/release-drill-check.json
+      RELEASE_LEDGER_MD: ${{ runner.temp }}/release-pack/release-evidence-ledger.md
+      RELEASE_LEDGER_JSON: ${{ runner.temp }}/release-pack/release-evidence-ledger.json
       RELEASE_SIGNOFF_MD: ${{ runner.temp }}/release-pack/release-signoff-checklist.md
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -641,12 +651,15 @@ jobs:
             if node "$GITHUB_WORKSPACE/scripts/validate-release-drill-manifest.js" --file "$RELEASE_DRILL_MANIFEST_JSON" --strict >"$manifest_validate_log" 2>&1; then
               manifest_validate_status="validated"
               cp "$manifest_validate_log" "$RELEASE_DRILL_MANIFEST_VALIDATE"
+              cp "$RELEASE_DRILL_MANIFEST_JSON" "$RELEASE_PACK_WORKDIR/release-drill-manifest.json"
+              cp "$RELEASE_DRILL_MANIFEST_VALIDATE" "$RELEASE_PACK_WORKDIR/release-drill-manifest.validation.txt"
             else
               cat "$manifest_validate_log" >&2
               exit 1
             fi
           elif [ "$manifest_build_status" = "built" ] && [ -f "$RELEASE_DRILL_MANIFEST_JSON" ]; then
             manifest_validate_status="unavailable"
+            cp "$RELEASE_DRILL_MANIFEST_JSON" "$RELEASE_PACK_WORKDIR/release-drill-manifest.json"
           fi
 
           {
@@ -673,15 +686,32 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f "$GITHUB_WORKSPACE/scripts/check-release-drill-artifacts.js" ]; then
+            work_check_json="$RELEASE_PACK_WORKDIR/release-drill-check.json"
             node "$GITHUB_WORKSPACE/scripts/check-release-drill-artifacts.js" \
               --dir "$RELEASE_PACK_WORKDIR" \
               --strict \
-              --json > "$RELEASE_DRILL_CHECK_JSON"
+              --json > "$work_check_json"
+            cp "$work_check_json" "$RELEASE_DRILL_CHECK_JSON"
             node -e "const fs=require('node:fs');const p=process.env.RELEASE_DRILL_CHECK_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Release drill artifact check');console.log('');console.log('- Result: '+(d.ok?'OK':'ERROR'));console.log('- Missing: '+d.missing.length);console.log('- Issues: '+d.issues.length);" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "### Release drill artifact check" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "- Result: skipped because ops:check-release-drill-artifacts is not defined." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Build release evidence ledger
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/build-release-evidence-ledger.js" ]; then
+            node "$GITHUB_WORKSPACE/scripts/build-release-evidence-ledger.js" \
+              --dir "$RELEASE_PACK_WORKDIR" \
+              --decision pending \
+              --out "$RELEASE_LEDGER_MD" \
+              --json-out "$RELEASE_LEDGER_JSON"
+            node -e "const fs=require('node:fs');const p=process.env.RELEASE_LEDGER_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Release evidence ledger');console.log('');console.log('- Overall status: '+String(d.overallStatus||'unknown'));console.log('- Decision: '+String(d.decision||'pending'));console.log('- Artifacts hashed: '+(Array.isArray(d.artifacts)?d.artifacts.length:0));" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Release evidence ledger" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: skipped because ops:build-release-evidence-ledger is not defined." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Append release pack summary
         if: always()
@@ -699,6 +729,14 @@ jobs:
           else
             echo "Release sign-off checklist was not generated." >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Append release evidence ledger
+        if: always()
+        run: |
+          if [ -f "$RELEASE_LEDGER_MD" ]; then
+            cat "$RELEASE_LEDGER_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Release evidence ledger was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Upload release evidence pack
         if: always()
         uses: actions/upload-artifact@v4
@@ -714,3 +752,5 @@ jobs:
             ${{ env.RELEASE_DRILL_MANIFEST_JSON }}
             ${{ env.RELEASE_DRILL_MANIFEST_VALIDATE }}
             ${{ env.RELEASE_DRILL_CHECK_JSON }}
+            ${{ env.RELEASE_LEDGER_MD }}
+            ${{ env.RELEASE_LEDGER_JSON }}

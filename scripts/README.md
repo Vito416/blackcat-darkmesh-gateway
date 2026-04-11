@@ -47,7 +47,7 @@ GATEWAY_INTEGRITY_STATE_TOKEN=state-secret \
 It runs build first, then executes the integrity-focused Vitest slices in a fixed order, and finishes with a single success summary line:
 
 ```text
-[integrity-gate] SUCCESS 19/19 checks passed
+[integrity-gate] SUCCESS <N>/<N> checks passed
 ```
 
 Usage:
@@ -281,7 +281,7 @@ npm run ops:check-release-readiness -- \
 
 ## One-shot release drill
 
-`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation output, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, strict manifest validation output, and strict artifact-set validation.
+`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation output, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, strict manifest validation output, strict artifact-set validation, and final release-evidence ledger generation.
 
 Usage:
 ```bash
@@ -327,6 +327,18 @@ npm run ops:check-release-drill-artifacts -- \
   --dir ./tmp/release-drill \
   --strict \
   --json
+```
+
+## Release evidence ledger
+
+`scripts/build-release-evidence-ledger.js` creates a final release ledger (`.md` + `.json`) from a completed drill directory, hashes archived artifacts, and derives an overall ready/blocked status.
+
+Usage:
+```bash
+npm run ops:build-release-evidence-ledger -- \
+  --dir ./tmp/release-drill \
+  --decision pending \
+  --strict
 ```
 
 ## Integrity attestation artifact
