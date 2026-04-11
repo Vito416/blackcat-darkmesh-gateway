@@ -2,6 +2,8 @@ import type { MailTransportRequest } from './transport.js'
 
 export type MailQueueItem = MailTransportRequest & {
   queuedAt: string
+  attempts?: number
+  nextAttemptAt?: string
 }
 
 export type MailRetrySchedule = {
@@ -46,7 +48,7 @@ export function createMailQueue(maxItems: number): MailQueue {
 
 export function enqueueMail(
   queue: MailQueue,
-  request: MailTransportRequest,
+  request: MailTransportRequest & Partial<Pick<MailQueueItem, 'attempts' | 'nextAttemptAt'>>,
   queuedAt = new Date().toISOString(),
 ): MailQueueItem {
   const item: MailQueueItem = {

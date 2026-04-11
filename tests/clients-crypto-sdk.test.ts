@@ -8,6 +8,32 @@ describe('crypto sdk client boundary', () => {
     vi.restoreAllMocks()
   })
 
+  it('rejects insecure and credentialed base urls', () => {
+    expect(() =>
+      createCryptoSdkClient({
+        baseUrl: 'http://crypto.example',
+        fetchImpl: vi.fn() as unknown as typeof fetch,
+      }),
+    ).toThrow('crypto sdk client baseUrl must use https')
+
+    expect(() =>
+      createCryptoSdkClient({
+        baseUrl: 'https://user:pass@crypto.example',
+        fetchImpl: vi.fn() as unknown as typeof fetch,
+      }),
+    ).toThrow('crypto sdk client baseUrl must not include credentials')
+  })
+
+  it('enforces an optional host allowlist at construction time', () => {
+    expect(() =>
+      createCryptoSdkClient({
+        baseUrl: 'https://blocked.example',
+        allowedHosts: ['allowed.example'],
+        fetchImpl: vi.fn() as unknown as typeof fetch,
+      }),
+    ).toThrow('crypto sdk client baseUrl host is not in the allowlist')
+  })
+
   it('posts verify requests with bearer auth and returns response body', async () => {
     const fetchSpy = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ verified: true }), {
@@ -38,6 +64,26 @@ describe('crypto sdk client boundary', () => {
     expect(JSON.parse(String(verifyInit.body))).toEqual({
       envelope: { id: 'env-1' },
       context: 'checkout',
+    })
+  })
+
+  it('keeps response body parsing deterministic for non-json responses', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response('{"verified":true}', {
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    )
+
+    const client = createCryptoSdkClient({
+      baseUrl: 'https://crypto.example',
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    })
+
+    await expect(client.verifyEnvelope({ envelope: { id: 'env-plain' } })).resolves.toEqual({
+      ok: true,
+      status: 200,
+      body: '{"verified":true}',
     })
   })
 

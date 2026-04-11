@@ -20,6 +20,7 @@
     "ops:validate-template-backend-contract": "node scripts/validate-template-backend-contract.js",
     "ops:validate-legacy-manifest": "node scripts/validate-legacy-manifest.js",
     "ops:check-legacy-runtime-boundary": "node scripts/check-legacy-runtime-boundary.js",
+    "ops:check-installer-runtime-boundary": "node scripts/check-installer-runtime-boundary.js",
     "ops:audit-legacy-risk": "node scripts/audit-legacy-risk.js",
     "ops:build-legacy-migration-matrix": "node scripts/build-legacy-migration-matrix.js",
     "ops:build-release-evidence-pack": "node scripts/build-release-evidence-pack.js",

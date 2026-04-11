@@ -21,7 +21,7 @@ type MailTransportOptions = {
   fetchImpl?: typeof fetch
 }
 
-type MailTransport = {
+export type MailTransport = {
   send: (request: MailTransportRequest) => Promise<MailTransportResult>
 }
 

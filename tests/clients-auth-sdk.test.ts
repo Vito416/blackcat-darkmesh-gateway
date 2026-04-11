@@ -8,6 +8,47 @@ describe('auth sdk client boundary', () => {
     vi.restoreAllMocks()
   })
 
+  it('rejects unsafe base urls before creating a client', () => {
+    const fetchSpy = vi.fn()
+
+    expect(() =>
+      createAuthSdkClient({
+        baseUrl: 'javascript:alert(1)',
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      }),
+    ).toThrow('auth sdk client baseUrl must use http or https')
+
+    expect(() =>
+      createAuthSdkClient({
+        baseUrl: 'https://user:pass@auth.example',
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      }),
+    ).toThrow('auth sdk client baseUrl must not include credentials')
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('enforces an optional host allowlist on the configured base url', () => {
+    const fetchSpy = vi.fn()
+
+    expect(() =>
+      createAuthSdkClient({
+        baseUrl: 'https://auth.example/api',
+        hostAllowlist: ['api.example', 'allowed.example:443'],
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      }),
+    ).toThrow('auth sdk client baseUrl host is not allowed: auth.example')
+
+    const client = createAuthSdkClient({
+      baseUrl: 'https://auth.example/api',
+      hostAllowlist: ['auth.example'],
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    })
+
+    expect(client).toBeDefined()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
   it('joins urls strictly and forwards auth headers on success', async () => {
     const fetchSpy = vi
       .fn()
@@ -50,6 +91,40 @@ describe('auth sdk client boundary', () => {
     expect(new Headers(introspectInit.headers).get('content-type')).toBe('application/json')
     expect(new Headers(introspectInit.headers).get('authorization')).toBe('Bearer gateway-token')
     expect(JSON.parse(String(introspectInit.body))).toEqual({ token: 'token-123' })
+  })
+
+  it('returns json bodies only when the response content type is json', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json; charset=utf-8' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('plain upstream text', {
+          status: 200,
+          headers: { 'content-type': 'text/plain; charset=utf-8' },
+        }),
+      )
+
+    const client = createAuthSdkClient({
+      baseUrl: 'https://auth.example',
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    })
+
+    await expect(client.introspectToken('token-123')).resolves.toEqual({
+      ok: true,
+      status: 200,
+      body: { ok: true },
+    })
+
+    await expect(client.introspectToken('token-456')).resolves.toEqual({
+      ok: true,
+      status: 200,
+      body: 'plain upstream text',
+    })
   })
 
   it('returns a stable timeout error shape when fetch aborts', async () => {

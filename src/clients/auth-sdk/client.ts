@@ -3,6 +3,7 @@ export type AuthSdkClientOptions = {
   token?: string
   timeoutMs?: number
   fetchImpl?: typeof fetch
+  hostAllowlist?: readonly string[]
 }
 
 type AuthSdkResult = {
@@ -23,6 +24,54 @@ function normalizeToken(value: string | undefined): string | undefined {
   return normalized.length > 0 ? normalized : undefined
 }
 
+function normalizeBaseUrl(baseUrlRaw: string): URL {
+  const trimmed = baseUrlRaw.trim()
+  if (!trimmed) {
+    throw new Error('auth sdk client baseUrl is required')
+  }
+
+  let baseUrl: URL
+  try {
+    baseUrl = new URL(trimmed)
+  } catch {
+    throw new Error('auth sdk client baseUrl must be a valid URL')
+  }
+
+  if (baseUrl.protocol !== 'http:' && baseUrl.protocol !== 'https:') {
+    throw new Error('auth sdk client baseUrl must use http or https')
+  }
+
+  if (baseUrl.username || baseUrl.password) {
+    throw new Error('auth sdk client baseUrl must not include credentials')
+  }
+
+  if (!baseUrl.hostname) {
+    throw new Error('auth sdk client baseUrl host is required')
+  }
+
+  return baseUrl
+}
+
+function normalizeHostAllowlist(hostAllowlist?: readonly string[]): string[] | undefined {
+  if (!hostAllowlist?.length) return undefined
+
+  const normalized = hostAllowlist
+    .map((host) => (typeof host === 'string' ? host.trim().toLowerCase() : ''))
+    .filter((host) => host.length > 0)
+
+  return normalized.length > 0 ? [...new Set(normalized)] : undefined
+}
+
+function validateHostAllowlist(baseUrl: URL, hostAllowlist?: readonly string[]): void {
+  const normalizedAllowlist = normalizeHostAllowlist(hostAllowlist)
+  if (!normalizedAllowlist) return
+
+  const host = baseUrl.host.toLowerCase()
+  if (normalizedAllowlist.includes(host)) return
+
+  throw new Error(`auth sdk client baseUrl host is not allowed: ${host}`)
+}
+
 function joinUrl(baseUrl: URL, path: string): string {
   const prefix = baseUrl.pathname.replace(/\/+$/u, '')
   const suffix = path.replace(/^\/+|\/+$/gu, '')
@@ -35,15 +84,25 @@ function joinUrl(baseUrl: URL, path: string): string {
   return url.toString()
 }
 
+function isJsonContentType(contentType: string | null): boolean {
+  if (!contentType) return false
+  const normalized = contentType.toLowerCase()
+  return normalized.includes('/json') || normalized.includes('+json')
+}
+
 async function readBody(response: Response): Promise<unknown> {
   const text = await response.text()
   if (!text) return null
 
-  try {
-    return JSON.parse(text)
-  } catch {
-    return text
+  if (isJsonContentType(response.headers.get('content-type'))) {
+    try {
+      return JSON.parse(text)
+    } catch {
+      return text
+    }
   }
+
+  return text
 }
 
 function errorResult(error: string): AuthSdkResult {
@@ -57,12 +116,10 @@ function errorResult(error: string): AuthSdkResult {
 }
 
 export function createAuthSdkClient(opts: AuthSdkClientOptions) {
-  const baseUrlRaw = typeof opts?.baseUrl === 'string' ? opts.baseUrl.trim() : ''
-  if (!baseUrlRaw) {
-    throw new Error('auth sdk client baseUrl is required')
-  }
+  const baseUrlRaw = typeof opts?.baseUrl === 'string' ? opts.baseUrl : ''
+  const baseUrl = normalizeBaseUrl(baseUrlRaw)
+  validateHostAllowlist(baseUrl, opts.hostAllowlist)
 
-  const baseUrl = new URL(baseUrlRaw)
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch
   if (typeof fetchImpl !== 'function') {
     throw new Error('auth sdk client fetchImpl is required')

@@ -3,6 +3,7 @@ export type CryptoSdkClientOptions = {
   token?: string
   timeoutMs?: number
   fetchImpl?: typeof fetch
+  allowedHosts?: string[]
 }
 
 type VerifyEnvelopeInput = {
@@ -36,6 +37,27 @@ function normalizeToken(value: string | undefined): string | undefined {
   if (typeof value !== 'string') return undefined
   const normalized = value.trim()
   return normalized.length > 0 ? normalized : undefined
+}
+
+function normalizeAllowedHosts(values: string[] | undefined): string[] {
+  if (!Array.isArray(values)) return []
+  return values
+    .map((value) => (typeof value === 'string' ? value.trim().toLowerCase() : ''))
+    .filter((value) => value.length > 0)
+}
+
+function validateBaseUrl(rawBaseUrl: string, allowedHosts: string[]): URL {
+  const baseUrl = new URL(rawBaseUrl)
+  if (baseUrl.protocol !== 'https:') {
+    throw new Error('crypto sdk client baseUrl must use https')
+  }
+  if (baseUrl.username || baseUrl.password) {
+    throw new Error('crypto sdk client baseUrl must not include credentials')
+  }
+  if (allowedHosts.length > 0 && !allowedHosts.includes(baseUrl.hostname.toLowerCase())) {
+    throw new Error('crypto sdk client baseUrl host is not in the allowlist')
+  }
+  return baseUrl
 }
 
 function joinUrl(baseUrl: URL, path: string): string {
@@ -73,6 +95,11 @@ function hasRequiredEnvelope(input: VerifyEnvelopeInput): boolean {
 async function readResponseBody(response: Response): Promise<unknown> {
   const raw = await response.text()
   if (!raw) return null
+
+  const contentType = response.headers.get('content-type')?.toLowerCase() || ''
+  const looksJson = contentType.includes('application/json') || contentType.includes('+json')
+  if (!looksJson) return raw
+
   try {
     return JSON.parse(raw) as unknown
   } catch {
@@ -85,7 +112,8 @@ export function createCryptoSdkClient(opts: CryptoSdkClientOptions) {
   if (!baseUrlRaw) {
     throw new Error('crypto sdk client baseUrl is required')
   }
-  const baseUrl = new URL(baseUrlRaw)
+  const allowedHosts = normalizeAllowedHosts(opts.allowedHosts)
+  const baseUrl = validateBaseUrl(baseUrlRaw, allowedHosts)
 
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch
   if (typeof fetchImpl !== 'function') {
