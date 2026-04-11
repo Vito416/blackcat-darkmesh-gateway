@@ -12,6 +12,7 @@
 - Consistency export helper: `npm run ops:export-consistency-report -- --matrix <FILE> --out-dir <DIR> [--profile wedos_small|wedos_medium|diskless] [--prefix <NAME>]` writes `*-drift-report.md` and `*-drift-summary.json`.
 - Release sign-off helper: `npm run ops:build-release-evidence-pack` consolidates consistency + evidence artifacts into one release pack.
 - Release-drill archive manifest: `npm run ops:build-release-drill-manifest -- --dir <drill-dir> --out <release-drill-manifest.json>` plus `npm run ops:validate-release-drill-manifest -- --file <release-drill-manifest.json> --strict` writes and validates the machine-checked drill archive manifest used in sign-off.
+- Release-drill artifact completeness check: `npm run ops:check-release-drill-artifacts -- --dir <drill-dir> --strict --json` verifies the final mandatory artifact set and strict cross-file consistency.
 - AO dependency gate source: `kernel-migration/ao-dependency-gate.json` provides machine-readable P0.1/P1.1/P1.2 status for release gating.
 - AO dependency gate validation: `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json` checks gate structure and closed-check evidence references.
 - Release sign-off checklist generator: `npm run ops:build-release-signoff-checklist -- --pack <release-evidence-pack.json> [--strict]`.

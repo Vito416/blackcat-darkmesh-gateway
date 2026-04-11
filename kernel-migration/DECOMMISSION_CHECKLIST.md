@@ -65,13 +65,13 @@ Fail criteria:
 
 ### D.2 Machine-validated release evidence
 
-- Preferred operator path is `scripts/run-release-drill.js`; it produces and archives the matrix, drift report/summary, release pack, signoff checklist, and readiness JSON as the canonical drill bundle.
-- The archived drill bundle must include `release-drill-manifest.json` and the strict validation output from the run.
+- Preferred operator path is `scripts/run-release-drill.js`; it produces and archives the matrix, drift report/summary, release pack, signoff checklist, readiness JSON, drill manifest, and drill artifact-check output as the canonical drill bundle.
+- The archived drill bundle must include `release-drill-manifest.json`, strict manifest validation output, and `release-drill-check.json`.
 - The release pack should be built with `npm run ops:build-release-evidence-pack` (or `node scripts/build-release-evidence-pack.js`) and archived as `release-evidence-pack.md` plus `release-evidence-pack.json`.
 - The AO dependency gate should be validated with `node scripts/validate-ao-dependency-gate.js --file kernel-migration/ao-dependency-gate.json`; this proves the JSON is well formed, but it does not mean the AO lifecycle work is done.
 - The release sign-off checklist should be generated with `node scripts/build-release-signoff-checklist.js --pack <release-evidence-pack.json> [--strict]` so the pack status and blockers are machine summarized.
 - Consistency drift evidence should include the markdown drift report and JSON drift summary from `node scripts/build-drift-alert-summary.js` (`consistency-drift-report.md`, `consistency-drift-summary.json`).
-- Mandatory archive artifacts for the drill/evidence bundle: matrix, drift report/summary, release pack, signoff checklist, readiness JSON, `release-drill-manifest.json`, strict validation output.
+- Mandatory archive artifacts for the drill/evidence bundle: matrix, drift report/summary, release pack, signoff checklist, readiness JSON, `release-drill-manifest.json`, strict validation output, `release-drill-check.json`.
 
 Pass criteria:
 - release pack status is `ready`

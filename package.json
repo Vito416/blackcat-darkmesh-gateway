@@ -20,6 +20,7 @@
     "ops:build-release-evidence-pack": "node scripts/build-release-evidence-pack.js",
     "ops:build-release-signoff-checklist": "node scripts/build-release-signoff-checklist.js",
     "ops:build-release-drill-manifest": "node scripts/build-release-drill-manifest.js",
+    "ops:check-release-drill-artifacts": "node scripts/check-release-drill-artifacts.js",
     "ops:check-release-readiness": "node scripts/check-release-readiness.js",
     "ops:run-release-drill": "node scripts/run-release-drill.js",
     "ops:validate-release-drill-manifest": "node scripts/validate-release-drill-manifest.js",

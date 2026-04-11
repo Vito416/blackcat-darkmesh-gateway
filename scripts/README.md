@@ -281,7 +281,7 @@ npm run ops:check-release-readiness -- \
 
 ## One-shot release drill
 
-`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, and strict manifest validation output.
+`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, strict manifest validation output, and strict artifact-set validation.
 
 Usage:
 ```bash
@@ -315,6 +315,18 @@ Usage:
 npm run ops:validate-release-drill-manifest -- \
   --file ./tmp/release-drill/release-drill-manifest.json \
   --strict
+```
+
+## Release drill artifact-set check
+
+`scripts/check-release-drill-artifacts.js` validates that the drill directory contains the full mandatory artifact set and, in strict mode, verifies cross-file release consistency plus manifest-validation output.
+
+Usage:
+```bash
+npm run ops:check-release-drill-artifacts -- \
+  --dir ./tmp/release-drill \
+  --strict \
+  --json
 ```
 
 ## Integrity attestation artifact

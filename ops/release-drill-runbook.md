@@ -255,6 +255,25 @@ Artifacts:
 - `$DRILL_DIR/release-drill-manifest.json`
 - `$DRILL_DIR/release-drill-manifest.validation.txt`
 
+## 11) Check drill artifact completeness (strict)
+
+Run the strict artifact-set checker to ensure the release-drill directory is complete and internally consistent.
+
+```bash
+DRILL_CHECK_JSON="$DRILL_DIR/release-drill-check.json"
+npm run ops:check-release-drill-artifacts -- \
+  --dir "$DRILL_DIR" \
+  --strict \
+  --json > "$DRILL_CHECK_JSON"
+```
+
+Expected output:
+- JSON check result written to `$DRILL_DIR/release-drill-check.json`
+- Exit code `0`
+
+Artifacts:
+- `$DRILL_DIR/release-drill-check.json`
+
 ## Failure triage matrix
 
 | Failing script | Likely cause | First check |
@@ -272,6 +291,7 @@ Artifacts:
 | `ops:check-release-readiness` | Pack contains blockers, or warnings remain under strict mode | Inspect `blockers` and `warnings` in `release-evidence-pack.json` |
 | `ops:build-release-drill-manifest` | Drill artifact directory is incomplete or release/status cannot be derived | Verify all required drill artifacts exist in `$DRILL_DIR` |
 | `ops:validate-release-drill-manifest` | Manifest schema/content mismatch in strict mode | Inspect path uniqueness, sha256 format/casing, and artifact metadata |
+| `ops:check-release-drill-artifacts` | Required drill artifacts are missing or release metadata is inconsistent across files | Inspect `release-drill-check.json`, then compare pack/readiness/manifest release fields and validation log |
 
 ## Final sign-off mapping
 
@@ -281,6 +301,7 @@ Artifacts:
 | Confirm evidence bundle is acceptable | `ops:export-integrity-evidence`, `ops:latest-evidence-bundle`, `ops:check-evidence-bundle` | Timestamped bundle containing `compare.txt`, `attestation.json`, and `manifest.json` |
 | Confirm AO dependency gate is acceptable | `ops:validate-ao-dependency-gate` | `kernel-migration/ao-dependency-gate.json` with all required checks closed |
 | Confirm archive manifest is acceptable | `ops:build-release-drill-manifest`, `ops:validate-release-drill-manifest` | `$DRILL_DIR/release-drill-manifest.json` and `$DRILL_DIR/release-drill-manifest.validation.txt` |
+| Confirm drill artifact completeness is acceptable | `ops:check-release-drill-artifacts` | `$DRILL_DIR/release-drill-check.json` |
 | Review blockers and warnings | `ops:build-release-evidence-pack`, `ops:check-release-readiness` | `release-evidence-pack.md`, `release-evidence-pack.json`, readiness output, and drill manifest artifacts |
 | Produce the operator checklist | `ops:build-release-signoff-checklist` | `release-signoff-checklist.md` |
 

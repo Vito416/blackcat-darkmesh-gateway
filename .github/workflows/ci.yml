@@ -337,6 +337,14 @@ jobs:
           else
             echo "ops:validate-release-drill-manifest is not defined in package.json; skipping help check."
           fi
+      - name: "Help: check release drill artifacts"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-release-drill-artifacts'] ? 0 : 1)"; then
+            npm run ops:check-release-drill-artifacts -- --help
+          else
+            echo "ops:check-release-drill-artifacts is not defined in package.json; skipping help check."
+          fi
       - name: "Help: validate AO dependency gate"
         run: npm run ops:validate-ao-dependency-gate -- --help
       - name: "Help: export consistency report"
@@ -509,6 +517,7 @@ jobs:
       RELEASE_READINESS_JSON: ${{ runner.temp }}/release-pack/release-readiness.json
       RELEASE_DRILL_MANIFEST_JSON: ${{ runner.temp }}/release-pack/release-drill-manifest.json
       RELEASE_DRILL_MANIFEST_VALIDATE: ${{ runner.temp }}/release-pack/release-drill-manifest.validation.txt
+      RELEASE_DRILL_CHECK_JSON: ${{ runner.temp }}/release-pack/release-drill-check.json
       RELEASE_SIGNOFF_MD: ${{ runner.temp }}/release-pack/release-signoff-checklist.md
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -650,10 +659,24 @@ jobs:
               echo ""
               echo "Manifest path: \`$RELEASE_DRILL_MANIFEST_JSON\`"
             fi
-            if [ -f "$RELEASE_DRILL_MANIFEST_VALIDATE" ]; then
+          if [ -f "$RELEASE_DRILL_MANIFEST_VALIDATE" ]; then
               echo "Manifest strict validation log: \`$RELEASE_DRILL_MANIFEST_VALIDATE\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check release drill artifacts
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/check-release-drill-artifacts.js" ]; then
+            node "$GITHUB_WORKSPACE/scripts/check-release-drill-artifacts.js" \
+              --dir "$RELEASE_PACK_WORKDIR" \
+              --strict \
+              --json > "$RELEASE_DRILL_CHECK_JSON"
+            node -e "const fs=require('node:fs');const p=process.env.RELEASE_DRILL_CHECK_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Release drill artifact check');console.log('');console.log('- Result: '+(d.ok?'OK':'ERROR'));console.log('- Missing: '+d.missing.length);console.log('- Issues: '+d.issues.length);" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Release drill artifact check" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: skipped because ops:check-release-drill-artifacts is not defined." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Append release pack summary
         if: always()
         run: |
@@ -683,3 +706,4 @@ jobs:
             ${{ env.RELEASE_READINESS_JSON }}
             ${{ env.RELEASE_DRILL_MANIFEST_JSON }}
             ${{ env.RELEASE_DRILL_MANIFEST_VALIDATE }}
+            ${{ env.RELEASE_DRILL_CHECK_JSON }}
