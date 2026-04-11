@@ -586,6 +586,10 @@ function runCloseout(options = {}, deps = {}) {
   const plan = buildCloseoutPlan(options)
 
   if (plan.dryRun) {
+    const blockerCount = 0
+    const automationBlockerCount = 0
+    const aoManualBlockerCount = 0
+    const warningCount = 0
     const stdout = plan.json
       ? `${JSON.stringify(
           {
@@ -604,6 +608,10 @@ function runCloseout(options = {}, deps = {}) {
             dryRun: true,
             status: 'dry-run',
             exitCode: 0,
+            blockerCount,
+            automationBlockerCount,
+            aoManualBlockerCount,
+            warningCount,
             steps: plan.steps.map((step) => ({
               id: step.id,
               index: step.index,
@@ -639,6 +647,10 @@ function runCloseout(options = {}, deps = {}) {
       status: 'dry-run',
       blockers: [],
       warnings: [],
+      blockerCount: 0,
+      automationBlockerCount: 0,
+      aoManualBlockerCount: 0,
+      warningCount: 0,
       validations: {
         finalMigrationSummary: null,
         signoffRecord: null,
@@ -859,6 +871,10 @@ function runCloseout(options = {}, deps = {}) {
       : 'automation-blocked'
 
   const blockers = [...automationBlockers, ...aoManualBlockers]
+  const blockerCount = blockers.length
+  const automationBlockerCount = automationBlockers.length
+  const aoManualBlockerCount = aoManualBlockers.length
+  const warningCount = warnings.length
   const status = logFailed ? 'failed' : closeoutState === 'ready' ? 'ready' : 'blocked'
 
   const exitCode = logFailed || (plan.strict && status === 'blocked') ? 3 : 0
@@ -886,6 +902,10 @@ function runCloseout(options = {}, deps = {}) {
             automationState,
             aoManualState,
             exitCode,
+            blockerCount,
+            automationBlockerCount,
+            aoManualBlockerCount,
+            warningCount,
             blockers,
             automationBlockers,
             aoManualBlockers,
@@ -917,6 +937,10 @@ function runCloseout(options = {}, deps = {}) {
             closeoutState,
             automationState,
             aoManualState,
+            blockerCount,
+            automationBlockerCount,
+            aoManualBlockerCount,
+            warningCount,
             blockers,
             automationBlockers,
             aoManualBlockers,
@@ -942,6 +966,10 @@ function runCloseout(options = {}, deps = {}) {
     closeoutState,
     automationState,
     aoManualState,
+    blockerCount,
+    automationBlockerCount,
+    aoManualBlockerCount,
+    warningCount,
     validations: {
       finalMigrationSummary: stepResults.find((step) => step.id === 'validate-final-migration-summary')?.payload || null,
       signoffRecord: stepResults.find((step) => step.id === 'validate-signoff-record')?.payload || null,

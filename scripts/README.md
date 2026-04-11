@@ -364,6 +364,20 @@ npm run ops:build-legacy-migration-matrix -- --core-map ./kernel-migration/core-
 npm run ops:build-legacy-migration-matrix -- --out ./kernel-migration/legacy-libs-matrix.md --json
 ```
 
+## Legacy module-map sync check
+
+`scripts/check-legacy-module-map-sync.js` ensures legacy module names stay synchronized across:
+
+- `libs/legacy/MIGRATION_PLAN.md`
+- `kernel-migration/LEGACY_MODULE_MAP.md`
+- `kernel-migration/LEGACY_DECOMMISSION_CONDITIONS.md`
+
+Usage:
+```bash
+npm run ops:check-legacy-module-map-sync -- --json
+npm run ops:check-legacy-module-map-sync -- --strict
+```
+
 ## Release evidence pack
 
 `scripts/build-release-evidence-pack.js` merges consistency and evidence artifacts into a single release-ready summary (`markdown` + optional JSON) for sign-off.
@@ -498,7 +512,7 @@ node scripts/build-decommission-evidence-log.js \
   --strict
 ```
 
-Strict mode exits non-zero if any mandatory machine artifact is missing from the drill directory.
+Strict mode exits non-zero if any mandatory machine artifact is missing from the drill directory. The checker is part of the closeout sequence before readiness/signoff, so docs and logs should treat it as the AO/manual proof gate rather than a generic post-run cleanup step.
 
 ## Decommission manual-proof check
 
@@ -518,6 +532,26 @@ npm run ops:check-decommission-manual-proofs -- \
 ```
 
 In non-strict mode, missing links return `pending` with exit code `0` so operators can track outstanding AO/manual work without breaking machine-only runs. In strict mode, missing proofs exit with code `3`.
+
+## Decommission manual-proof scaffold
+
+`scripts/init-decommission-manual-proofs.js` creates a JSON+Markdown scaffold for the required manual proof links before operators start filling decommission evidence.
+
+Usage:
+```bash
+npm run ops:init-decommission-manual-proofs -- \
+  --dir ./tmp/release-drill
+```
+
+Optional output overrides:
+```bash
+npm run ops:init-decommission-manual-proofs -- \
+  --dir ./tmp/release-drill \
+  --json-out ./tmp/release-drill/manual-proofs.json \
+  --md-out ./tmp/release-drill/manual-proofs.md
+```
+
+Use `--force` only when intentionally regenerating files.
 
 ## AO gate evidence quality check
 
@@ -553,7 +587,7 @@ npm run ops:check-decommission-readiness -- \
 
 ## Decommission closeout one-shot
 
-`scripts/run-decommission-closeout.js` is the final operator entrypoint for decommission closeout. It is intended to combine the machine checks, evidence log generation, and AO-gate/readiness summaries into one run. The automation can complete while AO checks or manual proofs are still pending, so treat this as the closeout bundle step rather than the final approval itself.
+`scripts/run-decommission-closeout.js` is the final operator entrypoint for decommission closeout. It is intended to combine the machine checks, `check-decommission-manual-proofs`, evidence log generation, and AO-gate/readiness summaries into one run. The automation can complete while AO checks or manual proofs are still pending, so treat this as the closeout bundle step rather than the final approval itself.
 
 By default it also validates:
 - `kernel-migration/FINAL_MIGRATION_SUMMARY.md`
@@ -574,8 +608,23 @@ node scripts/run-decommission-closeout.js \
 
 Failure triage:
 - If the JSON summary still shows open AO checks, the automation is complete but the closeout is not yet decommission-ready.
-- If the manual-proof fields are empty, fill in the recovery, fallback, rollback, and approvals links before retrying.
+- If the manual-proof fields are empty, fill in the recovery, fallback, rollback, and approvals links before retrying; if they are invalid, treat the result as `ao-manual-blocked`.
 - If the drill artifacts are missing, re-run the release drill bundle and `check-decommission-readiness` first.
+
+## Decommission closeout artifact validation
+
+`scripts/validate-decommission-closeout.js` validates a generated closeout JSON artifact (`run-decommission-closeout --json`) and can enforce strict `ready` state in release gates.
+
+Usage:
+```bash
+npm run ops:validate-decommission-closeout -- \
+  --file ./tmp/release-drill/decommission-closeout.json \
+  --json
+
+npm run ops:validate-decommission-closeout -- \
+  --file ./tmp/release-drill/decommission-closeout.json \
+  --strict
+```
 
 ## WEDOS readiness validator
 

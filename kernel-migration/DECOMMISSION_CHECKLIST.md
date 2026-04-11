@@ -4,7 +4,7 @@ Do not archive/delete the old repo until all checks below are complete.
 
 Gateway-side implementation and test coverage are ahead of the AO-side registry/authority lifecycle, so the remaining deletion gate is still blocked on the AO API and rollout evidence.
 
-Machine-validated release evidence can now be generated, but the readiness tooling intentionally splits the result into two phases: `automation-complete` for the archive/build/drill evidence, and `ao-manual-pending` when AO-side checks or proof links are still open. Use that split in notes and logs instead of a generic "blocked" label whenever the automation itself has already finished.
+Machine-validated release evidence can now be generated, but the readiness tooling intentionally splits the result into two phases: `automation-complete` for the archive/build/drill evidence, and `ao-manual-pending` / `ao-manual-blocked` when AO-side checks or proof links are still open. Use that split in notes and logs instead of a generic "blocked" label whenever the automation itself has already finished.
 
 ## Legacy module exit criteria
 
@@ -34,7 +34,7 @@ For each module below, require the same three proof types before marking it reti
 ## B. Functional parity
 
 - [ ] Trusted release registry logic is available via AO APIs.
-- [ ] Closeout automation is complete and AO/manual proof state is recorded separately (`automation-complete` vs `ao-manual-pending`).
+- [ ] Closeout automation is complete and AO/manual proof state is recorded separately (`automation-complete` vs `ao-manual-pending` / `ao-manual-blocked`).
 - [ ] Revoke semantics are enforced by gateway verifier.
 - [x] Pause/degraded mode policy is enforced in gateway runtime.
 - [ ] Upgrade lifecycle equivalent (`propose/activate/cancel`) is implemented in AO/write flows.
@@ -92,8 +92,8 @@ Fail criteria:
 - The release sign-off checklist should be generated with `node scripts/build-release-signoff-checklist.js --pack <release-evidence-pack.json> [--strict]` so the pack status and blockers are machine summarized.
 - Consistency drift evidence should include the markdown drift report and JSON drift summary from `node scripts/build-drift-alert-summary.js` (`consistency-drift-report.md`, `consistency-drift-summary.json`).
 - Mandatory archive artifacts for the drill/evidence bundle: matrix, drift report/summary, `ao-dependency-gate.validation.txt`, release pack, signoff checklist, readiness JSON, `release-drill-manifest.json`, strict validation output, `release-drill-check.json`, `release-evidence-ledger.md`, `release-evidence-ledger.json`.
-- Validator flow for closeout evidence is fixed: `build-release-drill-manifest` -> `validate-release-drill-manifest` -> `check-release-drill-artifacts` -> `build-release-evidence-ledger` / `build-decommission-evidence-log` -> `check-decommission-readiness` -> `check-ao-gate-evidence`.
-- If automation passes but AO/manual proof links are still missing, record `automation-complete` plus `ao-manual-pending`; do not collapse that into a generic blocked state.
+- Validator flow for closeout evidence is fixed: `build-release-drill-manifest` -> `validate-release-drill-manifest` -> `check-release-drill-artifacts` -> `build-release-evidence-ledger` / `build-decommission-evidence-log` -> `check-decommission-manual-proofs` -> `check-decommission-readiness` -> `check-ao-gate-evidence`.
+- If automation passes but AO/manual proof links are still missing, record `automation-complete` plus `ao-manual-pending`; if the proof links are known missing or invalid, record `ao-manual-blocked` rather than collapsing it into a generic blocked state.
 
 Pass criteria:
 - release pack status is `ready`
@@ -134,7 +134,7 @@ Manual evidence still required separately:
 - [ ] Stakeholder sign-off: architecture (`1` documented approval, target state and decommission scope match the approved design).
 - [x] P0 integrity rollout complete with `npm test` + focused integrity tests green on the current branch.
 - [ ] Final migration summary committed in gateway + AO notes with date, scope, and rollback reference.
-- [ ] Final decommission closeout log recorded from `run-decommission-closeout` with manual proof links attached and the automation/AO-manual state split explicitly recorded.
+- [ ] Final decommission closeout log recorded from `run-decommission-closeout` with manual proof links attached and the `automation-complete` / `ao-manual-pending` / `ao-manual-blocked` split explicitly recorded.
 - [ ] Rollback plan documented and tested in staging for at least one failure scenario.
 - [ ] No open P0/P1 migration blockers remain in backlog.
 - [ ] The old repo has been dry-run archived or mirrored with a verified restore path before deletion.
@@ -145,14 +145,14 @@ Latest machine verification snapshot (UTC: `2026-04-11`):
 - `npm run test:integrity-fast` → `SUCCESS 26/26 checks passed`
 - `npm test` → `85 files, 509 tests passed`
 
-Use one row per drill or proof item. Keep the artifact link stable and prefer the raw log, PR, or release note URL. The closeout automation can be complete even when AO/manual proofs are still pending; record that as `automation-complete` plus `ao-manual-pending` instead of compressing it into a single blocked state.
+Use one row per drill or proof item. Keep the artifact link stable and prefer the raw log, PR, or release note URL. The closeout automation can be complete even when AO/manual proofs are still pending; record that as `automation-complete` plus `ao-manual-pending` instead of compressing it into a single blocked state. If a manual proof is missing or invalid, mark it `ao-manual-blocked`.
 
 | Drill name | Date/time UTC | Operator | Command/script | Artifact link | Automation state | AO/manual state | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Decommission closeout automation |  |  | `run-decommission-closeout` |  | `complete` | `pending` | blocked |
-|  |  |  |  |  | `complete` | `complete` | ready |
-|  |  |  |  |  | `blocked` | `pending` | blocked |
-|  |  |  |  |  | `blocked` | `blocked` | blocked |
+| Decommission closeout automation |  |  | `run-decommission-closeout` |  | `automation-complete` | `ao-manual-pending` | `ao-manual-pending` |
+|  |  |  |  |  | `automation-complete` | `complete` | `ready` |
+|  |  |  |  |  | `automation-blocked` | `ao-manual-pending` | `automation-blocked` |
+|  |  |  |  |  | `automation-complete` | `ao-manual-blocked` | `ao-manual-blocked` |
 
 ## I. Evidence quality rubric
 
@@ -160,7 +160,7 @@ Use one row per drill or proof item. Keep the artifact link stable and prefer th
 - Every proof should show the command/script, UTC timestamp, operator, and the exact expected outcome.
 - Preferred proof links include immutable artifacts: workflow run, commit, release, or raw log; avoid screenshots unless they supplement a stronger artifact.
 - Not enough: paraphrased notes, chat snippets without a permalink, or files that can be edited in place without history.
-- Automation evidence and AO/manual evidence should be logged separately even when they land in the same drill bundle; the closeout state is only `ready` when both halves are complete.
+- Automation evidence and AO/manual evidence should be logged separately even when they land in the same drill bundle; the closeout state is only `ready` when both halves are complete. If the AO/manual half is not yet usable, keep it in `ao-manual-pending` or `ao-manual-blocked` rather than generic blocked.
 
 ## J. Go / No-Go decision template
 

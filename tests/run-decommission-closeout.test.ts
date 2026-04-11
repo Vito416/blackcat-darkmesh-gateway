@@ -294,6 +294,32 @@ describe('run-decommission-closeout.js', () => {
     expect(result.stderr).toBe('')
   })
 
+  it('prints dry-run JSON with zero blocker counters', () => {
+    const dir = makeTempDir()
+
+    const result = runCli(
+      [
+        '--dir',
+        dir,
+        '--ao-gate',
+        join(dir, 'ao-dependency-gate.json'),
+        '--json',
+        '--dry-run',
+      ],
+      { spawnSyncFn: vi.fn() },
+    )
+
+    const payload = JSON.parse(result.stdout)
+
+    expect(result.exitCode).toBe(0)
+    expect(payload.dryRun).toBe(true)
+    expect(payload.blockerCount).toBe(0)
+    expect(payload.automationBlockerCount).toBe(0)
+    expect(payload.aoManualBlockerCount).toBe(0)
+    expect(payload.warningCount).toBe(0)
+    expect(payload.steps).toHaveLength(7)
+  })
+
   it('runs the closeout flow and returns machine-friendly JSON', () => {
     const dir = makeTempDir()
     seedCloseoutArtifacts(dir)
@@ -462,6 +488,12 @@ describe('run-decommission-closeout.js', () => {
     expect(result.exitCode).toBe(0)
     expect(payload.status).toBe('ready')
     expect(payload.exitCode).toBe(0)
+    expect(payload.blockerCount).toBe(0)
+    expect(payload.automationBlockerCount).toBe(0)
+    expect(payload.aoManualBlockerCount).toBe(0)
+    expect(payload.warningCount).toBe(0)
+    expect(payload.closeoutState).toBe('ready')
+    expect(payload.aoManualState).toBe('complete')
     expect(payload.steps).toHaveLength(7)
     expect(payload.steps.map((step: { status: string }) => step.status)).toEqual([
       'passed',
@@ -487,6 +519,169 @@ describe('run-decommission-closeout.js', () => {
       'build-decommission-evidence-log.js',
       'check-decommission-manual-proofs.js',
     ])
+  })
+
+  it('reports ao-manual-pending when AO gate evidence needs manual review', () => {
+    const dir = makeTempDir()
+    seedCloseoutArtifacts(dir)
+
+    const spawnSyncFn = vi.fn((command: string, args: string[]) => {
+      expect(command).toBe(process.execPath)
+
+      switch (scriptName(args)) {
+        case 'check-ao-gate-evidence.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'ao-dependency-gate.json'),
+                result: 'WARNING',
+                closeoutReady: false,
+                warnings: ['manual review required'],
+                issues: [],
+              },
+              null,
+              2,
+            ),
+          )
+        case 'check-decommission-readiness.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                status: 'ready',
+                blockerCount: 0,
+                blockers: [],
+                checks: {
+                  releaseEvidencePack: { status: 'ready' },
+                  releaseReadiness: { status: 'ready' },
+                  releaseDrillManifest: { status: 'ready' },
+                  releaseDrillCheck: { ok: true },
+                  releaseEvidenceLedger: { status: 'ready' },
+                  aoGate: { closedCount: 3, openCount: 0 },
+                },
+              },
+              null,
+              2,
+            ),
+          )
+        case 'validate-wedos-readiness.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                profile: 'wedos_small',
+                status: 'pass',
+                criticalCount: 0,
+                warningCount: 0,
+                issues: [],
+              },
+              null,
+              2,
+            ),
+          )
+        case 'validate-final-migration-summary.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'FINAL_MIGRATION_SUMMARY.md'),
+                ok: true,
+                status: 'complete',
+                issueCount: 0,
+                strictIssueCount: 0,
+                issues: [],
+              },
+              null,
+              2,
+            ),
+          )
+        case 'validate-signoff-record.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'SIGNOFF_RECORD.md'),
+                ok: true,
+                status: 'complete',
+                blockers: [],
+                warnings: [],
+              },
+              null,
+              2,
+            ),
+          )
+        case 'build-decommission-evidence-log.js': {
+          const logMd = join(dir, 'decommission-evidence-log.md')
+          const logJson = join(dir, 'decommission-evidence-log.json')
+          writeFileSync(logMd, '# Decommission Evidence Log\n', 'utf8')
+          writeJson(logJson, {
+            createdAtUtc: '2026-04-11T12:00:00.000Z',
+            status: 'complete',
+            release: '1.4.0',
+            presence: { complete: true, requiredCount: 12, requiredPresentCount: 12, requiredMissingCount: 0 },
+            manualProofs: [
+              { key: 'recoveryDrillLink', label: 'Recovery drill proof', link: 'https://example.com/recovery' },
+              { key: 'aoFallbackLink', label: 'AO fallback proof', link: 'https://example.com/fallback' },
+              { key: 'rollbackProofLink', label: 'Rollback proof', link: 'https://example.com/rollback' },
+              { key: 'approvalsLink', label: 'Approvals / sign-off', link: 'https://example.com/approvals' },
+            ],
+          })
+          return spawnResult('# Decommission Evidence Log\n')
+        }
+        case 'check-decommission-manual-proofs.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'decommission-evidence-log.json'),
+                status: 'complete',
+                requiredCount: 4,
+                providedCount: 4,
+                missingCount: 0,
+                missingProofKeys: [],
+                missingProofLabels: [],
+                blockers: [],
+                warnings: [],
+              },
+              null,
+              2,
+            ),
+          )
+        default:
+          throw new Error(`unexpected script: ${scriptName(args)}`)
+      }
+    })
+
+    const result = runCli(
+      [
+        '--dir',
+        dir,
+        '--ao-gate',
+        join(dir, 'ao-dependency-gate.json'),
+        '--final-summary',
+        join(dir, 'FINAL_MIGRATION_SUMMARY.md'),
+        '--signoff-record',
+        join(dir, 'SIGNOFF_RECORD.md'),
+        '--json',
+      ],
+      { spawnSyncFn },
+    )
+
+    const payload = JSON.parse(result.stdout)
+
+    expect(result.exitCode).toBe(0)
+    expect(payload.status).toBe('blocked')
+    expect(payload.closeoutState).toBe('ao-manual-pending')
+    expect(payload.aoManualState).toBe('pending')
+    expect(payload.blockerCount).toBe(1)
+    expect(payload.automationBlockerCount).toBe(0)
+    expect(payload.aoManualBlockerCount).toBe(1)
+    expect(payload.warningCount).toBe(1)
+    expect(payload.steps.map((step: { status: string }) => step.status)).toEqual([
+      'warning',
+      'passed',
+      'skipped',
+      'passed',
+      'passed',
+      'passed',
+      'passed',
+    ])
+    expect(payload.blockers.some((blocker: string) => blocker.includes('AO gate evidence check has warnings/open evidence'))).toBe(true)
   })
 
   it('keeps going to the evidence log in strict mode and then fails the closeout', () => {
@@ -621,6 +816,10 @@ describe('run-decommission-closeout.js', () => {
     expect(result.exitCode).toBe(3)
     expect(payload.status).toBe('blocked')
     expect(payload.exitCode).toBe(3)
+    expect(payload.blockerCount).toBe(1)
+    expect(payload.automationBlockerCount).toBe(1)
+    expect(payload.aoManualBlockerCount).toBe(0)
+    expect(payload.warningCount).toBe(0)
     expect(payload.steps.map((step: { status: string }) => step.status)).toEqual([
       'passed',
       'blocked',

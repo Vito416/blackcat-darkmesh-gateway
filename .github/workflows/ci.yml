@@ -431,6 +431,30 @@ jobs:
           else
             echo "ops:build-decommission-evidence-log is not defined in package.json; skipping help check."
           fi
+      - name: "Help: check decommission manual proofs"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-decommission-manual-proofs'] ? 0 : 1)"; then
+            npm run ops:check-decommission-manual-proofs -- --help
+          else
+            echo "ops:check-decommission-manual-proofs is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: init decommission manual proofs"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:init-decommission-manual-proofs'] ? 0 : 1)"; then
+            npm run ops:init-decommission-manual-proofs -- --help
+          else
+            echo "ops:init-decommission-manual-proofs is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate decommission closeout"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-decommission-closeout'] ? 0 : 1)"; then
+            npm run ops:validate-decommission-closeout -- --help
+          else
+            echo "ops:validate-decommission-closeout is not defined in package.json; skipping help check."
+          fi
       - name: "Help: run decommission closeout"
         run: |
           set -euo pipefail
@@ -643,7 +667,9 @@ jobs:
       RELEASE_DECOMMISSION_READY_JSON: ${{ runner.temp }}/release-pack/decommission-readiness.json
       RELEASE_DECOMMISSION_LOG_MD: ${{ runner.temp }}/release-pack/decommission-evidence-log.md
       RELEASE_DECOMMISSION_LOG_JSON: ${{ runner.temp }}/release-pack/decommission-evidence-log.json
+      RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON: ${{ runner.temp }}/release-pack/decommission-manual-proofs.json
       RELEASE_CLOSEOUT_JSON: ${{ runner.temp }}/release-pack/decommission-closeout.json
+      RELEASE_CLOSEOUT_VALIDATION_JSON: ${{ runner.temp }}/release-pack/decommission-closeout.validation.json
       RELEASE_SIGNOFF_MD: ${{ runner.temp }}/release-pack/release-signoff-checklist.md
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -871,6 +897,24 @@ jobs:
           else
             echo "Decommission evidence log step skipped (script missing)." >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Check decommission manual proofs
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" ] && [ -f "$RELEASE_DECOMMISSION_LOG_JSON" ]; then
+            node "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" \
+              --file "$RELEASE_DECOMMISSION_LOG_JSON" \
+              --json \
+              > "$RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON"
+            node -e "const fs=require('node:fs');const p=process.env.RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission manual proofs');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Provided: '+Number(d.providedCount||0));console.log('- Required: '+Number(d.requiredCount||0));console.log('- Missing: '+Number(d.missingCount||0));" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Decommission manual proofs" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            if [ ! -f "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" ]; then
+              echo "- Result: skipped because scripts/check-decommission-manual-proofs.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- Result: skipped because decommission evidence log JSON is missing." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
       - name: Run decommission closeout
         run: |
           set -euo pipefail
@@ -884,6 +928,23 @@ jobs:
             echo "### Decommission closeout" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "- Result: skipped because scripts/run-decommission-closeout.js is missing." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Validate decommission closeout artifact
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" ] && [ -f "$RELEASE_CLOSEOUT_JSON" ]; then
+            node "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" \
+              --file "$RELEASE_CLOSEOUT_JSON" \
+              --json > "$RELEASE_CLOSEOUT_VALIDATION_JSON"
+            node -e "const fs=require('node:fs');const p=process.env.RELEASE_CLOSEOUT_VALIDATION_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission closeout validation');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Ready: '+String(Boolean(d.ready)));console.log('- Issues: '+Number(d.issueCount||0));console.log('- Blockers: '+Number(d.blockerCount||0));" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Decommission closeout validation" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            if [ ! -f "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" ]; then
+              echo "- Result: skipped because scripts/validate-decommission-closeout.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- Result: skipped because decommission closeout JSON is missing." >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
       - name: Append release pack summary
         if: always()
@@ -938,4 +999,6 @@ jobs:
             ${{ env.RELEASE_DECOMMISSION_READY_JSON }}
             ${{ env.RELEASE_DECOMMISSION_LOG_MD }}
             ${{ env.RELEASE_DECOMMISSION_LOG_JSON }}
+            ${{ env.RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON }}
             ${{ env.RELEASE_CLOSEOUT_JSON }}
+            ${{ env.RELEASE_CLOSEOUT_VALIDATION_JSON }}
