@@ -95,4 +95,53 @@ describe('suggest-ratelimit-overrides.js', () => {
     expect(res.stdout).toContain('- prefix=inbox')
     expect(res.stdout).toContain('- prefix=webhook')
   })
+
+  it('prints structured JSON only with --json', () => {
+    const input = writeInput([
+      { prefix: 'webhook', p95Rps: 20, blockedRate: 0.05, burstFactor: 1.25 },
+      { prefix: 'inbox', p95Rps: 10, blockedRate: 0.01, burstFactor: 1.05 },
+    ])
+
+    const res = runCli(['--input', input, '--json'])
+    expect(res.status).toBe(0)
+    expect(() => JSON.parse(res.stdout)).not.toThrow()
+
+    const parsed = JSON.parse(res.stdout)
+    expect(parsed).toMatchObject({
+      profile: 'wedos_medium',
+      suggestion: 'inbox=16,webhook=31',
+      entries: [
+        { prefix: 'inbox', value: 16, raw: 16 },
+        { prefix: 'webhook', value: 31, raw: 31 },
+      ],
+    })
+    expect(res.stdout.trim().startsWith('{')).toBe(true)
+    expect(res.stdout.trim().endsWith('}')).toBe(true)
+    expect(res.stdout).not.toContain('\n- prefix=')
+    expect(res.stdout).not.toContain('RATE_LIMIT_ROUTE_OVERRIDES=')
+  })
+
+  it('prints only the env override line with --env-line', () => {
+    const input = writeInput([
+      { prefix: 'webhook', p95Rps: 20, blockedRate: 0.05, burstFactor: 1.25 },
+      { prefix: 'inbox', p95Rps: 10, blockedRate: 0.01, burstFactor: 1.05 },
+    ])
+
+    const res = runCli(['--input', input, '--env-line'])
+    expect(res.status).toBe(0)
+    expect(res.stdout.trim()).toBe('RATE_LIMIT_ROUTE_OVERRIDES=inbox=16,webhook=31')
+    expect(res.stdout).not.toContain('- prefix=')
+    expect(res.stdout).not.toContain('{"profile"')
+  })
+
+  it('rejects mutually exclusive output modes', () => {
+    const input = writeInput([
+      { prefix: 'webhook', p95Rps: 20, blockedRate: 0.05, burstFactor: 1.25 },
+      { prefix: 'inbox', p95Rps: 10, blockedRate: 0.01, burstFactor: 1.05 },
+    ])
+
+    const res = runCli(['--input', input, '--json', '--env-line'])
+    expect(res.status).toBe(64)
+    expect(res.stderr).toContain('--json and --env-line cannot be used together')
+  })
 })

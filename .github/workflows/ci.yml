@@ -384,6 +384,12 @@ jobs:
         run: npm run ops:suggest-ratelimit-overrides -- --help
       - name: "Help: release evidence pack"
         run: npm run ops:build-release-evidence-pack -- --help
+      - name: "Help: validate AO dependency gate"
+        run: npm run ops:validate-ao-dependency-gate -- --help
+      - name: "Help: export consistency report"
+        run: npm run ops:export-consistency-report -- --help
+      - name: "Help: release sign-off checklist"
+        run: npm run ops:build-release-signoff-checklist -- --help
       - name: "Help: bundle check"
         run: npm run ops:check-evidence-bundle -- --help
       - name: "Help: latest bundle"
@@ -541,6 +547,7 @@ jobs:
       EVIDENCE_ARTIFACT_DIR: ${{ runner.temp }}/release-pack/evidence
       RELEASE_PACK_MD: ${{ runner.temp }}/release-pack/release-evidence-pack.md
       RELEASE_PACK_JSON: ${{ runner.temp }}/release-pack/release-evidence-pack.json
+      RELEASE_SIGNOFF_MD: ${{ runner.temp }}/release-pack/release-signoff-checklist.md
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -575,6 +582,11 @@ jobs:
             --json-out "$RELEASE_PACK_JSON" \
             --require-both \
             --require-ao-gate
+      - name: Build release sign-off checklist
+        run: |
+          node scripts/build-release-signoff-checklist.js \
+            --pack "$RELEASE_PACK_JSON" \
+            --out "$RELEASE_SIGNOFF_MD"
       - name: Append release pack summary
         if: always()
         run: |
@@ -582,6 +594,14 @@ jobs:
             cat "$RELEASE_PACK_MD" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Release evidence pack was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Append release sign-off checklist
+        if: always()
+        run: |
+          if [ -f "$RELEASE_SIGNOFF_MD" ]; then
+            cat "$RELEASE_SIGNOFF_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Release sign-off checklist was not generated." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Upload release evidence pack
         if: always()

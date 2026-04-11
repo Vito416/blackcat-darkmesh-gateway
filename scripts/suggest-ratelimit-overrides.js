@@ -30,13 +30,15 @@ function usage(exitCode = 0) {
   console.log(
     [
       'Usage:',
-      '  node scripts/suggest-ratelimit-overrides.js --input <FILE> [--profile wedos_small|wedos_medium|diskless] [--floor <N>] [--ceiling <N>]',
+      '  node scripts/suggest-ratelimit-overrides.js --input <FILE> [--profile wedos_small|wedos_medium|diskless] [--floor <N>] [--ceiling <N>] [--json|--env-line]',
       '',
       'Options:',
       '  --input <FILE>       JSON file with route stats array (required)',
       '  --profile <NAME>     wedos_small|wedos_medium|diskless (default: wedos_medium)',
       '  --floor <N>          Optional minimum suggested value',
       '  --ceiling <N>        Optional maximum suggested value',
+      '  --json               Print structured JSON only',
+      '  --env-line           Print RATE_LIMIT_ROUTE_OVERRIDES=<...> only',
       '  --help               Show this help',
       '',
       'Input format:',
@@ -68,6 +70,8 @@ function parseArgs(argv) {
     profile: 'wedos_medium',
     floor: undefined,
     ceiling: undefined,
+    json: false,
+    envLine: false,
   }
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -94,6 +98,12 @@ function parseArgs(argv) {
       case '--ceiling':
         args.ceiling = parseInteger(readValue(), '--ceiling')
         break
+      case '--json':
+        args.json = true
+        break
+      case '--env-line':
+        args.envLine = true
+        break
       default:
         if (arg.startsWith('--')) die(`unknown option: ${arg}`)
         die(`unexpected positional argument: ${arg}`)
@@ -113,6 +123,7 @@ function parseArgs(argv) {
   if (typeof args.floor !== 'undefined' && typeof args.ceiling !== 'undefined' && args.floor > args.ceiling) {
     die('--floor cannot be greater than --ceiling')
   }
+  if (args.json && args.envLine) die('--json and --env-line cannot be used together')
 
   return args
 }
@@ -238,6 +249,16 @@ export async function main(argv = process.argv.slice(2)) {
     floor: args.floor,
     ceiling: args.ceiling,
   })
+
+  if (args.json) {
+    console.log(JSON.stringify(result, null, 2))
+    return
+  }
+
+  if (args.envLine) {
+    console.log(`RATE_LIMIT_ROUTE_OVERRIDES=${result.suggestion}`)
+    return
+  }
 
   console.log(result.suggestion)
   for (const entry of result.entries) {

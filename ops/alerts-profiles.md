@@ -36,6 +36,15 @@ Use this loop when you are deciding whether to change fetch cadence, alert windo
 | `wedos_medium` | `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])`, `increase(gateway_cache_store_reject_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_JITTER_MS`; if the pattern is still bursty, raise `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS` before touching alert thresholds | Revert if the added jitter lowers fetch burstiness but increases checkpoint staleness, or if cache/replay pressure now outruns the retry failures |
 | `diskless` | `gateway_integrity_checkpoint_age_seconds`, `gateway_integrity_audit_lag_seconds`, `increase(gateway_integrity_mirror_mismatch_total[10m])`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_JITTER_MS`; keep `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS` low so diskless hosts do not accumulate long retry chains | Revert if the diskless host starts spending more time retrying than checkpointing, or if the mirror mismatch / fetch-fail signals stay flat while checkpoint age keeps climbing |
 
+## Release-week checklist
+
+Use this when a rollout is in flight and you are deciding whether to tighten or relax `for:` windows.
+
+- Watch the release-signoff panels together: `increase(gateway_integrity_mirror_mismatch_total[5m])`, `increase(gateway_integrity_mirror_mismatch_total[15m])`, `increase(gateway_integrity_mirror_fetch_fail_total[5m])`, `increase(gateway_integrity_mirror_fetch_fail_total[15m])`, `gateway_integrity_checkpoint_age_seconds`, `gateway_integrity_audit_lag_seconds`, and `increase(gateway_webhook_replay_pruned_total[10m])`.
+- Tighten windows first when mismatch or fetch-fail stays non-zero across both the 5m and 15m trend views, or when checkpoint age and audit lag rise in the same release window.
+- Relax windows only after the same signal is flat for one full alert window and the readiness indicators stay below threshold with no matching rise in `increase(gateway_webhook_replay_pruned_total[10m])` or `increase(gateway_cache_store_reject_total[10m])`.
+- For strict mirror releases (`AO_INTEGRITY_MIRROR_STRICT=1`), keep the shortest window until the release is clean for one rollout interval; then relax one step at a time before changing numeric thresholds.
+
 ## Anti-flap alert windows
 
 Use these as starter `for:` values when you need profile-specific alert rules. They reduce flapping without hiding a real regression. Do not widen all alerts at once; widen the noisiest signal first.
@@ -55,7 +64,8 @@ Use this quick map when a panel is noisy and you need the matching alert name wi
 | Dashboard panel | Primary alert |
 | --- | --- |
 | Integrity fetch retry pressure | `GatewayIntegrityMirrorFetchFail` |
-| Mirror mismatch / fetch-fail trend windows | `GatewayIntegrityMirrorMismatch`, `GatewayIntegrityMirrorFetchFail` |
+| Release signoff: consistency mismatch / fetch-fail trends | `GatewayIntegrityMirrorMismatch`, `GatewayIntegrityMirrorFetchFail` |
+| Release signoff: evidence readiness indicators | `GatewayIntegrityCheckpointStale`, `GatewayIntegrityAuditLagHigh`, `GatewayIntegrityAuditStreamAnomaly` |
 | Checkpoint age vs audit lag | `GatewayIntegrityCheckpointStale`, `GatewayIntegrityAuditLagHigh` |
 
 ## Notes

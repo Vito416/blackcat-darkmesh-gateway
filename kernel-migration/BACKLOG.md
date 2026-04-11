@@ -7,6 +7,8 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 
 - Gateway-side implementation is largely complete for the current migration slice; the remaining blockers are mostly AO-side registry/authority lifecycle work and the final decommission evidence.
+- Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.
+- Treat that output as machine-checked evidence only; manual evidence still needs separate drill logs, rollback proof, and human sign-off before decommission.
 
 ## This week execution
 
@@ -231,7 +233,9 @@ Use this checklist before merge/release sign-off.
   - [ ] `GATEWAY_RESOURCE_PROFILE` (optional, `wedos_small|wedos_medium|diskless`)
   - [ ] `GATEWAY_INTEGRITY_STATE_TOKEN` secret (required unless `CONSISTENCY_ALLOW_ANON=1`)
 - [ ] Latest consistency-smoke artifacts are archived (`consistency-matrix.json`, drift report `.md`, drift summary `.json`).
+- [ ] Latest machine-validated release evidence is archived (`release-evidence-pack.md`, `release-evidence-pack.json`, `build-release-signoff-checklist` output, `validate-ao-dependency-gate` output, drift report `.md`, drift summary `.json`).
 - [ ] Latest evidence-dry-run artifact bundle is archived and strict bundle checks are passing.
+- [ ] Manual evidence is archived separately from machine validation: recovery drill timestamp, AO fallback drill proof, rollback proof, and stakeholder sign-off.
 - [ ] Recovery drill timestamp, AO fallback drill proof, and rollback proof are linked in release notes.
 - [ ] Stakeholder approval/sign-off recorded for decommission transition.
 

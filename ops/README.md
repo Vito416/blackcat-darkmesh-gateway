@@ -8,8 +8,13 @@
 - Compare-integrity operator tool: `npm run ops:compare-integrity` compares two gateway integrity snapshots for drift.
 - Multi-gateway matrix compare: `npm run ops:compare-integrity-matrix` supports `pairwise` and `all` drift checks.
 - Drift summary helper: `npm run ops:build-drift-alert-summary` turns matrix JSON into a profile-aware alert report.
+- Consistency preflight helper: `npm run ops:validate-consistency-preflight -- --urls <CSV> [--mode pairwise|all] [--profile wedos_small|wedos_medium|diskless] [--token <VALUE>|--allow-anon]`.
+- Consistency export helper: `npm run ops:export-consistency-report -- --matrix <FILE> --out-dir <DIR> [--profile wedos_small|wedos_medium|diskless] [--prefix <NAME>]` writes `*-drift-report.md` and `*-drift-summary.json`.
 - Release sign-off helper: `npm run ops:build-release-evidence-pack` consolidates consistency + evidence artifacts into one release pack.
 - AO dependency gate source: `kernel-migration/ao-dependency-gate.json` provides machine-readable P0.1/P1.1/P1.2 status for release gating.
+- AO dependency gate validation: `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json` checks gate structure and closed-check evidence references.
+- Release sign-off checklist generator: `npm run ops:build-release-signoff-checklist -- --pack <release-evidence-pack.json> [--strict]`.
+- Release readiness evaluator: `npm run ops:check-release-readiness -- --pack <release-evidence-pack.json> [--strict] [--json]`.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
 - Bundle indexing/exchange pack: `npm run ops:index-evidence-bundles` and `npm run ops:build-attestation-exchange-pack` for portable review artifacts.
 - Schema validation: keep attestation payloads aligned with `ops/schemas/integrity-attestation.schema.json` before archiving the bundle.
@@ -30,6 +35,17 @@
 - Scheduled CI consistency smoke: set repo variable `CONSISTENCY_URLS` (optional `CONSISTENCY_MODE`, `GATEWAY_RESOURCE_PROFILE`) and secret `GATEWAY_INTEGRITY_STATE_TOKEN` when state auth is enabled.
 - Scheduled consistency preflight: CI now fails fast on missing/invalid `CONSISTENCY_*` config and reports issues in job summary; for public state endpoints only, set `CONSISTENCY_ALLOW_ANON=1`.
 - CI release artifact: workflow job `release-evidence-pack` now downloads consistency/evidence artifacts and uploads `release-evidence-pack` (`.md` + `.json`) for sign-off.
+
+## Release drill flow
+1. Compare the integrity matrix with `npm run ops:compare-integrity-matrix -- --mode pairwise` or `--mode all`.
+2. Export the drift artifacts with `npm run ops:export-consistency-report -- --matrix <FILE> --out-dir <DIR> --profile wedos_medium`.
+3. Validate the AO dependency gate with `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json`.
+4. Build the release evidence pack with `npm run ops:build-release-evidence-pack`.
+5. Run the evidence export with `npm run ops:export-integrity-evidence`.
+6. Verify the attestation bundle with `npm run ops:validate-integrity-attestation`.
+7. Generate the sign-off checklist with `npm run ops:build-release-signoff-checklist -- --pack <release-evidence-pack.json> --strict`.
+8. Optionally run machine output check with `npm run ops:check-release-readiness -- --pack <release-evidence-pack.json> --json`.
+9. Attach checklist, drift report, and release pack to the release review.
 
 ## Production guardrails
 - Cache: keep `gateway_cache_size` below the host memory budget with a clear ceiling per deployment tier.

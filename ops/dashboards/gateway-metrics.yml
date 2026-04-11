@@ -37,7 +37,8 @@ dashboard:
           legendFormat: snapshot_fetch_fail/5m
         - expr: increase(gateway_integrity_mirror_fetch_fail_total[5m])
           legendFormat: mirror_fetch_fail/5m
-    - title: "Mirror mismatch / fetch-fail trend windows"
+    # Release signoff section: consistency trends and evidence readiness
+    - title: "Release signoff: consistency mismatch / fetch-fail trends"
       type: timeseries
       datasource: Prometheus
       targets:
@@ -49,6 +50,22 @@ dashboard:
           legendFormat: fetch_fail/5m
         - expr: increase(gateway_integrity_mirror_fetch_fail_total[15m])
           legendFormat: fetch_fail/15m
+    - title: "Release signoff: evidence readiness indicators"
+      type: stat
+      datasource: Prometheus
+      targets:
+        - expr: gateway_integrity_checkpoint_age_seconds
+          legendFormat: checkpoint_age_s
+        - expr: gateway_integrity_audit_lag_seconds
+          legendFormat: audit_lag_s
+        - expr: increase(gateway_integrity_audit_stream_anomaly_total[15m])
+          legendFormat: audit_anomaly/15m
+        - expr: increase(gateway_integrity_mirror_mismatch_total[15m])
+          legendFormat: mismatch/15m
+        - expr: increase(gateway_integrity_mirror_fetch_fail_total[15m])
+          legendFormat: fetch_fail/15m
+        - expr: increase(gateway_webhook_replay_pruned_total[10m])
+          legendFormat: replay_pruned/10m
     - title: "Checkpoint age vs audit lag"
       type: stat
       datasource: Prometheus

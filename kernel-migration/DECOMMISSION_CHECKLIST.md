@@ -4,6 +4,8 @@ Do not archive/delete the old repo until all checks below are complete.
 
 Gateway-side implementation and test coverage are ahead of the AO-side registry/authority lifecycle, so the remaining deletion gate is still blocked on the AO API and rollout evidence.
 
+Machine-validated release evidence can now be generated, but it does not close the AO-side blockers by itself. Keep the AO registry/authority items open until the underlying APIs and lifecycle flows are actually complete.
+
 ## A. Knowledge preservation
 
 - [ ] Kernel source snapshot commit is recorded in this folder.
@@ -60,6 +62,25 @@ Fail criteria:
 - [ ] Manual consistency smoke `workflow_dispatch` link recorded with timestamp and operator.
 - [ ] Bundle manifest archived with exact command, URLs, and artifact paths.
 - [ ] Stable archive link recorded for the final evidence bundle.
+
+### D.2 Machine-validated release evidence
+
+- The release pack should be built with `npm run ops:build-release-evidence-pack` (or `node scripts/build-release-evidence-pack.js`) and archived as `release-evidence-pack.md` plus `release-evidence-pack.json`.
+- The AO dependency gate should be validated with `node scripts/validate-ao-dependency-gate.js --file kernel-migration/ao-dependency-gate.json`; this proves the JSON is well formed, but it does not mean the AO lifecycle work is done.
+- The release sign-off checklist should be generated with `node scripts/build-release-signoff-checklist.js --pack <release-evidence-pack.json> [--strict]` so the pack status and blockers are machine summarized.
+- Consistency drift evidence should include the markdown drift report and JSON drift summary from `node scripts/build-drift-alert-summary.js` (`consistency-drift-report.md`, `consistency-drift-summary.json`).
+
+Pass criteria:
+- release pack status is `ready`
+- AO gate validation exits `0`
+- sign-off checklist is generated from the same pack and reflects the current blockers
+- consistency drift report and summary match the archived compare run
+
+Manual evidence still required separately:
+- recovery drill timestamps
+- AO fallback drill proof
+- rollback proof for at least one failure scenario
+- stakeholder approvals/sign-off
 
 ## E. Test parity
 

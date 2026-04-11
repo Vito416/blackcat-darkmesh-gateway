@@ -29,7 +29,6 @@ on_error() {
 
 trap on_error ERR
 
-echo "[integrity-gate] starting 14 checks"
 CURRENT_STEP="preflight"
 require_cmd npm
 require_cmd npx
@@ -37,6 +36,21 @@ require_cmd npx
 STEPS_DONE=0
 STEPS_TOTAL=14
 CURRENT_STEP=""
+
+if [[ -f tests/integrity-transition-formal.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
+if [[ -f tests/validate-ao-dependency-gate.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
+if [[ -f tests/export-consistency-report.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
+if [[ -f tests/build-release-signoff-checklist.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
+
+echo "[integrity-gate] starting ${STEPS_TOTAL} checks"
 
 CURRENT_STEP="build"
 run_step "$CURRENT_STEP" npm run build
@@ -61,6 +75,26 @@ run_step "$CURRENT_STEP" npx vitest run tests/integrity-policy-gate.test.ts
 
 CURRENT_STEP="integrity-incident"
 run_step "$CURRENT_STEP" npx vitest run tests/integrity-incident.test.ts
+
+if [[ -f tests/integrity-transition-formal.test.ts ]]; then
+  CURRENT_STEP="integrity-transition-formal"
+  run_step "$CURRENT_STEP" npx vitest run tests/integrity-transition-formal.test.ts
+fi
+
+if [[ -f tests/validate-ao-dependency-gate.test.ts ]]; then
+  CURRENT_STEP="validate-ao-dependency-gate"
+  run_step "$CURRENT_STEP" npx vitest run tests/validate-ao-dependency-gate.test.ts
+fi
+
+if [[ -f tests/export-consistency-report.test.ts ]]; then
+  CURRENT_STEP="export-consistency-report"
+  run_step "$CURRENT_STEP" npx vitest run tests/export-consistency-report.test.ts
+fi
+
+if [[ -f tests/build-release-signoff-checklist.test.ts ]]; then
+  CURRENT_STEP="build-release-signoff-checklist"
+  run_step "$CURRENT_STEP" npx vitest run tests/build-release-signoff-checklist.test.ts
+fi
 
 CURRENT_STEP="fetch-control"
 run_step "$CURRENT_STEP" npx vitest run tests/fetch-control.test.ts
