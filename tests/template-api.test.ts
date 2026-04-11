@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { handleRequest } from '../src/handler.js'
+import { getTemplateActionPolicy } from '../src/runtime/template/actions.js'
 import { proxyTemplateCall } from '../src/templateApi.js'
 import { resetTemplateContractCacheForTests } from '../src/templateContract.js'
 import { reset, snapshot } from '../src/metrics.js'
@@ -41,6 +42,12 @@ describe('template api policy gateway', () => {
     writeFileSync(filePath, `${JSON.stringify(contract, null, 2)}\n`, 'utf8')
     return filePath
   }
+
+  it('keeps the template action catalog aligned with known read/write actions', () => {
+    expect(getTemplateActionPolicy('public.get-page')?.kind).toBe('read')
+    expect(getTemplateActionPolicy('checkout.create-order')?.kind).toBe('write')
+    expect(getTemplateActionPolicy('evil.exec')).toBeUndefined()
+  })
 
   it('blocks unknown template action', async () => {
     const req = new Request('http://gateway/template/call', {

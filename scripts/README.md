@@ -232,6 +232,27 @@ npm run ops:validate-ao-dependency-gate -- \
   --file kernel-migration/ao-dependency-gate.json
 ```
 
+## Template backend contract validation
+
+`scripts/validate-template-backend-contract.js` checks `config/template-backend-contract.json` for shape sanity on top of the JSON schema file. It verifies:
+
+- action names are unique
+- each action has a non-empty method and a non-empty path that starts with `/`
+- method + path pairs are unique across the contract
+- `forbiddenCapabilities` is non-empty and contains no duplicates
+
+Usage:
+```bash
+npm run ops:validate-template-backend-contract
+npm run ops:validate-template-backend-contract -- --strict
+npm run ops:validate-template-backend-contract -- --file ./config/template-backend-contract.json --json
+```
+
+Exit codes:
+- `0` validation passed, or issues were reported without `--strict`
+- `3` validation issues found in `--strict` mode, or a runtime error occurred
+- `64` usage error
+
 ## Legacy import manifest validation
 
 `scripts/validate-legacy-manifest.js` checks the imported legacy module inventory against `libs/legacy/MANIFEST.md`.

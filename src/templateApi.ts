@@ -1,22 +1,8 @@
 import crypto from 'crypto'
 
 import { inc } from './metrics.js'
+import { getTemplateActionPolicy, type BackendTarget, type TemplateActionPolicy } from './runtime/template/actions.js'
 import { getTemplateContractAction } from './templateContract.js'
-
-type BackendTarget = 'ao' | 'write' | 'worker'
-type ActionKind = 'read' | 'write'
-
-type ValidateResult = { ok: true } | { ok: false; error: string }
-type Validator = (payload: unknown) => ValidateResult
-
-type TemplateActionPolicy = {
-  action: string
-  kind: ActionKind
-  target: BackendTarget
-  path: string
-  method: 'POST'
-  validate: Validator
-}
 
 type TemplateCallInput = {
   action: string
@@ -29,85 +15,8 @@ type TemplateCallInput = {
 const DEFAULT_TEMPLATE_MAX_BODY_BYTES = 32_768
 const DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS = 7_000
 
-function isObj(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === 'object' && !Array.isArray(v)
-}
-
-function hasStr(v: Record<string, unknown>, key: string): boolean {
-  return typeof v[key] === 'string' && (v[key] as string).trim().length > 0
-}
-
-function validateResolveRoute(payload: unknown): ValidateResult {
-  if (!isObj(payload)) return { ok: false, error: 'payload must be an object' }
-  if (!hasStr(payload, 'host')) return { ok: false, error: 'payload.host is required' }
-  if (!hasStr(payload, 'path')) return { ok: false, error: 'payload.path is required' }
-  return { ok: true }
-}
-
-function validateGetPage(payload: unknown): ValidateResult {
-  if (!isObj(payload)) return { ok: false, error: 'payload must be an object' }
-  if (!hasStr(payload, 'siteId')) return { ok: false, error: 'payload.siteId is required' }
-  if (!hasStr(payload, 'slug')) return { ok: false, error: 'payload.slug is required' }
-  return { ok: true }
-}
-
-function validateCreateOrder(payload: unknown): ValidateResult {
-  if (!isObj(payload)) return { ok: false, error: 'payload must be an object' }
-  if (!hasStr(payload, 'siteId')) return { ok: false, error: 'payload.siteId is required' }
-  if (!Array.isArray(payload.items) || payload.items.length === 0) {
-    return { ok: false, error: 'payload.items must be a non-empty array' }
-  }
-  return { ok: true }
-}
-
-function validateCreatePaymentIntent(payload: unknown): ValidateResult {
-  if (!isObj(payload)) return { ok: false, error: 'payload must be an object' }
-  if (!hasStr(payload, 'orderId')) return { ok: false, error: 'payload.orderId is required' }
-  if (!hasStr(payload, 'provider')) return { ok: false, error: 'payload.provider is required' }
-  const provider = String(payload.provider).toLowerCase()
-  if (!['stripe', 'paypal', 'gopay'].includes(provider)) {
-    return { ok: false, error: 'payload.provider must be stripe|paypal|gopay' }
-  }
-  return { ok: true }
-}
-
-const policies: TemplateActionPolicy[] = [
-  {
-    action: 'public.resolve-route',
-    kind: 'read',
-    target: 'ao',
-    path: '/api/public/resolve-route',
-    method: 'POST',
-    validate: validateResolveRoute,
-  },
-  {
-    action: 'public.get-page',
-    kind: 'read',
-    target: 'ao',
-    path: '/api/public/page',
-    method: 'POST',
-    validate: validateGetPage,
-  },
-  {
-    action: 'checkout.create-order',
-    kind: 'write',
-    target: 'write',
-    path: '/api/checkout/order',
-    method: 'POST',
-    validate: validateCreateOrder,
-  },
-  {
-    action: 'checkout.create-payment-intent',
-    kind: 'write',
-    target: 'write',
-    path: '/api/checkout/payment-intent',
-    method: 'POST',
-    validate: validateCreatePaymentIntent,
-  },
-]
-
 function getPolicy(action: string): TemplateActionPolicy | undefined {
-  const localPolicy = policies.find((p) => p.action === action)
+  const localPolicy = getTemplateActionPolicy(action)
   if (!localPolicy) return undefined
 
   const contractPolicy = getTemplateContractAction(action)

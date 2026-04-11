@@ -10,6 +10,13 @@ import { fetchIntegritySnapshot } from './integrity/client.js'
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
 import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
 import { applySecurityHeaders } from './securityHeaders.js'
+import {
+  basicCredentialsMatch,
+  checkToken,
+  readBearerToken,
+  readHeaderToken,
+  tokenEquals,
+} from './runtime/auth/httpAuth.js'
 import type { IntegritySnapshot } from './integrity/types.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
@@ -265,45 +272,6 @@ function requestIp(req: Request): string {
 function rateLimitResponse(key: string): Response | null {
   if (rateCheck(key)) return null
   return respond('Too Many Requests', { status: 429 })
-}
-
-function readBearerToken(request: Request): string {
-  const auth = request.headers.get('authorization') || ''
-  if (/^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, '').trim()
-  return ''
-}
-
-function readHeaderToken(request: Request, headerName: string): string {
-  return (request.headers.get(headerName) || '').trim()
-}
-
-function tokenEquals(expected: string, presented: string): boolean {
-  if (!expected || !presented) return false
-  const a = Buffer.from(expected)
-  const b = Buffer.from(presented)
-  if (a.length !== b.length) return false
-  return crypto.timingSafeEqual(a, b)
-}
-
-function checkToken(request: Request, expectedToken: string, headerName: string): boolean {
-  const bearer = readBearerToken(request)
-  const header = readHeaderToken(request, headerName)
-  return tokenEquals(expectedToken, bearer) || tokenEquals(expectedToken, header)
-}
-
-function basicCredentialsMatch(expectedUser: string, expectedPass: string, presented: string): boolean {
-  if (!presented || !/^Basic\s+/i.test(presented)) return false
-  try {
-    const b64 = presented.replace(/^Basic\s+/i, '')
-    const decoded = Buffer.from(b64, 'base64').toString('utf8')
-    const colonIndex = decoded.indexOf(':')
-    if (colonIndex <= 0) return false
-    const user = decoded.slice(0, colonIndex)
-    const pass = decoded.slice(colonIndex + 1)
-    return tokenEquals(expectedUser, user) && tokenEquals(expectedPass, pass)
-  } catch (_) {
-    return false
-  }
 }
 
 function jsonErrorResponse(status: number, error: string, extra: Record<string, unknown> = {}): Response {
@@ -771,9 +739,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (integrityPaused) return policyPausedResponse()
     const token = process.env.GATEWAY_FORGET_TOKEN
     if (token) {
-      const auth = request.headers.get('authorization') || request.headers.get('x-forget-token') || ''
-      const bearer = auth.replace(/^Bearer\s+/i, '').trim()
-      if (!tokenEquals(token, bearer) && !tokenEquals(token, auth.trim())) {
+      const auth = request.headers.get('authorization') || ''
+      const bearer = readBearerToken(request)
+      const header = readHeaderToken(request, 'x-forget-token')
+      if (!tokenEquals(token, bearer) && !tokenEquals(token, auth.trim()) && !tokenEquals(token, header)) {
         return respond('unauthorized', { status: 401 })
       }
     }
@@ -806,10 +775,11 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
     if (needBasic || needBearer || mustGuard) {
       const auth = request.headers.get('authorization') || ''
-      const alt = request.headers.get('x-metrics-token') || ''
+      const bearer = readBearerToken(request)
+      const alt = readHeaderToken(request, 'x-metrics-token')
       let authed = false
-      if (needBearer && /^Bearer\s+/i.test(auth)) {
-        authed = tokenEquals(process.env.METRICS_BEARER_TOKEN || '', auth.replace(/^Bearer\s+/i, '').trim())
+      if (needBearer && auth) {
+        authed = tokenEquals(process.env.METRICS_BEARER_TOKEN || '', bearer)
       }
       if (needBearer && !authed && alt) {
         authed = tokenEquals(process.env.METRICS_BEARER_TOKEN || '', alt)

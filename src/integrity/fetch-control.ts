@@ -1,3 +1,10 @@
+import {
+  normalizeBoundedInteger,
+  parseBoundedInteger,
+  resolveGatewayResourceProfile,
+  type GatewayResourceProfile,
+} from '../runtime/config/profile.js'
+
 export type IntegrityFetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 export type IntegrityFetchControl = {
@@ -6,8 +13,6 @@ export type IntegrityFetchControl = {
   retryBackoffMs: number
   retryJitterMs: number
 }
-
-type GatewayResourceProfile = 'wedos_small' | 'wedos_medium' | 'diskless'
 
 const DEFAULT_TIMEOUT_MS = 5000
 const DEFAULT_RETRY_ATTEMPTS = 3
@@ -29,72 +34,39 @@ const PROFILE_DEFAULTS: Record<GatewayResourceProfile, IntegrityFetchControl> = 
   diskless: { timeoutMs: 4000, retryAttempts: 2, retryBackoffMs: 75, retryJitterMs: DEFAULT_RETRY_JITTER_MS },
 }
 
-function readPositiveInteger(value: string | undefined, fallback: number, max: number): number {
-  if (value === undefined) return fallback
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed) || parsed < 1) return fallback
-  return Math.min(parsed, max)
-}
-
-function normalizePositiveInteger(value: number | undefined, fallback: number, max: number): number {
-  if (value === undefined || !Number.isFinite(value) || value < 1) return fallback
-  return Math.min(Math.floor(value), max)
-}
-
-function normalizeNonNegativeInteger(value: number | undefined, fallback: number, max: number): number {
-  if (value === undefined || !Number.isFinite(value) || value < 0) return fallback
-  return Math.min(Math.floor(value), max)
-}
-
-function readNonNegativeInteger(value: string | undefined, fallback: number, max: number): number {
-  if (value === undefined) return fallback
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed) || parsed < 0) return fallback
-  return Math.min(parsed, max)
-}
-
-function resolveResourceProfile(raw: string | undefined): GatewayResourceProfile | null {
-  const value = (raw || '').trim().toLowerCase()
-  if (!value) return null
-  if (value === 'wedos-small' || value === 'small' || value === 's' || value === 'wedos_small') return 'wedos_small'
-  if (value === 'wedos-medium' || value === 'medium' || value === 'm' || value === 'default' || value === 'wedos_medium') return 'wedos_medium'
-  if (value === 'diskless' || value === 'memory-only' || value === 'memory_only' || value === 'ephemeral') return 'diskless'
-  return null
-}
-
 export function resolveIntegrityFetchControl(
   overrides: Partial<IntegrityFetchControl> = {},
 ): IntegrityFetchControl {
-  const profile = resolveResourceProfile(process.env.GATEWAY_RESOURCE_PROFILE)
+  const profile = resolveGatewayResourceProfile(process.env.GATEWAY_RESOURCE_PROFILE)
   const profileDefaults = profile ? PROFILE_DEFAULTS[profile] : PROFILE_DEFAULTS.wedos_medium
 
   const timeoutMs =
-    normalizePositiveInteger(
+    normalizeBoundedInteger(
       overrides.timeoutMs,
-      readPositiveInteger(process.env.AO_INTEGRITY_FETCH_TIMEOUT_MS, profileDefaults.timeoutMs, MAX_TIMEOUT_MS),
+      parseBoundedInteger(process.env.AO_INTEGRITY_FETCH_TIMEOUT_MS, profileDefaults.timeoutMs, 1, MAX_TIMEOUT_MS),
+      1,
       MAX_TIMEOUT_MS,
     )
 
   const retryAttempts =
-    normalizePositiveInteger(
+    normalizeBoundedInteger(
       overrides.retryAttempts,
-      readPositiveInteger(process.env.AO_INTEGRITY_FETCH_RETRY_ATTEMPTS, profileDefaults.retryAttempts, MAX_RETRY_ATTEMPTS),
+      parseBoundedInteger(process.env.AO_INTEGRITY_FETCH_RETRY_ATTEMPTS, profileDefaults.retryAttempts, 1, MAX_RETRY_ATTEMPTS),
+      1,
       MAX_RETRY_ATTEMPTS,
     )
 
-  const retryBackoffMs = normalizeNonNegativeInteger(
+  const retryBackoffMs = normalizeBoundedInteger(
     overrides.retryBackoffMs,
-    readPositiveInteger(process.env.AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS, profileDefaults.retryBackoffMs, MAX_RETRY_BACKOFF_MS),
+    parseBoundedInteger(process.env.AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS, profileDefaults.retryBackoffMs, 0, MAX_RETRY_BACKOFF_MS),
+    0,
     MAX_RETRY_BACKOFF_MS,
   )
 
-  const retryJitterMs = normalizeNonNegativeInteger(
+  const retryJitterMs = normalizeBoundedInteger(
     overrides.retryJitterMs,
-    readNonNegativeInteger(
-      process.env.AO_INTEGRITY_FETCH_RETRY_JITTER_MS,
-      profileDefaults.retryJitterMs,
-      MAX_RETRY_JITTER_MS,
-    ),
+    parseBoundedInteger(process.env.AO_INTEGRITY_FETCH_RETRY_JITTER_MS, profileDefaults.retryJitterMs, 0, MAX_RETRY_JITTER_MS),
+    0,
     MAX_RETRY_JITTER_MS,
   )
 
@@ -125,7 +97,7 @@ export function getIntegrityRetryDelayMs(
 ): number {
   if (retryBackoffMs <= 0 || attempt < 1) return 0
   const delay = retryBackoffMs * 2 ** (attempt - 1)
-  const jitterCap = normalizeNonNegativeInteger(retryJitterMs, 0, MAX_RETRY_JITTER_MS)
+  const jitterCap = normalizeBoundedInteger(retryJitterMs, 0, 0, MAX_RETRY_JITTER_MS)
   const jitter = jitterCap > 0 ? Math.floor(normalizeRetryJitterSample(random) * (jitterCap + 1)) : 0
   return Math.min(delay + jitter, MAX_RETRY_BACKOFF_MS)
 }

@@ -17,6 +17,7 @@
     "ops:export-consistency-report": "node scripts/export-consistency-report.js",
     "ops:validate-consistency-preflight": "node scripts/validate-consistency-preflight.js",
     "ops:validate-ao-dependency-gate": "node scripts/validate-ao-dependency-gate.js",
+    "ops:validate-template-backend-contract": "node scripts/validate-template-backend-contract.js",
     "ops:validate-legacy-manifest": "node scripts/validate-legacy-manifest.js",
     "ops:audit-legacy-risk": "node scripts/audit-legacy-risk.js",
     "ops:build-legacy-migration-matrix": "node scripts/build-legacy-migration-matrix.js",

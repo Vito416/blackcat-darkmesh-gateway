@@ -1,5 +1,6 @@
 import { inc, gauge } from './metrics.js'
 import crypto from 'crypto'
+import { safeCompareHexOrAscii } from './runtime/crypto/safeCompare.js'
 
 const DEFAULT_CERT_TTL_MS = 6 * 60 * 60 * 1000
 const MIN_CERT_TTL_MS = 60 * 1000
@@ -15,11 +16,6 @@ const MAX_STRIPE_SIGNATURE_PARTS = 32
 const DEFAULT_PAYPAL_HTTP_TIMEOUT_MS = 7000
 const MIN_PAYPAL_HTTP_TIMEOUT_MS = 1000
 const MAX_PAYPAL_HTTP_TIMEOUT_MS = 60000
-
-function timingSafeCompare(left: string, right: string): boolean {
-  if (left.length !== right.length) return false
-  return crypto.timingSafeEqual(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'))
-}
 
 function parseBoundedInt(raw: string | undefined, fallback: number, min: number, max: number): number {
   const parsed = Number.parseInt(raw || '', 10)
@@ -109,7 +105,7 @@ export function verifyStripe(body: string, sigHeader: string | null, secret: str
   if (Math.abs(Date.now() - (ts * 1000)) > tol) return false
   const signedPayload = `${parsed.timestamp}.${body}`
   const expected = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex')
-  return parsed.signatures.some((candidate) => timingSafeCompare(expected, candidate))
+  return parsed.signatures.some((candidate) => safeCompareHexOrAscii(expected, candidate))
 }
 
 // PayPal webhook verification (HMAC fallback + RSA remote)
@@ -122,7 +118,7 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
     const sig = headers.get('PayPal-Transmission-Sig') || headers.get('PP-Signature')
     if (!sig) return false
     const expected = crypto.createHmac('sha256', secret).update(body).digest('hex')
-    if (timingSafeCompare(expected, sig.trim())) return true
+    if (safeCompareHexOrAscii(expected, sig.trim())) return true
   }
   const certUrl = headers.get('PayPal-Cert-Url')
   if (!isValidCertUrl(certUrl || undefined)) return false
