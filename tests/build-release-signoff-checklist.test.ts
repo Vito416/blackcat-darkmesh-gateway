@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { renderChecklist } from '../scripts/build-release-signoff-checklist.js'
 
 const scriptPath = fileURLToPath(new URL('../scripts/build-release-signoff-checklist.js', import.meta.url))
 const tempDirs: string[] = []
@@ -74,6 +75,28 @@ describe('build-release-signoff-checklist.js', () => {
     expect(res.stdout).toContain('- [ ] consistency status=fail: 2 failure run(s)')
     expect(res.stdout).toContain('## Warnings')
     expect(res.stdout).toContain('- [ ] evidence bundle should be revalidated before approval')
+  })
+
+  it('renders status lines for AO gate, consistency, and evidence sections', () => {
+    const markdown = renderChecklist({
+      sourcePath: '/tmp/release-pack.json',
+      release: '1.4.0',
+      createdAt: '2026-04-11T10:20:30.000Z',
+      status: 'warning',
+      blockers: ['consistency status=warn: 1 mismatch run(s)'],
+      warnings: ['evidence bundle should be revalidated before approval'],
+      consistency: { status: 'warn', reason: '1 mismatch run(s)' },
+      evidence: { status: 'pass', reason: 'latest bundle strict markers are ok' },
+      aoGate: { status: 'pass', reason: 'all required AO dependency checks are closed' },
+    })
+
+    expect(markdown).toContain('- AO gate: `pass` — all required AO dependency checks are closed')
+    expect(markdown).toContain('- Consistency: `warn` — 1 mismatch run(s)')
+    expect(markdown).toContain('- Evidence bundle: `pass` — latest bundle strict markers are ok')
+    expect(markdown).toContain('## Blockers')
+    expect(markdown).toContain('- [ ] consistency status=warn: 1 mismatch run(s)')
+    expect(markdown).toContain('## Warnings')
+    expect(markdown).toContain('- [ ] evidence bundle should be revalidated before approval')
   })
 
   it('exits 3 in strict mode when the pack is not ready', () => {

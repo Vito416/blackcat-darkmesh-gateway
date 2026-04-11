@@ -8,6 +8,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 - Gateway-side implementation is largely complete for the current migration slice; the remaining blockers are mostly AO-side registry/authority lifecycle work and the final decommission evidence.
 - Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.
+- Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, release pack, signoff checklist, and readiness JSON as one drill bundle.
 - Treat that output as machine-checked evidence only; manual evidence still needs separate drill logs, rollback proof, and human sign-off before decommission.
 
 ## This week execution
@@ -233,7 +234,8 @@ Use this checklist before merge/release sign-off.
   - [ ] `GATEWAY_RESOURCE_PROFILE` (optional, `wedos_small|wedos_medium|diskless`)
   - [ ] `GATEWAY_INTEGRITY_STATE_TOKEN` secret (required unless `CONSISTENCY_ALLOW_ANON=1`)
 - [ ] Latest consistency-smoke artifacts are archived (`consistency-matrix.json`, drift report `.md`, drift summary `.json`).
-- [ ] Latest machine-validated release evidence is archived (`release-evidence-pack.md`, `release-evidence-pack.json`, `build-release-signoff-checklist` output, `validate-ao-dependency-gate` output, drift report `.md`, drift summary `.json`).
+- [ ] Latest machine-validated release evidence is archived (`release-evidence-pack.md`, `release-evidence-pack.json`, `build-release-signoff-checklist` output, `check-release-readiness --json` output, `validate-ao-dependency-gate` output, drift report `.md`, drift summary `.json`).
+- [ ] Preferred operator drill path is `scripts/run-release-drill.js`; archive the matrix, drift report/summary, release pack, signoff checklist, and readiness JSON from one run.
 - [ ] Latest evidence-dry-run artifact bundle is archived and strict bundle checks are passing.
 - [ ] Manual evidence is archived separately from machine validation: recovery drill timestamp, AO fallback drill proof, rollback proof, and stakeholder sign-off.
 - [ ] Recovery drill timestamp, AO fallback drill proof, and rollback proof are linked in release notes.

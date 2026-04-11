@@ -15,6 +15,8 @@
 - AO dependency gate validation: `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json` checks gate structure and closed-check evidence references.
 - Release sign-off checklist generator: `npm run ops:build-release-signoff-checklist -- --pack <release-evidence-pack.json> [--strict]`.
 - Release readiness evaluator: `npm run ops:check-release-readiness -- --pack <release-evidence-pack.json> [--strict] [--json]`.
+- One-shot release drill orchestrator: `npm run ops:run-release-drill -- --urls <CSV> --out-dir <DIR> [--profile ...] [--mode ...] [--token ...] [--allow-anon] [--release ...] [--strict]`.
+- Release drill runbook: `ops/release-drill-runbook.md`.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
 - Bundle indexing/exchange pack: `npm run ops:index-evidence-bundles` and `npm run ops:build-attestation-exchange-pack` for portable review artifacts.
 - Schema validation: keep attestation payloads aligned with `ops/schemas/integrity-attestation.schema.json` before archiving the bundle.
@@ -37,15 +39,7 @@
 - CI release artifact: workflow job `release-evidence-pack` now downloads consistency/evidence artifacts and uploads `release-evidence-pack` (`.md` + `.json`) for sign-off.
 
 ## Release drill flow
-1. Compare the integrity matrix with `npm run ops:compare-integrity-matrix -- --mode pairwise` or `--mode all`.
-2. Export the drift artifacts with `npm run ops:export-consistency-report -- --matrix <FILE> --out-dir <DIR> --profile wedos_medium`.
-3. Validate the AO dependency gate with `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json`.
-4. Build the release evidence pack with `npm run ops:build-release-evidence-pack`.
-5. Run the evidence export with `npm run ops:export-integrity-evidence`.
-6. Verify the attestation bundle with `npm run ops:validate-integrity-attestation`.
-7. Generate the sign-off checklist with `npm run ops:build-release-signoff-checklist -- --pack <release-evidence-pack.json> --strict`.
-8. Optionally run machine output check with `npm run ops:check-release-readiness -- --pack <release-evidence-pack.json> --json`.
-9. Attach checklist, drift report, and release pack to the release review.
+See `ops/release-drill-runbook.md` for the canonical step-by-step release drill, expected artifacts, and triage matrix.
 
 ## Production guardrails
 - Cache: keep `gateway_cache_size` below the host memory budget with a clear ceiling per deployment tier.

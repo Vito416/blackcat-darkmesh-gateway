@@ -49,6 +49,9 @@ fi
 if [[ -f tests/build-release-signoff-checklist.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
+if [[ -f tests/run-release-drill.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
 
 echo "[integrity-gate] starting ${STEPS_TOTAL} checks"
 
@@ -94,6 +97,11 @@ fi
 if [[ -f tests/build-release-signoff-checklist.test.ts ]]; then
   CURRENT_STEP="build-release-signoff-checklist"
   run_step "$CURRENT_STEP" npx vitest run tests/build-release-signoff-checklist.test.ts
+fi
+
+if [[ -f tests/run-release-drill.test.ts ]]; then
+  CURRENT_STEP="run-release-drill"
+  run_step "$CURRENT_STEP" npx vitest run tests/run-release-drill.test.ts
 fi
 
 CURRENT_STEP="fetch-control"

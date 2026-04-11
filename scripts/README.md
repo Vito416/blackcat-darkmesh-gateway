@@ -47,7 +47,7 @@ GATEWAY_INTEGRITY_STATE_TOKEN=state-secret \
 It runs build first, then executes the integrity-focused Vitest slices in a fixed order, and finishes with a single success summary line:
 
 ```text
-[integrity-gate] SUCCESS 14/14 checks passed
+[integrity-gate] SUCCESS 19/19 checks passed
 ```
 
 Usage:
@@ -61,7 +61,18 @@ Notes:
 - The gate checks `npm` and `npx` up front and fails with a clear message if either is unavailable.
 - Output is step-oriented (`>>> step`, `<<< step [ok]`) so the first failing slice is easy to spot.
 - The gate stops on the first failure and prints the failing step name in the error line.
-- CI runs this gate in its own dedicated `Integrity gate` job, separate from the core `build + full tests` job, so the final `SUCCESS 14/14 checks passed` line is easy to find in logs.
+- CI runs this gate in its own dedicated `Integrity gate` job, separate from the core `build + full tests` job, so the final `SUCCESS 19/19 checks passed` line is easy to find in logs.
+
+## Consistency preflight
+
+`scripts/validate-consistency-preflight.js` checks a gateway URL set before a matrix compare or release drill. It validates URL syntax, mode/profile selection, and token or anonymous access rules.
+
+Usage:
+```bash
+npm run ops:validate-consistency-preflight -- \
+  --urls https://gateway-a.example.com,https://gateway-b.example.com \
+  --mode pairwise --profile wedos_medium --allow-anon
+```
 
 ## Integrity incident smoke
 
@@ -200,9 +211,30 @@ npm run ops:build-drift-alert-summary -- \
   --json
 ```
 
+## Consistency export report
+
+`scripts/export-consistency-report.js` turns a matrix JSON file into a markdown drift report plus a JSON summary.
+
+Usage:
+```bash
+npm run ops:export-consistency-report -- \
+  --matrix ./tmp/consistency-matrix.json \
+  --out-dir ./tmp/consistency-report
+```
+
+## AO dependency gate validation
+
+`scripts/validate-ao-dependency-gate.js` checks `kernel-migration/ao-dependency-gate.json` before release gating. It verifies the required checks, allowed statuses, and evidence links for closed items.
+
+Usage:
+```bash
+npm run ops:validate-ao-dependency-gate -- \
+  --file kernel-migration/ao-dependency-gate.json
+```
+
 ## Release evidence pack
 
-`scripts/build-release-evidence-pack.js` merges consistency and evidence artifacts into a single release-ready summary (`markdown` + optional JSON), suitable for v1.4.0 sign-off.
+`scripts/build-release-evidence-pack.js` merges consistency and evidence artifacts into a single release-ready summary (`markdown` + optional JSON) for sign-off.
 
 Usage:
 ```bash
@@ -222,6 +254,45 @@ npm run ops:build-release-evidence-pack -- \
   --evidence-dir ./tmp/evidence-artifacts \
   --ao-gate-file ./kernel-migration/ao-dependency-gate.json \
   --json
+```
+
+## Release sign-off checklist
+
+`scripts/build-release-signoff-checklist.js` renders a markdown checklist from a release pack and can fail strict when the pack is not ready.
+
+Usage:
+```bash
+npm run ops:build-release-signoff-checklist -- \
+  --pack ./artifacts/release-evidence-pack.json \
+  --out ./artifacts/release-signoff-checklist.md \
+  --strict
+```
+
+## Release readiness
+
+`scripts/check-release-readiness.js` scores a release pack as `ready`, `warning`, or `blocked`, and can print JSON for automation.
+
+Usage:
+```bash
+npm run ops:check-release-readiness -- \
+  --pack ./artifacts/release-evidence-pack.json \
+  --json
+```
+
+## One-shot release drill
+
+`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation, release pack build, sign-off checklist, and readiness JSON.
+
+Usage:
+```bash
+npm run ops:run-release-drill -- \
+  --urls https://gateway-a.example.com,https://gateway-b.example.com \
+  --out-dir ./tmp/release-drill \
+  --profile wedos_medium \
+  --mode pairwise \
+  --token "$GATEWAY_INTEGRITY_STATE_TOKEN" \
+  --release 1.4.0 \
+  --strict
 ```
 
 ## Integrity attestation artifact
@@ -406,7 +477,7 @@ GH_TOKEN="$GH_TOKEN" \
     --owner Vito416 \
     --repo blackcat-darkmesh-gateway \
     --workflow ci.yml \
-    --ref feat/gateway-p2-1-hardening-batch \
+    --ref main \
     --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
     --consistency-mode all \
     --consistency-profile wedos_medium \
@@ -482,7 +553,7 @@ GH_TOKEN="$GH_TOKEN" \
     --owner Vito416 \
     --repo blackcat-darkmesh-gateway \
     --workflow ci.yml \
-    --ref feat/gateway-p2-1-hardening-batch \
+    --ref main \
     --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
     --consistency-token "$STATE_TOKEN" \
     --evidence-urls https://gateway-a.example.com,https://gateway-b.example.com \

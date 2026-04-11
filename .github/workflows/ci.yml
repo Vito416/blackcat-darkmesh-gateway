@@ -177,89 +177,26 @@ jobs:
       - name: Scheduled config preflight
         if: ${{ github.event_name == 'schedule' }}
         run: |
-          node <<'NODE'
-          const fs = require('node:fs')
+          set -euo pipefail
 
-          const urlsRaw = (process.env.CONSISTENCY_URLS || '').trim()
-          const mode = (process.env.CONSISTENCY_MODE || 'pairwise').trim().toLowerCase()
-          const profile = (process.env.CONSISTENCY_PROFILE || 'wedos_medium').trim().toLowerCase()
-          const token = (process.env.CONSISTENCY_TOKEN || '').trim()
-          const allowAnon = ['1', 'true', 'yes'].includes((process.env.CONSISTENCY_ALLOW_ANON || '').trim().toLowerCase())
+          preflight_args=(
+            --urls "$CONSISTENCY_URLS"
+            --mode "$CONSISTENCY_MODE"
+            --profile "$CONSISTENCY_PROFILE"
+          )
 
-          const issues = []
-          const warnings = []
+          if [ -n "${CONSISTENCY_TOKEN:-}" ]; then
+            preflight_args+=(--token "$CONSISTENCY_TOKEN")
+          fi
 
-          const urls = urlsRaw
-            .split(',')
-            .map((url) => url.trim())
-            .filter(Boolean)
+          allow_anon_value="$(printf '%s' "${CONSISTENCY_ALLOW_ANON:-}" | tr '[:upper:]' '[:lower:]')"
+          case "$allow_anon_value" in
+            1|true|yes)
+              preflight_args+=(--allow-anon)
+              ;;
+          esac
 
-          if (!urls.length) {
-            issues.push('Missing repo variable: CONSISTENCY_URLS')
-          } else if (urls.length < 2) {
-            issues.push('CONSISTENCY_URLS must contain at least two comma-separated URLs')
-          }
-
-          for (const url of urls) {
-            try {
-              const parsed = new URL(url)
-              if (!['http:', 'https:'].includes(parsed.protocol)) {
-                issues.push(`Unsupported URL protocol in CONSISTENCY_URLS: ${url}`)
-              }
-            } catch (_) {
-              issues.push(`Invalid URL in CONSISTENCY_URLS: ${url}`)
-            }
-          }
-
-          if (!['pairwise', 'all'].includes(mode)) {
-            issues.push(`Invalid CONSISTENCY_MODE: ${mode} (expected pairwise|all)`)
-          }
-
-          if (!['wedos_small', 'wedos_medium', 'diskless'].includes(profile)) {
-            issues.push(
-              `Invalid GATEWAY_RESOURCE_PROFILE: ${profile} (expected wedos_small|wedos_medium|diskless)`,
-            )
-          }
-
-          if (!token && !allowAnon) {
-            issues.push(
-              'Missing secret: GATEWAY_INTEGRITY_STATE_TOKEN (set repo var CONSISTENCY_ALLOW_ANON=1 only for public /integrity/state)',
-            )
-          } else if (!token && allowAnon) {
-            warnings.push('Running scheduled consistency smoke without state token (CONSISTENCY_ALLOW_ANON=1)')
-          }
-
-          const lines = []
-          lines.push('## Consistency schedule preflight')
-          lines.push(`- URLs configured: ${urls.length}`)
-          lines.push(`- Mode: ${mode}`)
-          lines.push(`- Profile: ${profile}`)
-          lines.push(`- Token: ${token ? 'present' : 'missing'}`)
-          lines.push(`- Anonymous override: ${allowAnon ? 'enabled' : 'disabled'}`)
-
-          if (warnings.length > 0) {
-            lines.push('')
-            lines.push('### Warnings')
-            for (const warning of warnings) lines.push(`- ${warning}`)
-          }
-
-          if (issues.length > 0) {
-            lines.push('')
-            lines.push('### Blocking issues')
-            for (const issue of issues) lines.push(`- ${issue}`)
-          } else {
-            lines.push('')
-            lines.push('✅ Preflight passed.')
-          }
-
-          const summaryFile = process.env.GITHUB_STEP_SUMMARY
-          if (summaryFile) {
-            fs.appendFileSync(summaryFile, `${lines.join('\n')}\n`)
-          }
-          console.log(lines.join('\n'))
-
-          if (issues.length > 0) process.exit(1)
-          NODE
+          npm run --silent ops:validate-consistency-preflight -- "${preflight_args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Compare integrity matrix
         id: compare_matrix
         continue-on-error: true
@@ -390,6 +327,8 @@ jobs:
         run: npm run ops:export-consistency-report -- --help
       - name: "Help: release sign-off checklist"
         run: npm run ops:build-release-signoff-checklist -- --help
+      - name: "Help: release drill orchestrator"
+        run: npm run ops:run-release-drill -- --help
       - name: "Help: bundle check"
         run: npm run ops:check-evidence-bundle -- --help
       - name: "Help: latest bundle"
@@ -587,6 +526,10 @@ jobs:
           node scripts/build-release-signoff-checklist.js \
             --pack "$RELEASE_PACK_JSON" \
             --out "$RELEASE_SIGNOFF_MD"
+      - name: Check release readiness
+        run: |
+          set -euo pipefail
+          npm run --silent ops:check-release-readiness -- --pack "$RELEASE_PACK_JSON" --json | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Append release pack summary
         if: always()
         run: |

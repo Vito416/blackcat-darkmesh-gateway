@@ -8,6 +8,7 @@ import {
   normalizeAoStatus,
   parseArgs,
   parseTimestampFromDir,
+  renderMarkdown,
   resolveConsistencyStatus,
   runCli,
 } from '../scripts/build-release-evidence-pack.js'
@@ -102,6 +103,39 @@ describe('build-release-evidence-pack.js', () => {
     )
     expect(notReady.status).toBe('not-ready')
     expect(notReady.blockers.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('propagates AO gate and consistency blockers into a not-ready pack', () => {
+    const readiness = combineReadiness(
+      { present: true, status: 'fail', reason: '1 failure run(s)' },
+      { present: true, status: 'pass', reason: 'latest bundle strict markers are ok' },
+      { present: true, status: 'fail', reason: '1 required AO check(s) not closed' },
+      true,
+      true,
+    )
+
+    expect(readiness.status).toBe('not-ready')
+    expect(readiness.blockers).toEqual([
+      'consistency status=fail: 1 failure run(s)',
+      'ao dependency gate status=fail: 1 required AO check(s) not closed',
+    ])
+    expect(readiness.warnings).toEqual([])
+
+    const markdown = renderMarkdown({
+      createdAt: '2026-04-11T10:20:30.000Z',
+      release: '1.4.0',
+      status: readiness.status,
+      blockers: readiness.blockers,
+      warnings: readiness.warnings,
+      consistency: { present: true, status: 'fail', reason: '1 failure run(s)' },
+      evidence: { present: true, status: 'pass', reason: 'latest bundle strict markers are ok' },
+      aoGate: { present: true, status: 'fail', reason: '1 required AO check(s) not closed' },
+    })
+
+    expect(markdown).toContain('- Status: **NOT-READY**')
+    expect(markdown).toContain('## Blockers')
+    expect(markdown).toContain('- consistency status=fail: 1 failure run(s)')
+    expect(markdown).toContain('- ao dependency gate status=fail: 1 required AO check(s) not closed')
   })
 
   it('normalizes AO statuses and validates AO gate file', async () => {

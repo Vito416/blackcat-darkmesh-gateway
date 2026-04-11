@@ -20,6 +20,7 @@
     "ops:build-release-evidence-pack": "node scripts/build-release-evidence-pack.js",
     "ops:build-release-signoff-checklist": "node scripts/build-release-signoff-checklist.js",
     "ops:check-release-readiness": "node scripts/check-release-readiness.js",
+    "ops:run-release-drill": "node scripts/run-release-drill.js",
     "ops:check-evidence-bundle": "node scripts/check-evidence-bundle.js",
     "ops:latest-evidence-bundle": "node scripts/latest-evidence-bundle.js",
     "ops:dispatch-consistency-smoke": "node scripts/dispatch-consistency-smoke.js",
