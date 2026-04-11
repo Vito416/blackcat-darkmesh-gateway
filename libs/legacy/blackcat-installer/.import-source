@@ -1,1 +1,3 @@
-blackcat-installer
+module: blackcat-installer
+source_commit: a975d15
+source_repo: snapshot-import

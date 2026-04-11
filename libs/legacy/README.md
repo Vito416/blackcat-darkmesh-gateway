@@ -13,6 +13,8 @@ This folder contains selected source snapshots imported from legacy Blackcat rep
 - Gateway is becoming the controlled backend surface for template runtime calls.
 - Keeping snapshots here prevents rework and helps retire old repos safely.
 
+Migration is driven by `MIGRATION_PLAN.md`, which keeps the snapshot inventory, phase gates, and do-not-port rules in one place.
+
 ## Included modules
 
 - `blackcat-analytics`
@@ -26,6 +28,17 @@ This folder contains selected source snapshots imported from legacy Blackcat rep
 - `blackcat-mailing`
 - `blackcat-sessions`
 - `blackcat-installer`
+
+## Migration workflow
+
+Use this sequence for every module:
+
+1. snapshot - keep `libs/legacy/<module>/` as the read-only source reference
+2. audit - record role, language, destination, dependency risk, and security risk in `MIGRATION_PLAN.md`
+3. adapter - add a gateway-owned facade that preserves the current contract
+4. runtime module - move the cleaned implementation into the gateway runtime and remove the legacy import path
+
+When a module still exists in `libs/legacy/`, treat it as reference material only. New runtime code should depend on gateway-owned modules, not on the snapshot directly.
 
 ## Intentionally excluded from import
 
@@ -46,4 +59,5 @@ bash scripts/import-legacy-libs.sh
 ## Notes
 
 - These snapshots are migration references and source donors, not immediately production-ready drop-ins.
-- Final consolidation should move cleaned modules into `src/` or `libs/runtime/` with proper tests and API boundaries.
+- Final consolidation should move cleaned modules into gateway-owned runtime modules with proper API boundaries and a documented decommission path.
+- See `MIGRATION_PLAN.md` for the per-module table, phase gates, and do-not-port rules.

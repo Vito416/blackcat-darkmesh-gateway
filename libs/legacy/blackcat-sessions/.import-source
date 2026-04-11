@@ -1,1 +1,3 @@
-blackcat-sessions
+module: blackcat-sessions
+source_commit: 5977072
+source_repo: snapshot-import

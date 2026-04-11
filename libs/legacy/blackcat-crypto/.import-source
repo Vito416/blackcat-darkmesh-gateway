@@ -1,1 +1,3 @@
-blackcat-crypto
+module: blackcat-crypto
+source_commit: 4f59c09
+source_repo: snapshot-import

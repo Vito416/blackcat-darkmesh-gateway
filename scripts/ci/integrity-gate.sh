@@ -67,6 +67,15 @@ fi
 if [[ -f tests/run-decommission-closeout.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
+if [[ -f tests/validate-legacy-manifest.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
+if [[ -f tests/audit-legacy-risk.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
+if [[ -f tests/build-legacy-migration-matrix.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
 if [[ -f tests/check-decommission-readiness.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
@@ -151,6 +160,21 @@ fi
 if [[ -f tests/run-decommission-closeout.test.ts ]]; then
   CURRENT_STEP="run-decommission-closeout"
   run_step "$CURRENT_STEP" npx vitest run tests/run-decommission-closeout.test.ts
+fi
+
+if [[ -f tests/validate-legacy-manifest.test.ts ]]; then
+  CURRENT_STEP="validate-legacy-manifest"
+  run_step "$CURRENT_STEP" npx vitest run tests/validate-legacy-manifest.test.ts
+fi
+
+if [[ -f tests/audit-legacy-risk.test.ts ]]; then
+  CURRENT_STEP="audit-legacy-risk"
+  run_step "$CURRENT_STEP" npx vitest run tests/audit-legacy-risk.test.ts
+fi
+
+if [[ -f tests/build-legacy-migration-matrix.test.ts ]]; then
+  CURRENT_STEP="build-legacy-migration-matrix"
+  run_step "$CURRENT_STEP" npx vitest run tests/build-legacy-migration-matrix.test.ts
 fi
 
 if [[ -f tests/check-decommission-readiness.test.ts ]]; then

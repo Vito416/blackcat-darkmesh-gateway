@@ -1,1 +1,3 @@
-blackcat-auth
+module: blackcat-auth
+source_commit: 14534b4
+source_repo: snapshot-import

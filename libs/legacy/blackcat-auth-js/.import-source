@@ -1,1 +1,3 @@
-blackcat-auth-js
+module: blackcat-auth-js
+source_commit: ff46aa7
+source_repo: snapshot-import

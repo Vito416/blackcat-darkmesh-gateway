@@ -1,1 +1,3 @@
-blackcat-crypto-js
+module: blackcat-crypto-js
+source_commit: 8df11f5
+source_repo: snapshot-import

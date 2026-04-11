@@ -1,1 +1,3 @@
-blackcat-mailing
+module: blackcat-mailing
+source_commit: 2e28e28
+source_repo: snapshot-import

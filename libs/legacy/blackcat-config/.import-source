@@ -1,1 +1,3 @@
-blackcat-config
+module: blackcat-config
+source_commit: aea90d4
+source_repo: snapshot-import

@@ -232,6 +232,55 @@ npm run ops:validate-ao-dependency-gate -- \
   --file kernel-migration/ao-dependency-gate.json
 ```
 
+## Legacy import manifest validation
+
+`scripts/validate-legacy-manifest.js` checks the imported legacy module inventory against `libs/legacy/MANIFEST.md`.
+It parses the manifest table, verifies every listed module directory exists under `libs/legacy/<module>`, and confirms each module has `README.md`, `LICENSE`, and a `.import-source` file with a commit-ish marker.
+
+Usage:
+```bash
+npm run ops:validate-legacy-manifest
+npm run ops:validate-legacy-manifest -- --json
+npm run ops:validate-legacy-manifest -- --manifest libs/legacy/MANIFEST.md --legacy-dir libs/legacy --strict
+```
+
+Exit codes:
+- `0` validation passed, or issues were reported without `--strict`
+- `3` validation issues found in `--strict` mode
+- `64` usage error
+
+## Legacy risk audit
+
+`scripts/audit-legacy-risk.js` scans `libs/legacy` for high-risk patterns before runtime extraction.
+
+It reports:
+- JS/TS risk patterns (`eval`, `new Function`, `child_process` execution and shell mode)
+- PHP risk patterns (`eval`, command execution functions, dynamic include/require paths)
+- generic risk hints (private keys, bearer tokens, SQL string concatenation hints)
+
+Usage:
+```bash
+npm run ops:audit-legacy-risk
+npm run ops:audit-legacy-risk -- --strict
+npm run ops:audit-legacy-risk -- --json > ./tmp/legacy-risk.json
+```
+
+Exit codes:
+- `0` no critical findings in strict mode, or report generated in non-strict mode
+- `3` strict mode with critical findings (or runtime scan failure)
+- `64` usage error
+
+## Legacy migration matrix build
+
+`scripts/build-legacy-migration-matrix.js` generates a markdown matrix from `libs/legacy/MANIFEST.md` and optional risk JSON.
+
+Usage:
+```bash
+npm run ops:build-legacy-migration-matrix
+npm run ops:build-legacy-migration-matrix -- --risk ./tmp/legacy-risk.json
+npm run ops:build-legacy-migration-matrix -- --out ./kernel-migration/legacy-libs-matrix.md --json
+```
+
 ## Release evidence pack
 
 `scripts/build-release-evidence-pack.js` merges consistency and evidence artifacts into a single release-ready summary (`markdown` + optional JSON) for sign-off.

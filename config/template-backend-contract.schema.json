@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "./config/template-backend-contract.schema.json",
+  "title": "Blackcat template backend contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "templateId",
+    "templateVersion",
+    "allowedActions",
+    "forbiddenCapabilities"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "Schema version for the template-backend contract artifact."
+    },
+    "templateId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable template identifier."
+    },
+    "templateVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Template release version covered by this contract."
+    },
+    "allowedActions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Approved template-to-gateway backend actions.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "method",
+          "path",
+          "auth",
+          "requestSchemaRef",
+          "responseSchemaRef",
+          "ratelimitProfile",
+          "idempotency"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Action name exposed to template code."
+          },
+          "method": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+            "description": "HTTP method bound to the approved backend route."
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^/",
+            "description": "Approved backend path for the action."
+          },
+          "auth": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["requiredRole"],
+            "properties": {
+              "requiredRole": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Role required to invoke the action."
+              }
+            },
+            "description": "Authorization requirements for the action."
+          },
+          "requestSchemaRef": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Reference to the request schema for the action."
+          },
+          "responseSchemaRef": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Reference to the response schema for the action."
+          },
+          "ratelimitProfile": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Named rate-limit profile applied to the action."
+          },
+          "idempotency": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode"],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": ["required", "optional", "forbidden"],
+                "description": "Idempotency requirement for the action."
+              },
+              "keyHeader": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional request header used as the idempotency key."
+              }
+            },
+            "description": "Idempotency policy for the action."
+          }
+        }
+      }
+    },
+    "forbiddenCapabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Capabilities templates must never gain through the backend contract.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "raw-sql",
+          "arbitrary-outbound-http",
+          "eval",
+          "secret-access"
+        ]
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional integrity metadata for future manifest and bundle binding.",
+      "properties": {
+        "manifestRootRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional reference to the manifest root object."
+        },
+        "manifestHashRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional reference to the manifest hash or checksum."
+        },
+        "bundleRootRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional reference to the bundle root object."
+        },
+        "bundleHashRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional reference to the bundle hash or checksum."
+        }
+      }
+    }
+  }
+}

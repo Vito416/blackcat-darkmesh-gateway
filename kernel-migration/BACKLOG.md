@@ -12,6 +12,17 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness`, but the final state is still **automation complete, awaiting AO/manual proofs**.
 - Treat that output as machine-checked evidence only; AO gate closure and manual evidence still need separate drill logs, rollback proof, and human sign-off before decommission.
 
+### Gateway libs consolidation workstream
+
+This workstream is gateway-owned and can progress against the snapshot inventory now; it does not depend on AO closeout being finished first.
+
+- [ ] Keep `libs/legacy/MIGRATION_PLAN.md` current for every imported snapshot module.
+- [ ] Map each gateway import from `libs/legacy/*` to a gateway-owned adapter or runtime module.
+- [ ] Start extraction with the P0 request-path modules: config, core, crypto, auth, and sessions.
+- [ ] Separate adapter work from runtime extraction so each replacement can be reviewed in a small diff.
+- [ ] Mark legacy-only tooling, templates, and bootstrap helpers as do-not-port for runtime.
+- [ ] Record a decommission condition for every module before removing the legacy import path.
+
 ## This week execution
 
 - [gateway] Keep the integrity gate aligned with the live AO snapshot shape and retain the new smoke/CI checks as the default path.

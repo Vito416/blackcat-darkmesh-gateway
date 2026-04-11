@@ -26,6 +26,7 @@ Machine-validated release evidence can now be generated, but it does not close t
 
 - [ ] Authority separation (`root/upgrade/emergency/reporter`) exists in AO policy model.
 - [ ] Key rotation procedure is implemented and tested.
+- [ ] Template-backend contract is defined and validated before legacy repos are retired.
 - [x] Replay/idempotency checks exist for privileged integrity actions.
 - [x] Incident path exists (report + operational response).
 
