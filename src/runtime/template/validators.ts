@@ -1,3 +1,5 @@
+import { validateCreatePaymentIntentPayload } from '../payments/validators.js'
+
 type ValidateResult = { ok: true } | { ok: false; error: string }
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -32,12 +34,5 @@ export function validateCreateOrder(payload: unknown): ValidateResult {
 }
 
 export function validateCreatePaymentIntent(payload: unknown): ValidateResult {
-  if (!isObj(payload)) return { ok: false, error: 'payload must be an object' }
-  if (!hasStr(payload, 'orderId')) return { ok: false, error: 'payload.orderId is required' }
-  if (!hasStr(payload, 'provider')) return { ok: false, error: 'payload.provider is required' }
-  const provider = String(payload.provider).toLowerCase()
-  if (!['stripe', 'paypal', 'gopay'].includes(provider)) {
-    return { ok: false, error: 'payload.provider must be stripe|paypal|gopay' }
-  }
-  return { ok: true }
+  return validateCreatePaymentIntentPayload(payload)
 }

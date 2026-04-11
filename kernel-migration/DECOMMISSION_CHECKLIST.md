@@ -6,6 +6,24 @@ Gateway-side implementation and test coverage are ahead of the AO-side registry/
 
 Machine-validated release evidence can now be generated, but it does not close the AO-side blockers by itself. The closeout automation is complete, awaiting AO/manual proofs, so keep the AO registry/authority items open until the underlying APIs and lifecycle flows are actually complete.
 
+## Legacy module exit criteria
+
+For each module below, require the same three proof types before marking it retired: (1) replacement path evidence, (2) targeted test log with exit code `0`, and (3) `rg` output showing no request-path import from `libs/legacy/<module>` in `src/`. Attach one global runtime-boundary proof per bundle: `npm run ops:check-legacy-runtime-boundary -- --strict` with `Findings: 0`.
+
+| Legacy module | Module-specific proof expectations |
+| --- | --- |
+| `blackcat-config` | Replacement in `src/runtime/config/`; pass `tests/runtime-config-profile.test.ts` and `tests/profile-tuning-sync.test.ts`; attach `rg -n "libs/legacy/blackcat-config" src` output. |
+| `blackcat-core` | Replacement in `src/runtime/core/` and template helpers in `src/runtime/template/`; pass `tests/template-api.test.ts` and `tests/validate-template-backend-contract.test.ts`; attach `rg -n "libs/legacy/blackcat-core" src` output. |
+| `blackcat-crypto` | Replacement in `src/runtime/crypto/`; pass `tests/runtime-crypto-safeCompare.test.ts` and `tests/webhooks.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto" src` output. |
+| `blackcat-auth` | Replacement in `src/runtime/auth/`; pass `tests/runtime-auth-httpAuth.test.ts` and `tests/metrics-auth.test.ts`; attach `rg -n "libs/legacy/blackcat-auth" src` output. |
+| `blackcat-sessions` | Replacement in `src/runtime/sessions/`; pass `tests/runtime-sessions-replayStore.test.ts` and `tests/rate-replay-limits.test.ts`; attach `rg -n "libs/legacy/blackcat-sessions" src` output. |
+| `blackcat-auth-js` | Gateway-owned client boundary exists (`src/clients/auth-sdk/` or documented equivalent); pass `tests/runtime-auth-sdk-*.test.ts`; attach `rg -n "libs/legacy/blackcat-auth-js" src` output. |
+| `blackcat-crypto-js` | Gateway-owned client boundary exists (`src/clients/crypto-sdk/` or documented equivalent); pass `tests/runtime-crypto-sdk-*.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto-js" src` output. |
+| `blackcat-mailing` | Replacement in `src/runtime/mailing/`; pass `tests/runtime-mailing-policy.test.ts`; attach `rg -n "libs/legacy/blackcat-mailing" src` output. |
+| `blackcat-gopay` | Replacement in `src/runtime/payments/`; pass `tests/runtime-payments-validators.test.ts` and `tests/template-api.test.ts`; attach `rg -n "libs/legacy/blackcat-gopay" src` output. |
+| `blackcat-analytics` | Replacement in `src/runtime/telemetry/analytics/`; pass `tests/runtime-telemetry-analytics.test.ts`; attach `rg -n "libs/legacy/blackcat-analytics" src` output. |
+| `blackcat-installer` | Explicit ops-only classification (`ops/` + `scripts/` references only); attach `rg -n "blackcat-installer|libs/legacy/blackcat-installer" src` output showing no request-path usage. |
+
 ## A. Knowledge preservation
 
 - [ ] Kernel source snapshot commit is recorded in this folder.

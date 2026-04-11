@@ -16,12 +16,32 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 This workstream is gateway-owned and can progress against the snapshot inventory now; it does not depend on AO closeout being finished first.
 
-- [ ] Keep `libs/legacy/MIGRATION_PLAN.md` current for every imported snapshot module.
-- [ ] Map each gateway import from `libs/legacy/*` to a gateway-owned integration module or runtime module.
-- [ ] Start extraction with the P0 request-path modules: config, core, crypto, auth, and sessions.
-- [ ] Separate integration work from runtime extraction so each replacement can be reviewed in a small diff.
-- [ ] Mark legacy-only tooling, templates, and bootstrap helpers as do-not-port for runtime.
-- [ ] Record a decommission condition for every module before removing the legacy import path.
+- [x] Keep `libs/legacy/MIGRATION_PLAN.md` current for every imported snapshot module (includes target path, status, and explicit decommission condition per module).
+- [x] Map runtime usage away from direct legacy imports (`rg -n "libs/legacy" src` -> no matches).
+- [x] Runtime boundary enforcement exists (`npm run ops:check-legacy-runtime-boundary -- --strict`, covered by `tests/check-legacy-runtime-boundary.test.ts`).
+- [x] Initial request-path extraction landed for runtime helpers:
+  - `src/runtime/auth/httpAuth.ts`
+  - `src/runtime/crypto/safeCompare.ts`
+  - `src/runtime/config/profile.ts`
+  - `src/runtime/sessions/replayStore.ts`
+  - `src/runtime/template/actions.ts` + `src/runtime/template/validators.ts`
+- [x] Additional extraction landed for operational helpers:
+  - `src/runtime/mailing/payloadPolicy.ts` + `src/runtime/mailing/sanitizer.ts`
+  - `src/runtime/payments/providers.ts` + `src/runtime/payments/validators.ts`
+  - `src/runtime/telemetry/analyticsEvent.ts` + `src/runtime/telemetry/analyticsPolicy.ts`
+- [x] Do-not-port rules are documented for runtime in `libs/legacy/MIGRATION_PLAN.md`.
+- [x] Decommission conditions are now tracked per module in `libs/legacy/MIGRATION_PLAN.md`.
+- [~] `blackcat-config`: finish full config loader extraction (profile + secret source contract), then add decommission proof with passing config/profile tests.
+- [~] `blackcat-core`: complete narrow `src/runtime/core/` extraction and keep template helper contract aligned with `tests/template-api.test.ts`.
+- [~] `blackcat-crypto`: expand from safe-compare helpers to full runtime crypto boundary (verification/signing key handling), then add module decommission proof.
+- [~] `blackcat-auth`: extend from HTTP auth helpers to gateway-owned token/policy service and remove remaining auth-policy drift points.
+- [~] `blackcat-sessions`: extend from replay store helper to full session lifecycle boundary (create/read/rotate/revoke) with deterministic failure semantics.
+- [ ] `blackcat-auth-js`: define keep-as-client boundary and implement gateway-owned adapter/tests under `src/clients/auth-sdk/` (or document explicit non-runtime ownership).
+- [ ] `blackcat-crypto-js`: define keep-as-client boundary and implement gateway-owned adapter/tests under `src/clients/crypto-sdk/` (or document explicit non-runtime ownership).
+- [~] `blackcat-mailing`: extend current policy/sanitizer helpers to queue + transport boundary and delivery-path tests before decommission.
+- [~] `blackcat-gopay`: extend current provider/validator helpers to callback verification + idempotency/duplicate-write defense tests before decommission.
+- [~] `blackcat-analytics`: extend current analytics normalization/policy helpers to production sink/export boundary and retention/drop policy tests.
+- [ ] `blackcat-installer`: keep installer logic ops-only (`ops/` + `scripts/`), and enforce zero request-path imports from installer snapshot.
 
 ## This week execution
 

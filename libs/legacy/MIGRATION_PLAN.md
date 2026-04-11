@@ -11,21 +11,31 @@ Move legacy snapshots into the gateway in a way that is:
 - fail-closed: security-sensitive paths do not keep legacy fallback behavior
 - decommissionable: each snapshot can be removed once the gateway-owned replacement is live
 
-## Module matrix
+## Module matrix (status snapshot: `2026-04-11` UTC)
 
-| Module | Role | Language | Likely destination in gateway | Dependency risk | Security risk | Priority | Acceptance criteria |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `blackcat-config` | Runtime config and profile loading | PHP | `src/runtime/config/` | High | High | P0 | Gateway boots from gateway-owned config loader; no security-critical path depends on env-only bypasses; profile and secret resolution are covered by the gateway contract. |
-| `blackcat-core` | Shared kernel primitives and low-level utilities | PHP | `src/runtime/core/` with narrow shared helpers only | High | High | P0 | Request-path code no longer imports legacy kernel primitives directly; any reused primitive has a gateway-owned wrapper or replacement; no hidden global state is introduced. |
-| `blackcat-crypto` | AEAD, HMAC, key rotation, envelope handling | PHP | `src/runtime/crypto/` | High | High | P0 | All crypto and signing calls go through a gateway-owned integration module; raw key handling is removed from callers; fail-closed verification is enforced before serving protected data. |
-| `blackcat-auth` | Authentication, authorization, token/session policy | PHP | `src/runtime/auth/` | High | High | P0 | Login, token, and policy decisions are gateway-owned; session and role checks no longer rely on legacy imports; auth failures remain deterministic and auditable. |
-| `blackcat-sessions` | DB-backed session lifecycle | PHP | `src/runtime/sessions/` | High | High | P0 | Session create/read/rotate/revoke flow uses gateway-owned storage and policy; no legacy shim is required in request handlers; invalid or stale sessions fail closed. |
-| `blackcat-auth-js` | TypeScript/JavaScript auth SDK/client helpers | TypeScript / JavaScript | `src/clients/auth-sdk/` or an integration boundary, not hot-path runtime | Medium | Medium | P1 | Gateway runtime does not depend on the snapshot at runtime; any client helper is isolated behind a documented interface and can be versioned independently. |
-| `blackcat-crypto-js` | TypeScript/JavaScript crypto SDK/client helpers | TypeScript / JavaScript | `src/clients/crypto-sdk/` or an integration boundary, not hot-path runtime | Medium | Medium | P1 | Gateway runtime no longer imports the snapshot directly; envelope and slot helpers are either gateway-owned or kept strictly as client-side support code. |
-| `blackcat-mailing` | Outbox, SMTP transport, queue worker | PHP | `src/runtime/mailing/` | Medium | Medium | P1 | Queue enqueue and SMTP dispatch are gateway-owned; mail payload handling stays behind one integration module; secrets and SMTP config are not read from ad-hoc legacy paths. |
-| `blackcat-gopay` | Payment gateway integration and idempotent payment flow | PHP | `src/runtime/payments/` | Medium | High | P1 | Payment creation, callback handling, and idempotency are gateway-owned; any external gateway client is isolated behind one payment interface; duplicate writes are blocked. |
-| `blackcat-analytics` | Event/telemetry collection and reporting support | PHP | `src/runtime/telemetry/analytics/` | Medium | Low | P2 | Gateway emits telemetry through its own sink; analytics consumers no longer require the legacy snapshot; event formatting is stable and documented. |
-| `blackcat-installer` | Environment bootstrap and module installation workflow | PHP + shell helpers | `ops/bootstrap/` or docs-only; do not place in request-path runtime | High | Low | P2 | Installer behavior is excluded from runtime code; any retained logic stays in ops/tooling space only; no runtime import depends on installer commands or templates. |
+| Module | Role | Language | Gateway target path | Dependency risk | Security risk | Priority | Current status | Decommission condition (explicit, testable) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `blackcat-config` | Runtime config and profile loading | PHP | `src/runtime/config/` | High | High | P0 | `partially extracted` | Gateway-owned config/profile loader covers security-critical fetch settings, `tests/runtime-config-profile.test.ts` + `tests/profile-tuning-sync.test.ts` pass, and `rg -n "libs/legacy/blackcat-config" src` returns no matches. |
+| `blackcat-core` | Shared kernel primitives and low-level utilities | PHP | `src/runtime/core/` (target) + `src/runtime/template/` (current extracted helpers) | High | High | P0 | `partially extracted` | Template/runtime helper contract is gateway-owned (`src/runtime/template/actions.ts`, `src/runtime/template/validators.ts`), `tests/template-api.test.ts` + `tests/validate-template-backend-contract.test.ts` pass, and `rg -n "libs/legacy/blackcat-core" src` returns no matches. |
+| `blackcat-crypto` | AEAD, HMAC, key rotation, envelope handling | PHP | `src/runtime/crypto/` | High | High | P0 | `partially extracted` | Request-path signature comparisons use `src/runtime/crypto/safeCompare.ts`, `tests/runtime-crypto-safeCompare.test.ts` + `tests/webhooks.test.ts` pass, and `rg -n "libs/legacy/blackcat-crypto" src` returns no matches. |
+| `blackcat-auth` | Authentication, authorization, token/session policy | PHP | `src/runtime/auth/` | High | High | P0 | `partially extracted` | Request auth checks use `src/runtime/auth/httpAuth.ts`, `tests/runtime-auth-httpAuth.test.ts` + `tests/metrics-auth.test.ts` pass, and `rg -n "libs/legacy/blackcat-auth" src` returns no matches. |
+| `blackcat-sessions` | DB-backed session lifecycle | PHP | `src/runtime/sessions/` | High | High | P0 | `partially extracted` | Replay/session guardrails run through `src/runtime/sessions/replayStore.ts`, `tests/runtime-sessions-replayStore.test.ts` + `tests/rate-replay-limits.test.ts` pass, and `rg -n "libs/legacy/blackcat-sessions" src` returns no matches. |
+| `blackcat-auth-js` | TypeScript/JavaScript auth SDK/client helpers | TypeScript / JavaScript | `src/clients/auth-sdk/` or gateway integration boundary (non-request-path) | Medium | Medium | P1 | `not started` | A gateway-owned auth client boundary exists (`src/clients/auth-sdk/` or equivalent documented boundary), client contract tests are present/passing, and `rg -n "libs/legacy/blackcat-auth-js" src` returns no matches. |
+| `blackcat-crypto-js` | TypeScript/JavaScript crypto SDK/client helpers | TypeScript / JavaScript | `src/clients/crypto-sdk/` or gateway integration boundary (non-request-path) | Medium | Medium | P1 | `not started` | A gateway-owned crypto client boundary exists (`src/clients/crypto-sdk/` or equivalent documented boundary), client contract tests are present/passing, and `rg -n "libs/legacy/blackcat-crypto-js" src` returns no matches. |
+| `blackcat-mailing` | Outbox, SMTP transport, queue worker | PHP | `src/runtime/mailing/` | Medium | Medium | P1 | `partially extracted` | Payload/sanitization helpers are gateway-owned (`src/runtime/mailing/payloadPolicy.ts`, `src/runtime/mailing/sanitizer.ts`), `tests/runtime-mailing-policy.test.ts` passes, and `rg -n "libs/legacy/blackcat-mailing" src` returns no matches. |
+| `blackcat-gopay` | Payment gateway integration and idempotent payment flow | PHP | `src/runtime/payments/` | Medium | High | P1 | `partially extracted` | Provider/validator boundary is gateway-owned (`src/runtime/payments/providers.ts`, `src/runtime/payments/validators.ts`), `tests/runtime-payments-validators.test.ts` + `tests/template-api.test.ts` pass, and `rg -n "libs/legacy/blackcat-gopay" src` returns no matches. |
+| `blackcat-analytics` | Event/telemetry collection and reporting support | PHP | `src/runtime/telemetry/analytics/` | Medium | Low | P2 | `partially extracted` | Analytics event/policy normalization is gateway-owned (`src/runtime/telemetry/analyticsEvent.ts`, `src/runtime/telemetry/analyticsPolicy.ts`), `tests/runtime-telemetry-analytics.test.ts` passes, and `rg -n "libs/legacy/blackcat-analytics" src` returns no matches. |
+| `blackcat-installer` | Environment bootstrap and module installation workflow | PHP + shell helpers | `ops/bootstrap/` or docs-only (no request-path runtime target) | High | Low | P2 | `not started` | Installer logic remains ops-only, `rg -n "blackcat-installer|libs/legacy/blackcat-installer" src` returns no matches, and operator docs point to gateway-owned scripts/runbooks under `ops/` + `scripts/`. |
+
+Status meanings:
+
+- `partially extracted`: gateway-owned runtime helpers are already in use, but module scope is not fully replaced.
+- `in progress`: target boundary/path is being built, but decommission checks still fail.
+- `not started`: no gateway-owned replacement module is complete yet.
+
+Global guardrail for all modules:
+
+- `npm run ops:check-legacy-runtime-boundary -- --strict` must report `Findings: 0` before any module is marked fully decommissionable.
 
 ## Phased plan
 

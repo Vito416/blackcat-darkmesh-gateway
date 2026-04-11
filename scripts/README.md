@@ -270,6 +270,22 @@ Exit codes:
 - `3` validation issues found in `--strict` mode
 - `64` usage error
 
+## Legacy runtime boundary check
+
+`scripts/check-legacy-runtime-boundary.js` scans runtime source files (default `src`) and reports import/require specifiers that reference `libs/legacy` directly or via path traversal.
+
+Usage:
+```bash
+npm run ops:check-legacy-runtime-boundary
+npm run ops:check-legacy-runtime-boundary -- --strict
+npm run ops:check-legacy-runtime-boundary -- --root src --json
+```
+
+Exit codes:
+- `0` pass, or findings without `--strict`
+- `3` findings in `--strict` mode, or a runtime error occurred
+- `64` usage error
+
 ## Legacy risk audit
 
 `scripts/audit-legacy-risk.js` scans `libs/legacy` for high-risk patterns before runtime extraction.
