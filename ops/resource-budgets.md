@@ -91,6 +91,10 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - Use `AO_INTEGRITY_FETCH_*` only when you need a profile-specific exception without changing the whole deployment profile.
 - Keep `AO_INTEGRITY_FETCH_RETRY_JITTER_MS` in the same family as timeout/backoff/attempts; if you adjust one knob for stability, check the others before declaring the profile tuned.
 
+## Mailing retry budget
+- Mailing dispatch now uses a deterministic exponential retry helper with a small cap so constrained hosts can requeue safely without building long retry tails.
+- Keep any future mail-specific retry knobs bounded in the same spirit as the integrity fetch controls above; on small hosts, prefer a lower backoff over adding more attempts.
+
 ## Checkpoint policy
 - Restore a signed checkpoint only when it verifies and is within `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS`.
 - Treat anything older as missing and refresh from AO instead of stretching local state.

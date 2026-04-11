@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 
 import { inc } from './metrics.js'
+import { requireAllowedRole } from './runtime/auth/policy.js'
 import { bodyExceedsUtf8Limit, readPositiveInteger, utf8ByteLength } from './runtime/core/bytes.js'
 import { getTemplateActionPolicy, type BackendTarget, type TemplateActionPolicy } from './runtime/template/actions.js'
 import { getTemplateContractAction, type TemplateContractAction } from './templateContract.js'
@@ -58,11 +59,6 @@ function asNonEmptyString(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : undefined
-}
-
-function normalizeRole(value: unknown): string | undefined {
-  const role = asNonEmptyString(value)
-  return role ? role.toLowerCase() : undefined
 }
 
 function resolveSiteId(input: TemplateCallInput): string | undefined {
@@ -331,13 +327,6 @@ async function signWriteEnvelope(
   }
 }
 
-function isRoleAllowed(requiredRole: string, role: string | undefined): boolean {
-  const required = normalizeRole(requiredRole)
-  if (!required || required === 'public') return true
-  const provided = normalizeRole(role)
-  return !!provided && provided === required
-}
-
 export async function proxyTemplateCall(input: TemplateCallInput): Promise<Response> {
   const policy = getResolvedPolicy(input.action)
   if (!policy) return jsonError(403, 'action_not_allowed')
@@ -346,7 +335,8 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     return jsonError(403, 'write_actions_disabled')
   }
 
-  if (!isRoleAllowed(policy.contract.auth.requiredRole, input.role)) {
+  const roleCheck = requireAllowedRole(policy.contract.auth.requiredRole, input.role, { publicRole: 'public' })
+  if (!roleCheck.ok) {
     return jsonError(403, 'forbidden_role', {
       requiredRole: policy.contract.auth.requiredRole,
       providedRole: input.role || null,

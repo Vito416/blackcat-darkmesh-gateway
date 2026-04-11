@@ -10,7 +10,7 @@ import { fetchIntegritySnapshot } from './integrity/client.js'
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
 import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
 import { applySecurityHeaders } from './securityHeaders.js'
-import { verifyGoPayWebhook } from './runtime/payments/gopayWebhook.js'
+import { classifyGoPayWebhookIdempotency, verifyGoPayWebhook } from './runtime/payments/gopayWebhook.js'
 import {
   basicCredentialsMatch,
   checkToken,
@@ -18,6 +18,7 @@ import {
   readHeaderToken,
   tokenEquals,
 } from './runtime/auth/httpAuth.js'
+import { requireAuthorizedSignatureRef } from './runtime/auth/policy.js'
 import type { IntegritySnapshot } from './integrity/types.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
@@ -336,26 +337,33 @@ function readRoleRefsFromEnv(role: IntegrityRole): string[] {
   return splitRefsCsv(envByRole[role])
 }
 
-function collectRoleRefs(role: IntegrityRole, integrity: IntegrityContext): string[] {
-  const refs = new Set<string>()
+function collectRoleRefs(role: IntegrityRole, integrity: IntegrityContext): { activeRefs: string[]; overlapRefs: string[] } {
+  const activeRefs = new Set<string>()
+  const overlapRefs = new Set<string>()
   const authority = integrity.snapshot?.authority
   const roleRef = authority?.[role]
   if (typeof roleRef === 'string' && roleRef.trim()) {
-    refs.add(roleRef.trim())
+    activeRefs.add(roleRef.trim())
   }
   for (const ref of readRoleRefsFromEnv(role)) {
-    refs.add(ref)
+    overlapRefs.add(ref)
   }
-  return [...refs]
+  return { activeRefs: [...activeRefs], overlapRefs: [...overlapRefs] }
 }
 
-function collectAllowedIncidentRefs(action: string, integrity: IntegrityContext): { roles: IntegrityRole[]; refs: string[] } {
+function collectAllowedIncidentRefs(
+  action: string,
+  integrity: IntegrityContext,
+): { roles: IntegrityRole[]; activeRefs: string[]; overlapRefs: string[] } {
   const roles = incidentActionRoles[action] || []
-  const refs = new Set<string>()
+  const activeRefs = new Set<string>()
+  const overlapRefs = new Set<string>()
   for (const role of roles) {
-    for (const ref of collectRoleRefs(role, integrity)) refs.add(ref)
+    const refs = collectRoleRefs(role, integrity)
+    for (const ref of refs.activeRefs) activeRefs.add(ref)
+    for (const ref of refs.overlapRefs) overlapRefs.add(ref)
   }
-  return { roles, refs: [...refs] }
+  return { roles, activeRefs: [...activeRefs], overlapRefs: [...overlapRefs] }
 }
 
 function recordWebhook5xx(provider: WebhookProvider) {
@@ -621,12 +629,13 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
     return jsonErrorResponse(400, 'invalid_action')
   }
   if (process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF === '1') {
-    const { roles, refs } = collectAllowedIncidentRefs(action, integrity)
-    if (roles.length === 0 || refs.length === 0) {
+    const { roles, activeRefs, overlapRefs } = collectAllowedIncidentRefs(action, integrity)
+    if (roles.length === 0 || (activeRefs.length === 0 && overlapRefs.length === 0)) {
       return jsonErrorResponse(500, 'incident_ref_policy_not_configured')
     }
     const presentedRef = readIncidentSignatureRef(req, body)
-    if (!presentedRef || !refs.includes(presentedRef)) {
+    const refCheck = requireAuthorizedSignatureRef(presentedRef, activeRefs, overlapRefs)
+    if (!refCheck.ok) {
       inc('gateway_integrity_incident_role_blocked')
       return jsonErrorResponse(403, 'forbidden_signature_ref')
     }
@@ -857,10 +866,17 @@ export async function handleRequest(request: Request): Promise<Response> {
         const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
         return respond('sig invalid', { status: shadow ? 202 : 401 })
       }
-      const replayKey = request.headers.get('x-gopay-event-id')
-      if (replayKey && markAndCheck(`gopay:${replayKey}`)) return respond('replay', { status: 200 })
+      const replayMode = process.env.GOPAY_WEBHOOK_IDEMPOTENCY_POLICY === 'reject' ? 'reject' : 'dedupe'
+      const idempotency = classifyGoPayWebhookIdempotency(request.headers.get('x-gopay-event-id'), body, replayMode)
+      if (idempotency.status === 'missing-id' || idempotency.status === 'conflict') {
+        return respond(idempotency.body, { status: idempotency.httpStatus })
+      }
+      if (idempotency.status === 'duplicate') {
+        inc('gateway_webhook_replay')
+        return respond(idempotency.body, { status: idempotency.httpStatus })
+      }
       inc('gateway_webhook_gopay_ok')
-      return respond('ok', { status: 200 })
+      return respond(idempotency.body, { status: idempotency.httpStatus })
     })
   }
 

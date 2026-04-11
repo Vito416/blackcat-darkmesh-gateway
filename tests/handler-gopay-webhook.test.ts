@@ -33,6 +33,7 @@ describe('handler gopay webhook route', () => {
     const body = JSON.stringify({ id: 'event-ok', amount: 1000 })
     const headers = new Headers({
       'x-gopay-signature': gopaySignature(body, webhookSecret),
+      'x-gopay-event-id': 'gopay-event-000',
     })
 
     const res = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body, headers }))
@@ -52,7 +53,7 @@ describe('handler gopay webhook route', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns replay on second request with repeated x-gopay-event-id', async () => {
+  it('dedupes a repeated GoPay event id', async () => {
     process.env.GOPAY_WEBHOOK_SECRET = webhookSecret
     const { handleRequest } = await loadHandler()
     const body = JSON.stringify({ id: 'event-replay', status: 'PAID' })
@@ -68,6 +69,42 @@ describe('handler gopay webhook route', () => {
     const second = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body, headers }))
     expect(second.status).toBe(200)
     await expect(second.text()).resolves.toBe('replay')
+  })
+
+  it('rejects a GoPay webhook without an event id', async () => {
+    process.env.GOPAY_WEBHOOK_SECRET = webhookSecret
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ amount: 1000, status: 'PAID' })
+    const headers = new Headers({
+      'x-gopay-signature': gopaySignature(body, webhookSecret),
+    })
+
+    const res = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body, headers }))
+    expect(res.status).toBe(400)
+    await expect(res.text()).resolves.toBe('missing event id')
+  })
+
+  it('rejects a conflicting GoPay payload for the same event id', async () => {
+    process.env.GOPAY_WEBHOOK_SECRET = webhookSecret
+    const { handleRequest } = await loadHandler()
+    const eventId = 'gopay-event-002'
+    const firstBody = JSON.stringify({ id: 'event-1', status: 'PAID' })
+    const secondBody = JSON.stringify({ id: 'event-1', status: 'FAILED' })
+    const headers = new Headers({
+      'x-gopay-event-id': eventId,
+      'x-gopay-signature': gopaySignature(firstBody, webhookSecret),
+    })
+    const first = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body: firstBody, headers }))
+    expect(first.status).toBe(200)
+    await expect(first.text()).resolves.toBe('ok')
+
+    const conflictHeaders = new Headers({
+      'x-gopay-event-id': eventId,
+      'x-gopay-signature': gopaySignature(secondBody, webhookSecret),
+    })
+    const second = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body: secondBody, headers: conflictHeaders }))
+    expect(second.status).toBe(409)
+    await expect(second.text()).resolves.toBe('conflicting event payload for event id')
   })
 
   it('returns 413 for oversized gopay payloads', async () => {

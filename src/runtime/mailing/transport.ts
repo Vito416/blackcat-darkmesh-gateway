@@ -5,9 +5,12 @@ export type MailTransportRequest = {
   requestId?: string
 }
 
+export type MailDeliveryOutcome = 'success' | 'retry' | 'fail-permanent'
+
 export type MailTransportResult = {
   ok: boolean
   status: number
+  outcome: MailDeliveryOutcome
   error?: string
 }
 
@@ -23,6 +26,7 @@ type MailTransport = {
 }
 
 const DEFAULT_TIMEOUT_MS = 5000
+const TRANSIENT_MAIL_STATUS_CODES = new Set([0, 408, 425, 429, 500, 502, 503, 504])
 
 function normalizeTimeoutMs(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value) || value < 1) return DEFAULT_TIMEOUT_MS
@@ -31,6 +35,12 @@ function normalizeTimeoutMs(value: number | undefined): number {
 
 function isAbortError(error: unknown): boolean {
   return !!error && typeof error === 'object' && 'name' in error && (error as { name?: string }).name === 'AbortError'
+}
+
+export function classifyMailDeliveryOutcome(status: number): MailDeliveryOutcome {
+  if (status >= 200 && status < 300) return 'success'
+  if (TRANSIENT_MAIL_STATUS_CODES.has(status)) return 'retry'
+  return 'fail-permanent'
 }
 
 export function createMailTransport(opts: MailTransportOptions): MailTransport {
@@ -60,12 +70,14 @@ export function createMailTransport(opts: MailTransportOptions): MailTransport {
         })
 
         if (response.ok) {
-          return { ok: true, status: response.status }
+          return { ok: true, status: response.status, outcome: 'success' }
         }
 
+        const outcome = classifyMailDeliveryOutcome(response.status)
         return {
-          ok: false,
+          ok: outcome === 'success',
           status: response.status,
+          outcome,
           error: `mail transport failed with status ${response.status}`,
         }
       } catch (error) {
@@ -73,6 +85,7 @@ export function createMailTransport(opts: MailTransportOptions): MailTransport {
           return {
             ok: false,
             status: 408,
+            outcome: 'retry',
             error: 'mail transport request timed out',
           }
         }
@@ -80,6 +93,7 @@ export function createMailTransport(opts: MailTransportOptions): MailTransport {
         return {
           ok: false,
           status: 0,
+          outcome: 'retry',
           error: error instanceof Error ? error.message : 'mail transport request failed',
         }
       } finally {

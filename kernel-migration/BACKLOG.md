@@ -34,13 +34,15 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] `blackcat-config`: finish full config loader extraction (profile + secret source contract), then add decommission proof with passing config/profile tests.
 - [~] `blackcat-core`: groundwork exists (`src/runtime/core/bytes.ts`, `tests/runtime-core-bytes.test.ts`); next is expanding `src/runtime/core/` primitive coverage and keeping template helper contract aligned with `tests/template-api.test.ts`.
 - [~] `blackcat-crypto`: expand from safe-compare helpers to full runtime crypto boundary (verification/signing key handling), then add module decommission proof.
+  - Progress note: signature-ref normalization/validation helpers now live in `src/runtime/crypto/signatureRefs.ts` with focused coverage in `tests/runtime-crypto-signatureRefs.test.ts`; the verification boundary stays independent from wallet/private-key logic.
 - [~] `blackcat-auth`: extend from HTTP auth helpers to gateway-owned token/policy service and remove remaining auth-policy drift points.
 - [~] `blackcat-sessions`: extend from replay store helper to full session lifecycle boundary (create/read/rotate/revoke) with deterministic failure semantics.
 - [~] `blackcat-auth-js`: client boundary exists under `src/clients/auth-sdk/client.ts` with focused tests (`tests/clients-auth-sdk.test.ts`); next is hardening + ownership docs before any decommission status change.
 - [~] `blackcat-crypto-js`: client boundary exists under `src/clients/crypto-sdk/client.ts` with focused tests (`tests/clients-crypto-sdk.test.ts`); next is hardening + ownership docs before any decommission status change.
 - [~] `blackcat-mailing`: queue/transport groundwork exists (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`), but runtime wiring + focused queue/transport/delivery tests are still required before decommission.
+  - Progress note: delivery outcome states and deterministic retry cadence/backoff helpers are now exposed at the runtime boundary; keep the wiring and any host-specific knobs aligned before decommission.
 - [~] `blackcat-gopay`: provider/validator helpers now have webhook groundwork (`src/runtime/payments/gopayWebhook.ts`, `/webhook/gopay` in `src/handler.ts`, `tests/handler-gopay-webhook.test.ts`), but explicit idempotency adapter extraction + duplicate-write defense tests remain open.
-- [~] `blackcat-analytics`: extend current analytics normalization/policy helpers to production sink/export boundary and retention/drop policy tests.
+- [~] `blackcat-analytics`: sink/export boundary now has a runtime retention/drop helper; keep tightening policy coverage and record decommission evidence once accepted/dropped paths stay deterministic.
 - [ ] `blackcat-installer`: keep installer logic ops-only (`ops/` + `scripts/`), and enforce zero request-path imports from installer snapshot.
 
 ### Current wave next actions (core + client boundaries + mailing/GoPay)
@@ -59,8 +61,8 @@ This workstream is gateway-owned and can progress against the snapshot inventory
   - Decide and document whether dispatch remains gateway-owned or delegated to worker-only path before decommissioning `blackcat-mailing`.
 - [ ] GoPay webhook + idempotency adapter progression:
   - Keep `/webhook/gopay` verification path on runtime-owned helper (`src/runtime/payments/gopayWebhook.ts`) with focused route tests (`tests/handler-gopay-webhook.test.ts`).
-  - Extract provider-agnostic webhook idempotency adapter under `src/runtime/payments/` and use it for GoPay duplicate-write defense.
-  - Add explicit idempotency tests (duplicate event id / missing id / conflicting payload) before marking GoPay migration ready for decommission evidence.
+  - [~] Extract provider-agnostic webhook idempotency adapter under `src/runtime/payments/` and use it for GoPay duplicate-write defense.
+  - Added explicit idempotency tests (duplicate event id / missing id / conflicting payload) to keep GoPay migration evidence moving.
 
 ## This week execution
 
@@ -159,6 +161,7 @@ Acceptance:
 Progress notes:
 - Gateway incident actions can enforce role-aware `signatureRef` (`pause/resume` -> emergency/root; `ack/report` -> reporter/emergency/root).
 - Authorization refs are sourced from AO snapshot authority and can be safely overlapped via `GATEWAY_INTEGRITY_ROLE_*_REFS` during rotation windows.
+- Runtime auth boundary helpers now live in `src/runtime/auth/policy.ts` with deterministic deny codes for role and signature-ref checks, so template and integrity paths can reuse the same overlap-safe enforcement.
 - Operator runbook added: `ops/integrity-runbook.md`.
 
 ### P1.2 Audit commitments stream
