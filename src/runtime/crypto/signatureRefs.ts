@@ -81,10 +81,16 @@ export function validateExpectedSignatureRefs(
   options: SignatureRefMatchOptions = {},
 ): SignatureRefMatchResult {
   const actualResult = validateSignatureRefList(actual)
-  if (!actualResult.ok) return actualResult
+  if (actualResult.ok === false) {
+    const failure = actualResult as Extract<SignatureRefListValidationResult, { ok: false }>
+    return { ok: false, error: failure.error }
+  }
 
   const expectedResult = validateSignatureRefList(expected)
-  if (!expectedResult.ok) return expectedResult
+  if (expectedResult.ok === false) {
+    const failure = expectedResult as Extract<SignatureRefListValidationResult, { ok: false }>
+    return { ok: false, error: failure.error }
+  }
 
   if (options.strict) {
     if (!sameSignatureRefSet(actualResult.refs, expectedResult.refs)) {

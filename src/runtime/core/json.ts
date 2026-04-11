@@ -75,7 +75,7 @@ function parseJsonBodyWithLimit<T>(
   }
 
   const parsed = parseJsonText(raw)
-  if (!parsed.ok) return parsed
+  if (parsed.ok === false) return parsed as JsonParseFailure
 
   if (kind === 'object') {
     if (!isObject(parsed.value)) {
@@ -93,7 +93,7 @@ function parseJsonBodyWithLimit<T>(
 
 export function parseJsonObject(raw: string): JsonParseResult<Record<string, unknown>> {
   const parsed = parseJsonText(raw)
-  if (!parsed.ok) return parsed
+  if (parsed.ok === false) return parsed as JsonParseFailure
   if (!isObject(parsed.value)) {
     return makeFailure('json_not_object', 'json value must be an object')
   }
@@ -102,7 +102,7 @@ export function parseJsonObject(raw: string): JsonParseResult<Record<string, unk
 
 export function parseJsonArray(raw: string): JsonParseResult<unknown[]> {
   const parsed = parseJsonText(raw)
-  if (!parsed.ok) return parsed
+  if (parsed.ok === false) return parsed as JsonParseFailure
   if (!isArray(parsed.value)) {
     return makeFailure('json_not_array', 'json value must be an array')
   }

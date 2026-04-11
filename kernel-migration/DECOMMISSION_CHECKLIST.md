@@ -12,17 +12,17 @@ For each module below, require the same three proof types before marking it reti
 
 | Legacy module | Module-specific proof expectations |
 | --- | --- |
-| `blackcat-config` | Replacement in `src/runtime/config/`; pass `tests/runtime-config-profile.test.ts` and `tests/profile-tuning-sync.test.ts`; attach `rg -n "libs/legacy/blackcat-config" src` output. |
-| `blackcat-core` | Replacement in `src/runtime/core/` and template helpers in `src/runtime/template/`; pass `tests/template-api.test.ts` and `tests/validate-template-backend-contract.test.ts`; attach `rg -n "libs/legacy/blackcat-core" src` output. |
+| `blackcat-config` | Replacement in `src/runtime/config/`; pass `tests/runtime-config-loader.test.ts`, `tests/runtime-config-profile.test.ts`, and `tests/profile-tuning-sync.test.ts`; attach `rg -n "libs/legacy/blackcat-config" src` output. |
+| `blackcat-core` | Replacement in `src/runtime/core/` and template helpers in `src/runtime/template/`; pass `tests/runtime-core-bytes.test.ts`, `tests/runtime-core-json.test.ts`, `tests/template-api.test.ts`, and `tests/validate-template-backend-contract.test.ts`; attach `rg -n "libs/legacy/blackcat-core" src` output. |
 | `blackcat-crypto` | Replacement in `src/runtime/crypto/`; pass `tests/runtime-crypto-safeCompare.test.ts` and `tests/webhooks.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto" src` output. |
-| `blackcat-auth` | Replacement in `src/runtime/auth/`; pass `tests/runtime-auth-httpAuth.test.ts` and `tests/metrics-auth.test.ts`; attach `rg -n "libs/legacy/blackcat-auth" src` output. |
-| `blackcat-sessions` | Replacement in `src/runtime/sessions/`; pass `tests/runtime-sessions-replayStore.test.ts` and `tests/rate-replay-limits.test.ts`; attach `rg -n "libs/legacy/blackcat-sessions" src` output. |
-| `blackcat-auth-js` | Gateway-owned client boundary exists (`src/clients/auth-sdk/` or documented equivalent); pass `tests/runtime-auth-sdk-*.test.ts`; attach `rg -n "libs/legacy/blackcat-auth-js" src` output. |
-| `blackcat-crypto-js` | Gateway-owned client boundary exists (`src/clients/crypto-sdk/` or documented equivalent); pass `tests/runtime-crypto-sdk-*.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto-js" src` output. |
-| `blackcat-mailing` | Replacement in `src/runtime/mailing/`; pass `tests/runtime-mailing-policy.test.ts`; attach `rg -n "libs/legacy/blackcat-mailing" src` output. |
-| `blackcat-gopay` | Replacement in `src/runtime/payments/`; pass `tests/runtime-payments-validators.test.ts` and `tests/template-api.test.ts`; attach `rg -n "libs/legacy/blackcat-gopay" src` output. |
+| `blackcat-auth` | Replacement in `src/runtime/auth/`; pass `tests/runtime-auth-httpAuth.test.ts`, `tests/runtime-auth-policy.test.ts`, and `tests/metrics-auth.test.ts`; attach `rg -n "libs/legacy/blackcat-auth" src` output. |
+| `blackcat-sessions` | Replacement in `src/runtime/sessions/`; pass `tests/runtime-sessions-replayStore.test.ts`, `tests/runtime-sessions-lifecycle.test.ts`, and `tests/rate-replay-limits.test.ts`; attach `rg -n "libs/legacy/blackcat-sessions" src` output. |
+| `blackcat-auth-js` | Gateway-owned client boundary exists (`src/clients/auth-sdk/` or documented equivalent); pass `tests/clients-auth-sdk.test.ts`; attach `rg -n "libs/legacy/blackcat-auth-js" src` output. |
+| `blackcat-crypto-js` | Gateway-owned client boundary exists (`src/clients/crypto-sdk/` or documented equivalent); pass `tests/clients-crypto-sdk.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto-js" src` output. |
+| `blackcat-mailing` | Replacement in `src/runtime/mailing/`; pass `tests/runtime-mailing-policy.test.ts`, `tests/runtime-mailing-transport.test.ts`, and `tests/runtime-mailing-delivery.test.ts`; attach `rg -n "libs/legacy/blackcat-mailing" src` output. |
+| `blackcat-gopay` | Replacement in `src/runtime/payments/`; pass `tests/runtime-payments-validators.test.ts` and `tests/handler-gopay-webhook.test.ts`; attach `rg -n "libs/legacy/blackcat-gopay" src` output. |
 | `blackcat-analytics` | Replacement in `src/runtime/telemetry/analytics/`; pass `tests/runtime-telemetry-analytics.test.ts`; attach `rg -n "libs/legacy/blackcat-analytics" src` output. |
-| `blackcat-installer` | Explicit ops-only classification (`ops/` + `scripts/` references only); attach `rg -n "blackcat-installer|libs/legacy/blackcat-installer" src` output showing no request-path usage. |
+| `blackcat-installer` | Explicit ops-only classification (`ops/` + `scripts/` references only); pass `npm run ops:check-installer-runtime-boundary -- --strict`; attach `rg -n "blackcat-installer|libs/legacy/blackcat-installer" src` output showing no request-path usage. |
 
 ## A. Knowledge preservation
 

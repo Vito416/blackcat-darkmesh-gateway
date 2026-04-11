@@ -32,6 +32,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [x] Do-not-port rules are documented for runtime in `libs/legacy/MIGRATION_PLAN.md`.
 - [x] Decommission conditions are now tracked per module in `libs/legacy/MIGRATION_PLAN.md`.
 - [~] `blackcat-config`: finish full config loader extraction (profile + secret source contract), then add decommission proof with passing config/profile tests.
+  - Progress note: typed config loader with source metadata now lives in `src/runtime/config/loader.ts` and is covered by `tests/runtime-config-loader.test.ts`.
   - Progress note: config loader contract now exists in `src/runtime/config/loader.ts` with deterministic typed parsing/result metadata and focused coverage in `tests/runtime-config-loader.test.ts`.
 - [~] `blackcat-core`: groundwork exists (`src/runtime/core/bytes.ts`, `tests/runtime-core-bytes.test.ts`); next is expanding `src/runtime/core/` primitive coverage and keeping template helper contract aligned with `tests/template-api.test.ts`.
   - Progress note: JSON-safe core parsing helpers landed in `src/runtime/core/json.ts` with focused tests in `tests/runtime-core-json.test.ts`.
@@ -44,6 +45,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] `blackcat-auth-js`: client boundary exists under `src/clients/auth-sdk/client.ts` with focused tests (`tests/clients-auth-sdk.test.ts`); next is hardening + ownership docs before any decommission status change.
   - Progress note: client hardening now enforces URL safety + optional host allowlist and deterministic response parsing behavior.
 - [~] `blackcat-crypto-js`: client boundary exists under `src/clients/crypto-sdk/client.ts` with focused tests (`tests/clients-crypto-sdk.test.ts`); next is hardening + ownership docs before any decommission status change.
+  - Progress note: client boundary now enforces URL safety and optional host allowlists with deterministic body parsing.
   - Progress note: client hardening now enforces URL safety + optional host allowlist and deterministic response parsing behavior.
 - [~] `blackcat-mailing`: queue/transport groundwork exists (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`), but runtime wiring + focused queue/transport/delivery tests are still required before decommission.
   - Progress note: delivery outcome states, deterministic retry cadence/backoff, and a delivery orchestrator helper now exist (`src/runtime/mailing/delivery.ts`, `tests/runtime-mailing-delivery.test.ts`).
@@ -56,6 +58,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 
 - [~] `src/runtime/core/` extraction:
   - Commit the core helper boundary shape (`src/runtime/core/bytes.ts` + `src/runtime/core/index.ts`) and keep call sites on runtime-core imports only.
+  - Progress note: JSON-safe parsing helpers now landed under `src/runtime/core/json.ts` and are exported via `src/runtime/core/index.ts`.
   - Add/retain focused tests for core byte helpers (`tests/runtime-core-bytes.test.ts`) and ensure template body-limit behavior stays covered in `tests/template-api.test.ts`.
   - Extend `libs/legacy/MIGRATION_PLAN.md` primitive mapping notes for every newly extracted core helper before decommission state changes.
 - [~] auth-js/crypto-js client boundaries:

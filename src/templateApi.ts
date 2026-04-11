@@ -1,8 +1,9 @@
 import crypto from 'crypto'
 
 import { inc } from './metrics.js'
+import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
 import { requireAllowedRole } from './runtime/auth/policy.js'
-import { bodyExceedsUtf8Limit, readPositiveInteger, utf8ByteLength } from './runtime/core/bytes.js'
+import { bodyExceedsUtf8Limit, utf8ByteLength } from './runtime/core/index.js'
 import { getTemplateActionPolicy, type BackendTarget, type TemplateActionPolicy } from './runtime/template/actions.js'
 import { getTemplateContractAction, type TemplateContractAction } from './templateContract.js'
 
@@ -41,6 +42,9 @@ type SignedWriteEnvelope = {
   nonce: string
   payload: unknown
 }
+type SignedWriteEnvelopeResult =
+  | { ok: true; signature: string; signatureRef: string }
+  | { ok: false; status: number; error: string; detail?: Record<string, unknown> }
 
 const DEFAULT_TEMPLATE_MAX_BODY_BYTES = 32_768
 const DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS = 7_000
@@ -95,6 +99,19 @@ function parseStringMap(raw: string, envName: string): { ok: true; map: Record<s
   return { ok: true, map }
 }
 
+function readStringEnv(name: string): string | undefined {
+  const loaded = loadStringConfig(name)
+  if (!loaded.ok) return undefined
+  return asNonEmptyString(loaded.value)
+}
+
+function readPositiveIntegerEnv(name: string, fallback: number): number {
+  const loaded = loadIntegerConfig(name, { fallbackValue: fallback })
+  if (!loaded.ok) return fallback
+  if (!Number.isFinite(loaded.value) || loaded.value <= 0) return fallback
+  return Math.floor(loaded.value)
+}
+
 function getResolvedPolicy(action: string): ResolvedTemplatePolicy | undefined {
   const local = getTemplateActionPolicy(action)
   if (!local) return undefined
@@ -110,24 +127,24 @@ function getResolvedPolicy(action: string): ResolvedTemplatePolicy | undefined {
 
 function resolveBackendBaseUrl(target: BackendTarget): ResolveResult {
   if (target === 'ao') {
-    const baseUrl = process.env.AO_PUBLIC_API_URL || process.env.AO_READ_URL || undefined
+    const baseUrl = readStringEnv('AO_PUBLIC_API_URL') || readStringEnv('AO_READ_URL')
     if (!baseUrl) return { ok: false, status: 503, error: 'target_not_configured', detail: { target: 'ao' } }
     return { ok: true, value: baseUrl }
   }
 
   if (target === 'write') {
-    const baseUrl = process.env.WRITE_API_URL || undefined
+    const baseUrl = readStringEnv('WRITE_API_URL')
     if (!baseUrl) return { ok: false, status: 503, error: 'target_not_configured', detail: { target: 'write' } }
     return { ok: true, value: baseUrl }
   }
 
-  const baseUrl = process.env.WORKER_API_URL || undefined
+  const baseUrl = readStringEnv('WORKER_API_URL')
   if (!baseUrl) return { ok: false, status: 503, error: 'target_not_configured', detail: { target: 'worker' } }
   return { ok: true, value: baseUrl }
 }
 
 function resolveSignerBaseUrl(siteId: string): ResolveResult {
-  const mapRaw = (process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP || '').trim()
+  const mapRaw = readStringEnv('GATEWAY_TEMPLATE_WORKER_URL_MAP')
   if (mapRaw) {
     const parsed = parseStringMap(mapRaw, 'GATEWAY_TEMPLATE_WORKER_URL_MAP')
     if (!parsed.ok) {
@@ -135,7 +152,7 @@ function resolveSignerBaseUrl(siteId: string): ResolveResult {
         ok: false,
         status: 500,
         error: 'worker_route_map_invalid',
-        detail: { message: parsed.message },
+        detail: { message: 'message' in parsed ? parsed.message : 'invalid_map' },
       }
     }
     const mapped = parsed.map[siteId]
@@ -150,7 +167,7 @@ function resolveSignerBaseUrl(siteId: string): ResolveResult {
     return { ok: true, value: mapped }
   }
 
-  const fallback = process.env.WORKER_API_URL || process.env.WORKER_SIGN_URL || undefined
+  const fallback = readStringEnv('WORKER_API_URL') || readStringEnv('WORKER_SIGN_URL')
   if (!fallback) {
     return {
       ok: false,
@@ -164,7 +181,7 @@ function resolveSignerBaseUrl(siteId: string): ResolveResult {
 }
 
 function resolveSignerToken(siteId: string): string | undefined {
-  const mapRaw = (process.env.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP || '').trim()
+  const mapRaw = readStringEnv('GATEWAY_TEMPLATE_WORKER_TOKEN_MAP')
   if (mapRaw) {
     const parsed = parseStringMap(mapRaw, 'GATEWAY_TEMPLATE_WORKER_TOKEN_MAP')
     if (parsed.ok) {
@@ -173,29 +190,29 @@ function resolveSignerToken(siteId: string): string | undefined {
     }
   }
 
-  return asNonEmptyString(process.env.WORKER_AUTH_TOKEN) || asNonEmptyString(process.env.WORKER_SIGN_TOKEN)
+  return readStringEnv('WORKER_AUTH_TOKEN') || readStringEnv('WORKER_SIGN_TOKEN')
 }
 
 function hmacBody(body: string): string | undefined {
-  const secret = process.env.GATEWAY_TEMPLATE_HMAC_SECRET
+  const secret = readStringEnv('GATEWAY_TEMPLATE_HMAC_SECRET')
   if (!secret) return undefined
   return crypto.createHmac('sha256', secret).update(body).digest('hex')
 }
 
 function getTemplateMaxBodyBytes(): number {
-  return readPositiveInteger(process.env.GATEWAY_TEMPLATE_MAX_BODY_BYTES, DEFAULT_TEMPLATE_MAX_BODY_BYTES)
+  return readPositiveIntegerEnv('GATEWAY_TEMPLATE_MAX_BODY_BYTES', DEFAULT_TEMPLATE_MAX_BODY_BYTES)
 }
 
 function getTemplateUpstreamTimeoutMs(): number {
-  return readPositiveInteger(process.env.GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS, DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS)
+  return readPositiveIntegerEnv('GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS', DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS)
 }
 
 function getTemplateSignTimeoutMs(): number {
-  return readPositiveInteger(process.env.GATEWAY_TEMPLATE_SIGN_TIMEOUT_MS, DEFAULT_TEMPLATE_SIGN_TIMEOUT_MS)
+  return readPositiveIntegerEnv('GATEWAY_TEMPLATE_SIGN_TIMEOUT_MS', DEFAULT_TEMPLATE_SIGN_TIMEOUT_MS)
 }
 
 function getTemplateTargetAllowlist(): string[] | null {
-  const raw = (process.env.GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST || '').trim()
+  const raw = readStringEnv('GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST')
   if (!raw) return null
   return raw
     .split(',')
@@ -266,7 +283,7 @@ async function signWriteEnvelope(
   signerToken: string,
   envelope: SignedWriteEnvelope,
   timeoutMs: number,
-): Promise<{ ok: true; signature: string; signatureRef: string } | { ok: false; status: number; error: string; detail?: Record<string, unknown> }> {
+): Promise<SignedWriteEnvelopeResult> {
   const signUrl = new URL('/sign', signerBaseUrl).toString()
   const controller = new AbortController()
   let timedOut = false
@@ -331,7 +348,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   const policy = getResolvedPolicy(input.action)
   if (!policy) return jsonError(403, 'action_not_allowed')
 
-  if (policy.local.kind === 'write' && process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS !== '1') {
+  if (policy.local.kind === 'write' && readStringEnv('GATEWAY_TEMPLATE_ALLOW_MUTATIONS') !== '1') {
     return jsonError(403, 'write_actions_disabled')
   }
 
@@ -357,10 +374,11 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   }
 
   const resolvedTarget = resolveBackendBaseUrl(policy.local.target)
-  if (!resolvedTarget.ok) {
-    return jsonError(resolvedTarget.status, resolvedTarget.error, resolvedTarget.detail)
+  if (resolvedTarget.ok === false) {
+    const resolvedTargetError = resolvedTarget as Extract<ResolveResult, { ok: false }>
+    return jsonError(resolvedTargetError.status, resolvedTargetError.error, resolvedTargetError.detail)
   }
-  const baseUrl = resolvedTarget.value
+  const baseUrl = (resolvedTarget as Extract<ResolveResult, { ok: true }>).value
 
   const allowlist = getTemplateTargetAllowlist()
   const baseUrlAllowError = validateAllowlist(baseUrl, allowlist)
@@ -379,8 +397,9 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     }
 
     const signerBase = resolveSignerBaseUrl(resolvedSiteId)
-    if (!signerBase.ok) {
-      return jsonError(signerBase.status, signerBase.error, signerBase.detail)
+    if (signerBase.ok === false) {
+      const signerBaseError = signerBase as Extract<ResolveResult, { ok: false }>
+      return jsonError(signerBaseError.status, signerBaseError.error, signerBaseError.detail)
     }
 
     const signerAllowError = validateAllowlist(signerBase.value, allowlist)
@@ -393,9 +412,11 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
 
     effectiveRequestId = effectiveRequestId || `req-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
     const signEnvelope = buildWriteSignEnvelope(input, resolvedSiteId, effectiveRequestId)
-    const signed = await signWriteEnvelope(signerBase.value, signerToken, signEnvelope, getTemplateSignTimeoutMs())
-    if (!signed.ok) {
-      return jsonError(signed.status, signed.error, signed.detail)
+    const signerBaseUrl = (signerBase as Extract<ResolveResult, { ok: true }>).value
+    const signed = await signWriteEnvelope(signerBaseUrl, signerToken, signEnvelope, getTemplateSignTimeoutMs())
+    if (signed.ok === false) {
+      const signedError = signed as Extract<SignedWriteEnvelopeResult, { ok: false }>
+      return jsonError(signedError.status, signedError.error, signedError.detail)
     }
 
     writeEnvelope = {

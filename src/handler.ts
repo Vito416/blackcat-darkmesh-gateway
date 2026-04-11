@@ -11,6 +11,8 @@ import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/c
 import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
 import { applySecurityHeaders } from './securityHeaders.js'
 import { classifyGoPayWebhookIdempotency, verifyGoPayWebhook } from './runtime/payments/gopayWebhook.js'
+import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
+import { parseJsonObject } from './runtime/core/index.js'
 import {
   basicCredentialsMatch,
   checkToken,
@@ -67,6 +69,17 @@ const integrityRuntime: IntegrityRuntimeCache = {
   snapshot: null,
 }
 
+function readEnvString(name: string): string | undefined {
+  const loaded = loadStringConfig(name)
+  if (!loaded.ok) return undefined
+  const value = typeof loaded.value === 'string' ? loaded.value.trim() : ''
+  return value.length > 0 ? value : undefined
+}
+
+function readStrictEnabledFlag(name: string): boolean {
+  return readEnvString(name) === '1'
+}
+
 function respond(body?: BodyInit | null, init?: ResponseInit): Response {
   return applySecurityHeaders(new Response(body, init))
 }
@@ -98,49 +111,36 @@ function updateIntegrityAuditGauges(snapshot: IntegritySnapshot | null) {
 }
 
 function readEnvIntegrityPolicyState(): IntegrityPolicyState {
-  const fallbackPaused = process.env.GATEWAY_INTEGRITY_POLICY_PAUSED === '1'
-  const raw = process.env.GATEWAY_INTEGRITY_POLICY_JSON?.trim()
+  const fallbackPaused = readStrictEnabledFlag('GATEWAY_INTEGRITY_POLICY_PAUSED')
+  const raw = readEnvString('GATEWAY_INTEGRITY_POLICY_JSON')
   if (!raw) return { paused: fallbackPaused, source: 'env' }
 
-  try {
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object' && typeof parsed.paused === 'boolean') {
-      return { paused: parsed.paused, source: 'env' }
-    }
-  } catch (_) {
-    // Ignore malformed policy JSON and fall back to the env flag.
+  const parsed = parseJsonObject(raw)
+  if (parsed.ok && typeof parsed.value.paused === 'boolean') {
+    return { paused: parsed.value.paused, source: 'env' }
   }
 
+  // Ignore malformed policy JSON and fall back to the env flag.
   return { paused: fallbackPaused, source: 'env' }
 }
 
 function readIntegrityCacheTtlMs(): number {
-  const raw = process.env.GATEWAY_INTEGRITY_CACHE_TTL_MS
-  const parsed = raw ? Number.parseInt(raw, 10) : INTEGRITY_CACHE_DEFAULT_TTL_MS
-  if (!Number.isFinite(parsed) || parsed <= 0) return INTEGRITY_CACHE_DEFAULT_TTL_MS
-  return parsed
+  return readPositiveIntEnv('GATEWAY_INTEGRITY_CACHE_TTL_MS', INTEGRITY_CACHE_DEFAULT_TTL_MS)
 }
 
 function readIntegrityIncidentReplayTtlMs(): number {
-  const raw = process.env.GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS
-  const parsed = raw ? Number.parseInt(raw, 10) : INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS
-  if (!Number.isFinite(parsed) || parsed <= 0) return INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS
-  return parsed
+  return readPositiveIntEnv('GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS', INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS)
 }
 
 function readIntegrityIncidentReplayCap(): number {
-  const raw = process.env.GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP
-  const parsed = raw ? Number.parseInt(raw, 10) : INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP
-  if (!Number.isFinite(parsed) || parsed <= 0) return INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP
-  return parsed
+  return readPositiveIntEnv('GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP', INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP)
 }
 
 function readPositiveIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name]
-  if (!raw) return fallback
-  const parsed = Number.parseInt(raw, 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
-  return parsed
+  const loaded = loadIntegerConfig(name, { fallbackValue: fallback })
+  if (!loaded.ok) return fallback
+  if (!Number.isFinite(loaded.value) || loaded.value <= 0) return fallback
+  return Math.floor(loaded.value)
 }
 
 function readIntegrityIncidentMaxBodyBytes(): number {
@@ -205,7 +205,7 @@ async function resolveIntegrityContext(): Promise<IntegrityContext> {
 }
 
 function requireVerifiedCache(): boolean {
-  return process.env.GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE === '1'
+  return readStrictEnabledFlag('GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE')
 }
 
 function collectTrustedRoots(snapshot: IntegritySnapshot): string[] {
