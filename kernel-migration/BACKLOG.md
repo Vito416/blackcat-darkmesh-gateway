@@ -33,6 +33,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [x] Decommission conditions are now tracked per module in `libs/legacy/MIGRATION_PLAN.md`.
 - [~] `blackcat-config`: finish full config loader extraction (profile + secret source contract), then add decommission proof with passing config/profile tests.
   - Progress note: typed config loader with source metadata now lives in `src/runtime/config/loader.ts` and is covered by `tests/runtime-config-loader.test.ts`.
+  - Progress note: loader wiring is now active in request-path modules (`src/templateApi.ts`, `src/handler.ts`, `src/webhooks.ts`, `src/ratelimit.ts`, `src/replay.ts`).
   - Progress note: config loader contract now exists in `src/runtime/config/loader.ts` with deterministic typed parsing/result metadata and focused coverage in `tests/runtime-config-loader.test.ts`.
 - [~] `blackcat-core`: groundwork exists (`src/runtime/core/bytes.ts`, `tests/runtime-core-bytes.test.ts`); next is expanding `src/runtime/core/` primitive coverage and keeping template helper contract aligned with `tests/template-api.test.ts`.
   - Progress note: JSON-safe core parsing helpers landed in `src/runtime/core/json.ts` with focused tests in `tests/runtime-core-json.test.ts`.

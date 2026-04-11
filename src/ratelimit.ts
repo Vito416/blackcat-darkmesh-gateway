@@ -1,7 +1,22 @@
 import { inc, gauge } from './metrics.js'
+import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
 
-function positiveInt(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(value || '', 10)
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const loaded = loadIntegerConfig(name, { fallbackValue: fallback })
+  if (!loaded.ok) return fallback
+  if (!Number.isFinite(loaded.value) || loaded.value <= 0) return fallback
+  return Math.floor(loaded.value)
+}
+
+function readStringEnv(name: string): string | undefined {
+  const loaded = loadStringConfig(name)
+  if (!loaded.ok) return undefined
+  const value = typeof loaded.value === 'string' ? loaded.value.trim() : ''
+  return value.length > 0 ? value : undefined
+}
+
+function positiveInt(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
@@ -26,10 +41,10 @@ function parseOverrides(raw: string | undefined): Map<string, number> {
   return overrides
 }
 
-const WINDOW_MS = positiveInt(process.env.GATEWAY_RL_WINDOW_MS, 60000)
-const MAX_REQ = positiveInt(process.env.GATEWAY_RL_MAX, 120)
-const MAX_BUCKETS = positiveInt(process.env.GATEWAY_RL_MAX_BUCKETS, 10000)
-const PREFIX_OVERRIDES = parseOverrides(process.env.GATEWAY_RL_MAX_OVERRIDES)
+const WINDOW_MS = readPositiveIntEnv('GATEWAY_RL_WINDOW_MS', 60000)
+const MAX_REQ = readPositiveIntEnv('GATEWAY_RL_MAX', 120)
+const MAX_BUCKETS = readPositiveIntEnv('GATEWAY_RL_MAX_BUCKETS', 10000)
+const PREFIX_OVERRIDES = parseOverrides(readStringEnv('GATEWAY_RL_MAX_OVERRIDES'))
 
 const buckets = new Map<string, { count: number; reset: number }>()
 

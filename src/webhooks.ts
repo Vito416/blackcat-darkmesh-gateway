@@ -1,6 +1,7 @@
 import { inc, gauge } from './metrics.js'
 import crypto from 'crypto'
 import { safeCompareHexOrAscii } from './runtime/crypto/safeCompare.js'
+import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
 
 const DEFAULT_CERT_TTL_MS = 6 * 60 * 60 * 1000
 const MIN_CERT_TTL_MS = 60 * 1000
@@ -17,10 +18,18 @@ const DEFAULT_PAYPAL_HTTP_TIMEOUT_MS = 7000
 const MIN_PAYPAL_HTTP_TIMEOUT_MS = 1000
 const MAX_PAYPAL_HTTP_TIMEOUT_MS = 60000
 
-function parseBoundedInt(raw: string | undefined, fallback: number, min: number, max: number): number {
-  const parsed = Number.parseInt(raw || '', 10)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.min(Math.max(parsed, min), max)
+function readStringEnv(name: string): string | undefined {
+  const loaded = loadStringConfig(name)
+  if (!loaded.ok) return undefined
+  const value = typeof loaded.value === 'string' ? loaded.value.trim() : ''
+  return value.length > 0 ? value : undefined
+}
+
+function readBoundedIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const loaded = loadIntegerConfig(name, { fallbackValue: fallback })
+  if (!loaded.ok) return fallback
+  if (!Number.isFinite(loaded.value)) return fallback
+  return Math.min(Math.max(Math.floor(loaded.value), min), max)
 }
 
 function isAbortError(error: unknown): boolean {
@@ -49,12 +58,12 @@ function parsePaypalApiAllowHosts(raw: string | undefined): string[] {
 }
 
 function resolvePaypalApiBase(): URL | null {
-  const rawBase = process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com'
+  const rawBase = readStringEnv('PAYPAL_API_BASE') || 'https://api-m.sandbox.paypal.com'
   try {
     const base = new URL(rawBase)
     if (base.protocol !== 'https:') return null
     if (base.username || base.password) return null
-    const allowHosts = parsePaypalApiAllowHosts(process.env.PAYPAL_API_ALLOW_HOSTS)
+    const allowHosts = parsePaypalApiAllowHosts(readStringEnv('PAYPAL_API_ALLOW_HOSTS'))
     if (allowHosts.length > 0 && !allowHosts.includes(base.hostname.toLowerCase())) return null
     return base
   } catch {
@@ -63,8 +72,8 @@ function resolvePaypalApiBase(): URL | null {
 }
 
 function getPaypalHttpTimeoutMs(): number {
-  return parseBoundedInt(
-    process.env.PAYPAL_HTTP_TIMEOUT_MS,
+  return readBoundedIntEnv(
+    'PAYPAL_HTTP_TIMEOUT_MS',
     DEFAULT_PAYPAL_HTTP_TIMEOUT_MS,
     MIN_PAYPAL_HTTP_TIMEOUT_MS,
     MAX_PAYPAL_HTTP_TIMEOUT_MS,
@@ -123,7 +132,7 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
   const certUrl = headers.get('PayPal-Cert-Url')
   if (!isValidCertUrl(certUrl || undefined)) return false
   // Remote verify (requires PAYPAL_WEBHOOK_ID and client creds via env)
-  const webhookId = process.env.PAYPAL_WEBHOOK_ID
+  const webhookId = readStringEnv('PAYPAL_WEBHOOK_ID')
   if (!webhookId) return false
   const base = resolvePaypalApiBase()
   if (!base) return false
@@ -167,8 +176,8 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
 }
 
 async function paypalToken(base: URL, timeoutMs: number): Promise<string | null> {
-  const cid = process.env.PAYPAL_CLIENT_ID
-  const sec = process.env.PAYPAL_CLIENT_SECRET
+  const cid = readStringEnv('PAYPAL_CLIENT_ID')
+  const sec = readStringEnv('PAYPAL_CLIENT_SECRET')
   if (!cid || !sec) return null
   const controller = new AbortController()
   let timedOut = false
@@ -199,19 +208,19 @@ async function paypalToken(base: URL, timeoutMs: number): Promise<string | null>
 
 // Simple cert cache placeholder (for future pinning)
 const certCache = new Map<string, number>()
-const CERT_TTL = parseBoundedInt(process.env.GW_CERT_CACHE_TTL_MS, DEFAULT_CERT_TTL_MS, MIN_CERT_TTL_MS, MAX_CERT_TTL_MS)
-const CERT_CACHE_MAX = parseBoundedInt(process.env.GW_CERT_CACHE_MAX_SIZE, DEFAULT_CERT_CACHE_MAX, MIN_CERT_CACHE_MAX, MAX_CERT_CACHE_MAX)
-const STRIPE_SIGNATURE_HEADER_MAX_BYTES = parseBoundedInt(
-  process.env.GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES,
+const CERT_TTL = readBoundedIntEnv('GW_CERT_CACHE_TTL_MS', DEFAULT_CERT_TTL_MS, MIN_CERT_TTL_MS, MAX_CERT_TTL_MS)
+const CERT_CACHE_MAX = readBoundedIntEnv('GW_CERT_CACHE_MAX_SIZE', DEFAULT_CERT_CACHE_MAX, MIN_CERT_CACHE_MAX, MAX_CERT_CACHE_MAX)
+const STRIPE_SIGNATURE_HEADER_MAX_BYTES = readBoundedIntEnv(
+  'GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES',
   DEFAULT_STRIPE_SIGNATURE_HEADER_BYTES,
   MIN_STRIPE_SIGNATURE_HEADER_BYTES,
   MAX_STRIPE_SIGNATURE_HEADER_BYTES,
 )
-const CERT_ALLOW_PREFIXES = (process.env.PAYPAL_CERT_ALLOW_PREFIXES || '')
+const CERT_ALLOW_PREFIXES = (readStringEnv('PAYPAL_CERT_ALLOW_PREFIXES') || '')
   .split(',')
   .map((s) => s.trim())
   .filter((s) => s.length > 0)
-const CERT_PIN_SHA256 = (process.env.GW_CERT_PIN_SHA256 || '')
+const CERT_PIN_SHA256 = (readStringEnv('GW_CERT_PIN_SHA256') || '')
   .split(',')
   .map((s) => s.trim())
   .filter((s) => s.length > 0)
