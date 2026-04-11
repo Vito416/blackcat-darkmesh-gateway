@@ -26,6 +26,7 @@
 - Diskless mode: `GATEWAY_INTEGRITY_DISKLESS=1` (or `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`) disables checkpoint file IO and keeps integrity state memory-only.
 - Checkpoint age: compare `gateway_integrity_checkpoint_age_seconds` against your max-age policy; stale checkpoints should be treated as absent.
 - Scheduled CI consistency smoke: set repo variable `CONSISTENCY_URLS` (optional `CONSISTENCY_MODE`, `GATEWAY_RESOURCE_PROFILE`) and secret `GATEWAY_INTEGRITY_STATE_TOKEN` when state auth is enabled.
+- Scheduled consistency preflight: CI now fails fast on missing/invalid `CONSISTENCY_*` config and reports issues in job summary; for public state endpoints only, set `CONSISTENCY_ALLOW_ANON=1`.
 
 ## Production guardrails
 - Cache: keep `gateway_cache_size` below the host memory budget with a clear ceiling per deployment tier.

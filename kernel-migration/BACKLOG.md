@@ -214,6 +214,23 @@ Progress notes:
 - `evidence-dry-run` now uploads its generated evidence directory as a CI artifact for offline review/sign-off.
 - Weekly scheduled consistency smoke is enabled in CI (requires `CONSISTENCY_URLS`; optional `CONSISTENCY_MODE` and `GATEWAY_RESOURCE_PROFILE`).
 - Dispatch helper now supports `--consistency-mode` and `--consistency-profile` so manual operator runs can match scheduled profile behavior.
+- Scheduled consistency now performs a fail-fast config preflight and reports missing/invalid vars/secrets in the job summary.
+
+## v1.4.0 release-ready checklist
+
+Use this checklist before merge/release sign-off.
+
+- [ ] AO registry/authority lifecycle items are complete (`publish/revoke/query/pause`, `root/upgrade/emergency/reporter`, audit sequence surface).
+- [ ] Gateway `main` CI is green on full tests, integrity gate, and smoke jobs.
+- [ ] Scheduled consistency preflight is passing with repository configuration in place:
+  - [ ] `CONSISTENCY_URLS` (at least two valid URLs)
+  - [ ] `CONSISTENCY_MODE` (optional, `pairwise|all`)
+  - [ ] `GATEWAY_RESOURCE_PROFILE` (optional, `wedos_small|wedos_medium|diskless`)
+  - [ ] `GATEWAY_INTEGRITY_STATE_TOKEN` secret (required unless `CONSISTENCY_ALLOW_ANON=1`)
+- [ ] Latest consistency-smoke artifacts are archived (`consistency-matrix.json`, drift report `.md`, drift summary `.json`).
+- [ ] Latest evidence-dry-run artifact bundle is archived and strict bundle checks are passing.
+- [ ] Recovery drill timestamp, AO fallback drill proof, and rollback proof are linked in release notes.
+- [ ] Stakeholder approval/sign-off recorded for decommission transition.
 
 ## Suggested execution order
 
