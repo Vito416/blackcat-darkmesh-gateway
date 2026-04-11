@@ -26,6 +26,8 @@ const STEP_SCRIPTS = {
   buildPack: resolve(SCRIPT_DIR, 'build-release-evidence-pack.js'),
   buildChecklist: resolve(SCRIPT_DIR, 'build-release-signoff-checklist.js'),
   checkReadiness: resolve(SCRIPT_DIR, 'check-release-readiness.js'),
+  buildDrillManifest: resolve(SCRIPT_DIR, 'build-release-drill-manifest.js'),
+  validateDrillManifest: resolve(SCRIPT_DIR, 'validate-release-drill-manifest.js'),
 }
 
 class CliError extends Error {
@@ -68,6 +70,8 @@ function usageText() {
     '  8) build release evidence pack',
     '  9) build release sign-off checklist',
     '  10) check release readiness',
+    '  11) build release drill manifest',
+    '  12) validate release drill manifest',
     '',
     'Exit codes:',
     '  0   success',
@@ -214,6 +218,8 @@ function buildDrillPlan({
   const summaryJson = join(resolvedOutDir, 'consistency-drift-summary.json')
   const latestBundleJson = join(resolvedOutDir, 'latest-evidence-bundle.json')
   const readinessJson = join(resolvedOutDir, 'release-readiness.json')
+  const drillManifestJson = join(resolvedOutDir, 'release-drill-manifest.json')
+  const drillManifestValidation = join(resolvedOutDir, 'release-drill-manifest.validation.txt')
 
   const preflightArgs = ['--urls', urlsCsv, '--mode', mode, '--profile', profile]
   if (isNonEmptyString(token)) preflightArgs.push('--token', token)
@@ -363,6 +369,28 @@ function buildDrillPlan({
       displayArgs: strict ? ['--pack', packJson, '--json', '--strict'] : ['--pack', packJson, '--json'],
       outputFile: readinessJson,
     },
+    {
+      id: 'build-drill-manifest',
+      index: 11,
+      label: 'build release drill manifest',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.buildDrillManifest,
+      displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.buildDrillManifest),
+      args: ['--dir', resolvedOutDir, '--out', drillManifestJson],
+      displayArgs: ['--dir', resolvedOutDir, '--out', drillManifestJson],
+      outputFile: drillManifestJson,
+    },
+    {
+      id: 'validate-drill-manifest',
+      index: 12,
+      label: 'validate release drill manifest',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.validateDrillManifest,
+      displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.validateDrillManifest),
+      args: ['--file', drillManifestJson, '--strict'],
+      displayArgs: ['--file', drillManifestJson, '--strict'],
+      outputFile: drillManifestValidation,
+    },
   ]
 
   return {
@@ -384,6 +412,8 @@ function buildDrillPlan({
       packJson,
       checklistMd,
       readinessJson,
+      drillManifestJson,
+      drillManifestValidation,
       aoGateFile: DEFAULT_AO_GATE_FILE,
     },
     steps,
@@ -504,6 +534,9 @@ function runReleaseDrill(options = {}, deps = {}) {
         const readiness = JSON.parse(childStdout || '{}')
         writeTextFile(plan.artifacts.readinessJson, `${JSON.stringify(readiness, null, 2)}\n`)
       }
+      if (step.id === 'validate-drill-manifest') {
+        writeTextFile(plan.artifacts.drillManifestValidation, childStdout || 'valid release drill manifest\n')
+      }
     } catch (err) {
       stderr.push(`${stepLine} failed to parse JSON output: ${err instanceof Error ? err.message : String(err)}\n`)
       return { exitCode: 3, stdout: stdout.join(''), stderr: stderr.join(''), plan, artifacts: plan.artifacts }
@@ -521,6 +554,8 @@ function runReleaseDrill(options = {}, deps = {}) {
       }
       if (step.id === 'build-checklist') ensureFile(plan.artifacts.checklistMd, step.label)
       if (step.id === 'readiness') ensureFile(plan.artifacts.readinessJson, step.label)
+      if (step.id === 'build-drill-manifest') ensureFile(plan.artifacts.drillManifestJson, step.label)
+      if (step.id === 'validate-drill-manifest') ensureFile(plan.artifacts.drillManifestValidation, step.label)
     } catch (err) {
       stderr.push(`${stepLine} failed: ${err instanceof Error ? err.message : String(err)}\n`)
       return { exitCode: 3, stdout: stdout.join(''), stderr: stderr.join(''), plan, artifacts: plan.artifacts }

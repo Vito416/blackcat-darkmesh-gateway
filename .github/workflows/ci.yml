@@ -321,6 +321,22 @@ jobs:
         run: npm run ops:suggest-ratelimit-overrides -- --help
       - name: "Help: release evidence pack"
         run: npm run ops:build-release-evidence-pack -- --help
+      - name: "Help: build release drill manifest"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:build-release-drill-manifest'] ? 0 : 1)"; then
+            npm run ops:build-release-drill-manifest -- --help
+          else
+            echo "ops:build-release-drill-manifest is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate release drill manifest"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-release-drill-manifest'] ? 0 : 1)"; then
+            npm run ops:validate-release-drill-manifest -- --help
+          else
+            echo "ops:validate-release-drill-manifest is not defined in package.json; skipping help check."
+          fi
       - name: "Help: validate AO dependency gate"
         run: npm run ops:validate-ao-dependency-gate -- --help
       - name: "Help: export consistency report"
@@ -482,10 +498,17 @@ jobs:
     if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.consistency_urls != '' && inputs.evidence_urls != '' }}
     env:
       RELEASE_LABEL: ${{ inputs.release_label || '1.4.0' }}
+      CONSISTENCY_URLS: ${{ inputs.consistency_urls }}
+      CONSISTENCY_MODE: ${{ inputs.consistency_mode || vars.CONSISTENCY_MODE || 'pairwise' }}
+      CONSISTENCY_PROFILE: ${{ inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'wedos_medium' }}
       CONSISTENCY_ARTIFACT_DIR: ${{ runner.temp }}/release-pack/consistency
       EVIDENCE_ARTIFACT_DIR: ${{ runner.temp }}/release-pack/evidence
+      RELEASE_PACK_WORKDIR: ${{ runner.temp }}/release-pack/work
       RELEASE_PACK_MD: ${{ runner.temp }}/release-pack/release-evidence-pack.md
       RELEASE_PACK_JSON: ${{ runner.temp }}/release-pack/release-evidence-pack.json
+      RELEASE_READINESS_JSON: ${{ runner.temp }}/release-pack/release-readiness.json
+      RELEASE_DRILL_MANIFEST_JSON: ${{ runner.temp }}/release-pack/release-drill-manifest.json
+      RELEASE_DRILL_MANIFEST_VALIDATE: ${{ runner.temp }}/release-pack/release-drill-manifest.validation.txt
       RELEASE_SIGNOFF_MD: ${{ runner.temp }}/release-pack/release-signoff-checklist.md
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -529,7 +552,108 @@ jobs:
       - name: Check release readiness
         run: |
           set -euo pipefail
-          npm run --silent ops:check-release-readiness -- --pack "$RELEASE_PACK_JSON" --json | tee -a "$GITHUB_STEP_SUMMARY"
+          npm run --silent ops:check-release-readiness -- --pack "$RELEASE_PACK_JSON" --json | tee "$RELEASE_READINESS_JSON" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Build and validate release drill manifest
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$RELEASE_PACK_WORKDIR"
+          mkdir -p "$(dirname "$RELEASE_DRILL_MANIFEST_VALIDATE")"
+
+          manifest_build_status="skipped"
+          manifest_validate_status="skipped"
+          manifest_build_log="$(mktemp)"
+          manifest_validate_log="$(mktemp)"
+          : >"$manifest_build_log"
+
+          copy_artifact() {
+            local filename="$1"
+            local src="$CONSISTENCY_ARTIFACT_DIR/$filename"
+            local fallback
+
+            if [ -f "$src" ]; then
+              cp "$src" "$RELEASE_PACK_WORKDIR/$filename"
+              return 0
+            fi
+
+            fallback="$(find "$CONSISTENCY_ARTIFACT_DIR" -type f -name "$filename" -print -quit 2>/dev/null || true)"
+            if [ -n "$fallback" ] && [ -f "$fallback" ]; then
+              cp "$fallback" "$RELEASE_PACK_WORKDIR/$filename"
+            fi
+          }
+
+          if [ -f "$GITHUB_WORKSPACE/scripts/build-release-drill-manifest.js" ]; then
+            copy_artifact "consistency-matrix.json"
+            copy_artifact "consistency-drift-report.md"
+            copy_artifact "consistency-drift-summary.json"
+
+            [ -f "$RELEASE_PACK_MD" ] && cp "$RELEASE_PACK_MD" "$RELEASE_PACK_WORKDIR/release-evidence-pack.md"
+            [ -f "$RELEASE_PACK_JSON" ] && cp "$RELEASE_PACK_JSON" "$RELEASE_PACK_WORKDIR/release-evidence-pack.json"
+            [ -f "$RELEASE_SIGNOFF_MD" ] && cp "$RELEASE_SIGNOFF_MD" "$RELEASE_PACK_WORKDIR/release-signoff-checklist.md"
+            [ -f "$RELEASE_READINESS_JSON" ] && cp "$RELEASE_READINESS_JSON" "$RELEASE_PACK_WORKDIR/release-readiness.json"
+
+            latest_bundle_json="$RELEASE_PACK_WORKDIR/latest-evidence-bundle.json"
+            if [ -d "$EVIDENCE_ARTIFACT_DIR" ] && [ -f "$GITHUB_WORKSPACE/scripts/latest-evidence-bundle.js" ]; then
+              if ! node "$GITHUB_WORKSPACE/scripts/latest-evidence-bundle.js" \
+                --root "$EVIDENCE_ARTIFACT_DIR" \
+                --json \
+                --require-files >"$latest_bundle_json" 2>>"$manifest_build_log"; then
+                rm -f "$latest_bundle_json"
+              fi
+            fi
+
+            if (
+              node "$GITHUB_WORKSPACE/scripts/build-release-drill-manifest.js" \
+                --dir "$RELEASE_PACK_WORKDIR" \
+                --out "$RELEASE_DRILL_MANIFEST_JSON"
+            ) >>"$manifest_build_log" 2>&1; then
+              manifest_build_status="built"
+            else
+              build_rc=$?
+              build_output="$(cat "$manifest_build_log")"
+              if printf '%s' "$build_output" | grep -Eqi 'missing|not found|enoent|no such file'; then
+                manifest_build_status="missing-inputs"
+              else
+                cat "$manifest_build_log" >&2
+                exit "$build_rc"
+              fi
+            fi
+          else
+            manifest_build_status="unavailable"
+          fi
+
+          if [ "$manifest_build_status" = "built" ] && [ -f "$RELEASE_DRILL_MANIFEST_JSON" ] && [ -f "$GITHUB_WORKSPACE/scripts/validate-release-drill-manifest.js" ]; then
+            if node "$GITHUB_WORKSPACE/scripts/validate-release-drill-manifest.js" --file "$RELEASE_DRILL_MANIFEST_JSON" --strict >"$manifest_validate_log" 2>&1; then
+              manifest_validate_status="validated"
+              cp "$manifest_validate_log" "$RELEASE_DRILL_MANIFEST_VALIDATE"
+            else
+              cat "$manifest_validate_log" >&2
+              exit 1
+            fi
+          elif [ "$manifest_build_status" = "built" ] && [ -f "$RELEASE_DRILL_MANIFEST_JSON" ]; then
+            manifest_validate_status="unavailable"
+          fi
+
+          {
+            echo "### Release drill manifest"
+            echo ""
+            echo "- Build status: ${manifest_build_status}"
+            echo "- Validate status: ${manifest_validate_status}"
+            if [ "$manifest_build_status" = "missing-inputs" ]; then
+              echo "- Result: skipped because required inputs were not available in the release-pack working dir."
+            elif [ "$manifest_build_status" = "unavailable" ]; then
+              echo "- Result: skipped because ops:build-release-drill-manifest is not defined."
+            elif [ "$manifest_validate_status" = "validated" ]; then
+              echo "- Result: manifest built and validated in strict mode."
+            fi
+            if [ -f "$RELEASE_DRILL_MANIFEST_JSON" ]; then
+              echo ""
+              echo "Manifest path: \`$RELEASE_DRILL_MANIFEST_JSON\`"
+            fi
+            if [ -f "$RELEASE_DRILL_MANIFEST_VALIDATE" ]; then
+              echo "Manifest strict validation log: \`$RELEASE_DRILL_MANIFEST_VALIDATE\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Append release pack summary
         if: always()
         run: |
@@ -555,3 +679,7 @@ jobs:
           path: |
             ${{ env.RELEASE_PACK_MD }}
             ${{ env.RELEASE_PACK_JSON }}
+            ${{ env.RELEASE_SIGNOFF_MD }}
+            ${{ env.RELEASE_READINESS_JSON }}
+            ${{ env.RELEASE_DRILL_MANIFEST_JSON }}
+            ${{ env.RELEASE_DRILL_MANIFEST_VALIDATE }}

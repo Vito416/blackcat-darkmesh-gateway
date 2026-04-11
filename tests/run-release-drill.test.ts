@@ -68,6 +68,8 @@ describe('run-release-drill.js', () => {
     expect(result.stdout).toContain('scripts/check-evidence-bundle.js')
     expect(result.stdout).toContain('release-evidence-pack.json')
     expect(result.stdout).toContain('release-readiness.json')
+    expect(result.stdout).toContain('scripts/build-release-drill-manifest.js')
+    expect(result.stdout).toContain('scripts/validate-release-drill-manifest.js')
     expect(result.stdout).toContain('Strict readiness: yes')
     expect(result.stderr).toBe('')
   })
@@ -195,6 +197,28 @@ describe('run-release-drill.js', () => {
         )
       }
 
+      if (scriptName === 'build-release-drill-manifest.js') {
+        const manifestPath = join(outDir, 'release-drill-manifest.json')
+        writeFileSync(
+          manifestPath,
+          `${JSON.stringify(
+            {
+              release: '2.0.0',
+              status: 'ready',
+              artifacts: [{ path: 'release-evidence-pack.json', sizeBytes: 123, sha256: 'a'.repeat(64) }],
+            },
+            null,
+            2,
+          )}\n`,
+          'utf8',
+        )
+        return makeSpawnResult(`# Release Drill Manifest\n- Output: ${manifestPath}\n`)
+      }
+
+      if (scriptName === 'validate-release-drill-manifest.js') {
+        return makeSpawnResult('valid release drill manifest: /tmp/release-drill-manifest.json\n')
+      }
+
       return makeSpawnResult('', `unexpected script: ${scriptName}`, 3)
     })
 
@@ -213,7 +237,7 @@ describe('run-release-drill.js', () => {
     )
 
     expect(result.exitCode).toBe(0)
-    expect(spawnSyncFn).toHaveBeenCalledTimes(10)
+    expect(spawnSyncFn).toHaveBeenCalledTimes(12)
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'validate-consistency-preflight.js',
       'compare-integrity-matrix.js',
@@ -225,8 +249,10 @@ describe('run-release-drill.js', () => {
       'build-release-evidence-pack.js',
       'build-release-signoff-checklist.js',
       'check-release-readiness.js',
+      'build-release-drill-manifest.js',
+      'validate-release-drill-manifest.js',
     ])
-    expect(result.stdout).toContain('[1/10] validate consistency preflight')
+    expect(result.stdout).toContain('[1/12] validate consistency preflight')
     expect(result.stdout).toContain('# Release Evidence Pack')
     expect(result.stdout).toContain('# Release Sign-off Checklist')
     expect(result.stdout).toContain('"status": "ready"')
@@ -236,9 +262,13 @@ describe('run-release-drill.js', () => {
     const pack = JSON.parse(readFileSync(join(outDir, 'release-evidence-pack.json'), 'utf8'))
     const latest = JSON.parse(readFileSync(join(outDir, 'latest-evidence-bundle.json'), 'utf8'))
     const readiness = JSON.parse(readFileSync(join(outDir, 'release-readiness.json'), 'utf8'))
+    const manifest = JSON.parse(readFileSync(join(outDir, 'release-drill-manifest.json'), 'utf8'))
+    const manifestValidation = readFileSync(join(outDir, 'release-drill-manifest.validation.txt'), 'utf8')
     expect(matrix.counts.total).toBe(1)
     expect(pack.status).toBe('ready')
     expect(latest.bundleName).toBe('2026-04-11T12-00-00Z-abc')
     expect(readiness.status).toBe('ready')
+    expect(manifest.release).toBe('2.0.0')
+    expect(manifestValidation).toContain('valid release drill manifest')
   })
 })

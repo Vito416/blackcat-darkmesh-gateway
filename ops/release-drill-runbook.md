@@ -229,6 +229,32 @@ Expected output:
 Artifacts:
 - None, unless you redirect stdout to a file for archival
 
+## 10) Build and validate the drill manifest
+
+Create the release-drill manifest from the drill artifact directory, validate it in strict mode, and archive both the JSON and validation output.
+
+```bash
+ARCHIVE_MANIFEST="$DRILL_DIR/release-drill-manifest.json"
+ARCHIVE_MANIFEST_VALIDATE="$DRILL_DIR/release-drill-manifest.validation.txt"
+
+npm run ops:build-release-drill-manifest -- \
+  --dir "$DRILL_DIR" \
+  --out "$ARCHIVE_MANIFEST"
+
+npm run ops:validate-release-drill-manifest -- \
+  --file "$ARCHIVE_MANIFEST" \
+  --strict | tee "$ARCHIVE_MANIFEST_VALIDATE"
+```
+
+Expected output:
+- JSON manifest written to `$DRILL_DIR/release-drill-manifest.json`
+- Strict validation output written to `$DRILL_DIR/release-drill-manifest.validation.txt`
+- Both commands exit `0`
+
+Artifacts:
+- `$DRILL_DIR/release-drill-manifest.json`
+- `$DRILL_DIR/release-drill-manifest.validation.txt`
+
 ## Failure triage matrix
 
 | Failing script | Likely cause | First check |
@@ -244,6 +270,8 @@ Artifacts:
 | `ops:build-release-evidence-pack` | Missing consistency evidence, missing evidence bundle, or an AO gate that is not closed | Verify the latest bundle directory and the release pack status fields |
 | `ops:build-release-signoff-checklist` | Pack JSON missing, unreadable, or not `ready` under `--strict` | Read the pack blockers and warnings before retrying |
 | `ops:check-release-readiness` | Pack contains blockers, or warnings remain under strict mode | Inspect `blockers` and `warnings` in `release-evidence-pack.json` |
+| `ops:build-release-drill-manifest` | Drill artifact directory is incomplete or release/status cannot be derived | Verify all required drill artifacts exist in `$DRILL_DIR` |
+| `ops:validate-release-drill-manifest` | Manifest schema/content mismatch in strict mode | Inspect path uniqueness, sha256 format/casing, and artifact metadata |
 
 ## Final sign-off mapping
 
@@ -252,12 +280,13 @@ Artifacts:
 | Confirm consistency is acceptable | `ops:validate-consistency-preflight`, `ops:compare-integrity-matrix`, `ops:export-consistency-report` | `consistency-matrix.json`, `consistency-drift-report.md`, `consistency-drift-summary.json` |
 | Confirm evidence bundle is acceptable | `ops:export-integrity-evidence`, `ops:latest-evidence-bundle`, `ops:check-evidence-bundle` | Timestamped bundle containing `compare.txt`, `attestation.json`, and `manifest.json` |
 | Confirm AO dependency gate is acceptable | `ops:validate-ao-dependency-gate` | `kernel-migration/ao-dependency-gate.json` with all required checks closed |
-| Review blockers and warnings | `ops:build-release-evidence-pack`, `ops:check-release-readiness` | `release-evidence-pack.md`, `release-evidence-pack.json`, and readiness output |
+| Confirm archive manifest is acceptable | `ops:build-release-drill-manifest`, `ops:validate-release-drill-manifest` | `$DRILL_DIR/release-drill-manifest.json` and `$DRILL_DIR/release-drill-manifest.validation.txt` |
+| Review blockers and warnings | `ops:build-release-evidence-pack`, `ops:check-release-readiness` | `release-evidence-pack.md`, `release-evidence-pack.json`, readiness output, and drill manifest artifacts |
 | Produce the operator checklist | `ops:build-release-signoff-checklist` | `release-signoff-checklist.md` |
 
 ## Closeout
 
 - Confirm the release pack status is `ready`
 - Confirm the readiness check returns exit code `0`
-- Attach the evidence bundle, consistency report, release pack, and checklist to the release review
+- Attach the evidence bundle, archive manifest, consistency report, release pack, and checklist to the release review
 - Record the exact bundle paths in the release note
