@@ -4,7 +4,7 @@ Do not archive/delete the old repo until all checks below are complete.
 
 Gateway-side implementation and test coverage are ahead of the AO-side registry/authority lifecycle, so the remaining deletion gate is still blocked on the AO API and rollout evidence.
 
-Machine-validated release evidence can now be generated, but it does not close the AO-side blockers by itself. The closeout automation is complete, awaiting AO/manual proofs, so keep the AO registry/authority items open until the underlying APIs and lifecycle flows are actually complete.
+Machine-validated release evidence can now be generated, but the readiness tooling intentionally splits the result into two phases: `automation-complete` for the archive/build/drill evidence, and `ao-manual-pending` when AO-side checks or proof links are still open. Use that split in notes and logs instead of a generic "blocked" label whenever the automation itself has already finished.
 
 ## Legacy module exit criteria
 
@@ -13,13 +13,13 @@ For each module below, require the same three proof types before marking it reti
 | Legacy module | Module-specific proof expectations |
 | --- | --- |
 | `blackcat-config` | Replacement in `src/runtime/config/`; pass `tests/runtime-config-loader.test.ts`, `tests/runtime-config-profile.test.ts`, and `tests/profile-tuning-sync.test.ts`; attach `rg -n "libs/legacy/blackcat-config" src` output. |
-| `blackcat-core` | Replacement in `src/runtime/core/` and template helpers in `src/runtime/template/`; pass `tests/runtime-core-bytes.test.ts`, `tests/runtime-core-json.test.ts`, `tests/template-api.test.ts`, and `tests/validate-template-backend-contract.test.ts`; attach `rg -n "libs/legacy/blackcat-core" src` output. |
-| `blackcat-crypto` | Replacement in `src/runtime/crypto/`; pass `tests/runtime-crypto-safeCompare.test.ts` and `tests/webhooks.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto" src` output. |
+| `blackcat-core` | Replacement in `src/runtime/core/` and template helpers in `src/runtime/template/`; keep `kernel-migration/core-primitive-map.json` aligned with the gateway runtime, pass `tests/runtime-core-bytes.test.ts`, `tests/runtime-core-json.test.ts`, `tests/runtime-core-canonicalJson.test.ts`, `tests/template-api.test.ts`, and `tests/validate-template-backend-contract.test.ts`; attach `rg -n "libs/legacy/blackcat-core" src` output. |
+| `blackcat-crypto` | Replacement in `src/runtime/crypto/`; pass `tests/runtime-crypto-safeCompare.test.ts`, `tests/runtime-crypto-hmac.test.ts`, `tests/runtime-crypto-signatureRefs.test.ts`, `tests/runtime-crypto-boundary.test.ts`, and `tests/webhooks.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto" src` output plus runtime boundary proof (`verification-only`, no wallet/private-key signing). |
 | `blackcat-auth` | Replacement in `src/runtime/auth/`; pass `tests/runtime-auth-httpAuth.test.ts`, `tests/runtime-auth-policy.test.ts`, and `tests/metrics-auth.test.ts`; attach `rg -n "libs/legacy/blackcat-auth" src` output. |
 | `blackcat-sessions` | Replacement in `src/runtime/sessions/`; pass `tests/runtime-sessions-replayStore.test.ts`, `tests/runtime-sessions-lifecycle.test.ts`, and `tests/rate-replay-limits.test.ts`; attach `rg -n "libs/legacy/blackcat-sessions" src` output. |
 | `blackcat-auth-js` | Gateway-owned client boundary exists (`src/clients/auth-sdk/` or documented equivalent); pass `tests/clients-auth-sdk.test.ts`; attach `rg -n "libs/legacy/blackcat-auth-js" src` output. |
 | `blackcat-crypto-js` | Gateway-owned client boundary exists (`src/clients/crypto-sdk/` or documented equivalent); pass `tests/clients-crypto-sdk.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto-js" src` output. |
-| `blackcat-mailing` | Replacement in `src/runtime/mailing/`; pass `tests/runtime-mailing-policy.test.ts`, `tests/runtime-mailing-transport.test.ts`, and `tests/runtime-mailing-delivery.test.ts`; attach `rg -n "libs/legacy/blackcat-mailing" src` output. |
+| `blackcat-mailing` | Replacement in `src/runtime/mailing/`; pass `tests/runtime-mailing-policy.test.ts`, `tests/runtime-mailing-transport.test.ts`, `tests/runtime-mailing-delivery.test.ts`, `tests/runtime-mailing-integration.test.ts`, and `tests/check-mailing-secret-boundary.test.ts`; attach `rg -n "libs/legacy/blackcat-mailing" src` output plus `npm run ops:check-mailing-secret-boundary -- --strict`. |
 | `blackcat-gopay` | Replacement in `src/runtime/payments/`; pass `tests/runtime-payments-validators.test.ts` and `tests/handler-gopay-webhook.test.ts`; attach `rg -n "libs/legacy/blackcat-gopay" src` output. |
 | `blackcat-analytics` | Replacement in `src/runtime/telemetry/analytics/`; pass `tests/runtime-telemetry-analytics.test.ts`; attach `rg -n "libs/legacy/blackcat-analytics" src` output. |
 | `blackcat-installer` | Explicit ops-only classification (`ops/` + `scripts/` references only); pass `npm run ops:check-installer-runtime-boundary -- --strict`; attach `rg -n "blackcat-installer|libs/legacy/blackcat-installer" src` output showing no request-path usage. |
@@ -34,7 +34,7 @@ For each module below, require the same three proof types before marking it reti
 ## B. Functional parity
 
 - [ ] Trusted release registry logic is available via AO APIs.
-- [ ] Closeout automation is complete, awaiting AO/manual proofs (AO gate may still be open).
+- [ ] Closeout automation is complete and AO/manual proof state is recorded separately (`automation-complete` vs `ao-manual-pending`).
 - [ ] Revoke semantics are enforced by gateway verifier.
 - [x] Pause/degraded mode policy is enforced in gateway runtime.
 - [ ] Upgrade lifecycle equivalent (`propose/activate/cancel`) is implemented in AO/write flows.
@@ -132,7 +132,7 @@ Manual evidence still required separately:
 - [ ] Stakeholder sign-off: architecture (`1` documented approval, target state and decommission scope match the approved design).
 - [x] P0 integrity rollout complete with `npm test` + focused integrity tests green on the current branch.
 - [ ] Final migration summary committed in gateway + AO notes with date, scope, and rollback reference.
-- [ ] Final decommission closeout log recorded from `run-decommission-closeout` with manual proof links attached.
+- [ ] Final decommission closeout log recorded from `run-decommission-closeout` with manual proof links attached and the automation/AO-manual state split explicitly recorded.
 - [ ] Rollback plan documented and tested in staging for at least one failure scenario.
 - [ ] No open P0/P1 migration blockers remain in backlog.
 - [ ] The old repo has been dry-run archived or mirrored with a verified restore path before deletion.
@@ -141,16 +141,16 @@ Manual evidence still required separately:
 
 Latest machine verification snapshot (UTC: `2026-04-11`):
 - `npm run test:integrity-fast` → `SUCCESS 26/26 checks passed`
-- `npm test` → `51 files, 329 tests passed`
+- `npm test` → `85 files, 509 tests passed`
 
-Use one row per drill or proof item. Keep the artifact link stable and prefer the raw log, PR, or release note URL. The closeout automation can be complete even when AO/manual proofs are still pending; record that status explicitly in the log.
+Use one row per drill or proof item. Keep the artifact link stable and prefer the raw log, PR, or release note URL. The closeout automation can be complete even when AO/manual proofs are still pending; record that as `automation-complete` plus `ao-manual-pending` instead of compressing it into a single blocked state.
 
-| Drill name | Date/time UTC | Operator | Command/script | Artifact link | Status |
-| --- | --- | --- | --- | --- | --- |
-| Decommission closeout automation |  |  | `run-decommission-closeout` |  | automation complete, awaiting AO/manual proofs |
-|  |  |  |  |  | pending |
-|  |  |  |  |  | pending |
-|  |  |  |  |  | pending |
+| Drill name | Date/time UTC | Operator | Command/script | Artifact link | Automation state | AO/manual state | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Decommission closeout automation |  |  | `run-decommission-closeout` |  | `complete` | `pending` | blocked |
+|  |  |  |  |  | `complete` | `complete` | ready |
+|  |  |  |  |  | `blocked` | `pending` | blocked |
+|  |  |  |  |  | `blocked` | `blocked` | blocked |
 
 ## I. Evidence quality rubric
 

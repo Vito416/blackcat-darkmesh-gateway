@@ -93,12 +93,15 @@ describe('webhook verification', () => {
     const body = JSON.stringify({ id: 'WH-1', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
     const secret = 'ppsecret'
     const sig = crypto.createHmac('sha256', secret).update(body).digest('hex')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
     const headers = new Headers({
       'PayPal-Transmission-Sig': sig,
       'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
     })
     const ok = await verifyPayPal(body, headers, secret)
     expect(ok).toBe(true)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('rejects non-https paypal api bases without calling fetch', async () => {

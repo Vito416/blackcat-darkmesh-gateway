@@ -51,20 +51,22 @@ This file defines the minimum removal gate for each `libs/legacy/<module>/` snap
   - PR/commit link for config snapshot removal
 
 ### `blackcat-core` (current: `in progress`)
-- Tests required: keep current groundwork tests (`tests/runtime-core-bytes.test.ts`, `tests/template-api.test.ts`, `tests/validate-template-backend-contract.test.ts`) and add coverage for each additional primitive moved into `src/runtime/core/`.
-- Docs required: complete primitive-by-primitive mapping in `libs/legacy/MIGRATION_PLAN.md` and record final target paths in `kernel-migration/LEGACY_MODULE_MAP.md`.
+- Tests required: keep current groundwork tests (`tests/runtime-core-bytes.test.ts`, `tests/runtime-core-json.test.ts`, `tests/runtime-core-canonicalJson.test.ts`, `tests/template-api.test.ts`, `tests/validate-template-backend-contract.test.ts`) and add coverage for each additional primitive moved into `src/runtime/core/`.
+- Docs required: keep `kernel-migration/core-primitive-map.json` in sync with the gateway runtime, complete primitive-by-primitive mapping in `libs/legacy/MIGRATION_PLAN.md`, and record final target paths in `kernel-migration/LEGACY_MODULE_MAP.md`.
 - Proof required: no hidden direct dependency on `libs/legacy/blackcat-core` in request path and no backslide from runtime-core boundaries to legacy helpers.
 - Evidence to archive:
   - primitive replacement test log
+  - core primitive map JSON snapshot
   - `rg` no-import proof log
   - PR/commit link for core mapping completion
 
 ### `blackcat-crypto` (current: `partially extracted`)
-- Tests required: `tests/runtime-crypto-safeCompare.test.ts` plus webhook verification coverage (`tests/webhooks.test.ts`) pass in removal PR.
-- Docs required: map + migration plan row marked `removed` with replacement path `src/runtime/crypto/safeCompare.ts`.
-- Proof required: no runtime imports from `libs/legacy/blackcat-crypto`.
+- Tests required: `tests/runtime-crypto-safeCompare.test.ts`, `tests/runtime-crypto-hmac.test.ts`, `tests/runtime-crypto-signatureRefs.test.ts`, `tests/runtime-crypto-boundary.test.ts`, and webhook verification coverage (`tests/webhooks.test.ts`) pass in the removal PR.
+- Docs required: map + migration plan row marked `removed` with replacement paths `src/runtime/crypto/safeCompare.ts`, `src/runtime/crypto/hmac.ts`, `src/runtime/crypto/signatureRefs.ts`, and `src/runtime/crypto/boundary.ts`.
+- Proof required: no runtime imports from `libs/legacy/blackcat-crypto`, and the gateway request path remains verification-only with no wallet/private-key signing.
 - Evidence to archive:
   - focused test run log
+  - crypto-boundary proof log (`rg` no wallet/private-key signing references in `src/runtime/crypto` and `src/webhooks.ts`)
   - `rg` no-import proof log
   - PR/commit link for crypto snapshot removal
 
@@ -87,9 +89,9 @@ This file defines the minimum removal gate for each `libs/legacy/<module>/` snap
   - PR/commit link for GoPay migration completion
 
 ### `blackcat-mailing` (current: `extracted`)
-- Tests required: keep payload/sanitizer coverage (`tests/runtime-mailing-policy.test.ts`) and keep/expand focused queue+transport coverage (`tests/runtime-mailing-transport.test.ts`) before any snapshot removal.
-- Docs required: document final ownership and runtime boundary (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`) in migration docs, including whether delivery is gateway-owned or delegated.
-- Proof required: if Worker-owned, prove no direct SMTP/runtime dependency on `libs/legacy/blackcat-mailing` in gateway; if gateway-owned, prove queue+transport path is committed and legacy-independent.
+- Tests required: keep payload/sanitizer coverage (`tests/runtime-mailing-policy.test.ts`) and keep/expand focused queue+transport coverage (`tests/runtime-mailing-transport.test.ts`) before any snapshot removal; add and keep the mailing secret-boundary check green (`tests/check-mailing-secret-boundary.test.ts`).
+- Docs required: document final ownership and runtime boundary (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`) in migration docs, including that the gateway owns the public queue/transport surface while the worker owns all secret-bearing mailing credentials.
+- Proof required: prove no direct SMTP/runtime dependency on `libs/legacy/blackcat-mailing` in gateway, and prove the mailing subtree does not require local secrets (`node scripts/check-mailing-secret-boundary.js --strict` with `Findings: 0`).
 - Evidence to archive:
   - ownership test/integration log
   - `rg` no-import proof log

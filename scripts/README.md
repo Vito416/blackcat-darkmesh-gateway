@@ -286,6 +286,22 @@ Exit codes:
 - `3` findings in `--strict` mode, or a runtime error occurred
 - `64` usage error
 
+## Mailing secret boundary check
+
+`scripts/check-mailing-secret-boundary.js` scans `src/runtime/mailing/**` and fails when request-path mailing code reads local secrets (`process.env`, `import.meta.env`, or equivalent bindings).
+
+Usage:
+```bash
+npm run ops:check-mailing-secret-boundary
+npm run ops:check-mailing-secret-boundary -- --strict
+npm run ops:check-mailing-secret-boundary -- --json
+```
+
+Exit codes:
+- `0` pass, or findings without `--strict`
+- `3` findings in `--strict` mode, or a runtime error occurred
+- `64` usage error
+
 ## Legacy risk audit
 
 `scripts/audit-legacy-risk.js` scans `libs/legacy` for high-risk patterns before runtime extraction.
@@ -309,12 +325,13 @@ Exit codes:
 
 ## Legacy migration matrix build
 
-`scripts/build-legacy-migration-matrix.js` generates a markdown matrix from `libs/legacy/MANIFEST.md` and optional risk JSON.
+`scripts/build-legacy-migration-matrix.js` generates a markdown matrix from `libs/legacy/MANIFEST.md`, optional risk JSON, and an optional machine-readable `blackcat-core` primitive map.
 
 Usage:
 ```bash
 npm run ops:build-legacy-migration-matrix
 npm run ops:build-legacy-migration-matrix -- --risk ./tmp/legacy-risk.json
+npm run ops:build-legacy-migration-matrix -- --core-map ./kernel-migration/core-primitive-map.json
 npm run ops:build-legacy-migration-matrix -- --out ./kernel-migration/legacy-libs-matrix.md --json
 ```
 
@@ -471,7 +488,11 @@ npm run ops:check-ao-gate-evidence -- \
 
 ## Decommission readiness check
 
-`scripts/check-decommission-readiness.js` reads a completed drill directory + AO gate file and emits a blocker-oriented readiness summary.
+`scripts/check-decommission-readiness.js` reads a completed drill directory + AO gate file and emits a blocker-oriented readiness summary with an explicit state split:
+
+- `automationState`: machine artifact/drill readiness (`complete` or `blocked`)
+- `aoManualState`: AO/manual proof readiness (`complete`, `pending`, or `blocked`)
+- `closeoutState`: combined operator state (`ready`, `automation-blocked`, `ao-manual-pending`, `ao-manual-blocked`)
 
 Usage:
 ```bash

@@ -117,6 +117,23 @@ jobs:
       - name: Check runtime config boundary
         run: npm run ops:check-config-loader-runtime-boundary -- --strict
 
+  mailing-secret-boundary:
+    name: Mailing secret boundary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Check mailing secret boundary
+        run: npm run ops:check-mailing-secret-boundary -- --strict
+
   legacy-no-import-evidence:
     name: Legacy no-import evidence
     runs-on: ubuntu-24.04

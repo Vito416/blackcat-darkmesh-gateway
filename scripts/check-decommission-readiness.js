@@ -154,7 +154,7 @@ function uniqueStrings(values) {
   return [...new Set(values.filter(isNonEmptyString).map((value) => value.trim()))]
 }
 
-function collectGateChecks(gate, blockers) {
+function collectGateChecks(gate, aoManualBlockers) {
   const summary = {
     present: !!gate,
     valid: false,
@@ -164,21 +164,22 @@ function collectGateChecks(gate, blockers) {
     openCount: 0,
     missingRequiredChecks: [],
     openChecks: [],
+    status: 'blocked',
   }
 
   if (!gate || typeof gate !== 'object' || Array.isArray(gate)) {
-    blockers.push('ao gate must be a JSON object')
+    aoManualBlockers.push('ao gate must be a JSON object')
     return summary
   }
 
   summary.release = isNonEmptyString(gate.release) ? gate.release.trim() : ''
 
   if (!Array.isArray(gate.required) || gate.required.length === 0) {
-    blockers.push('ao gate.required must be a non-empty array')
+    aoManualBlockers.push('ao gate.required must be a non-empty array')
     return summary
   }
   if (!Array.isArray(gate.checks) || gate.checks.length === 0) {
-    blockers.push('ao gate.checks must be a non-empty array')
+    aoManualBlockers.push('ao gate.checks must be a non-empty array')
     return summary
   }
 
@@ -196,7 +197,7 @@ function collectGateChecks(gate, blockers) {
     const check = checksById.get(requiredId)
     if (!check) {
       summary.missingRequiredChecks.push(requiredId)
-      blockers.push(`ao gate missing required check: ${requiredId}`)
+      aoManualBlockers.push(`ao gate missing required check: ${requiredId}`)
       continue
     }
 
@@ -204,30 +205,40 @@ function collectGateChecks(gate, blockers) {
     if (status !== 'closed') {
       summary.openCount += 1
       summary.openChecks.push(requiredId)
-      blockers.push(`ao gate required check is not closed: ${requiredId} (${status || 'missing status'})`)
+      aoManualBlockers.push(`ao gate required check is not closed: ${requiredId} (${status || 'missing status'})`)
       continue
     }
 
     summary.closedCount += 1
   }
 
-  summary.valid = summary.missingRequiredChecks.length === 0 && summary.openChecks.length === 0
+  if (summary.missingRequiredChecks.length > 0) {
+    summary.status = 'blocked'
+  } else if (summary.openChecks.length > 0) {
+    summary.status = 'pending'
+  } else {
+    summary.status = 'complete'
+  }
+
+  summary.valid = summary.status === 'complete'
   return summary
 }
 
 function assessDecommissionReadiness({ dir, aoGateFile }) {
   const blockers = []
+  const automationBlockers = []
+  const aoManualBlockers = []
   const resolvedDir = resolve(dir)
   const resolvedGate = resolve(aoGateFile)
 
   const artifacts = {}
   for (const entry of REQUIRED_ARTIFACTS) {
-    artifacts[entry.key] = readJsonArtifact(resolvedDir, entry.file, blockers)
+    artifacts[entry.key] = readJsonArtifact(resolvedDir, entry.file, automationBlockers)
   }
 
-  const gateArtifact = readJsonArtifact('.', resolvedGate, blockers)
+  const gateArtifact = readJsonArtifact('.', resolvedGate, aoManualBlockers)
   const gate = gateArtifact.valid ? gateArtifact.value : null
-  const gateSummary = collectGateChecks(gate, blockers)
+  const gateSummary = collectGateChecks(gate, aoManualBlockers)
 
   const pack = artifacts['release-evidence-pack'].value
   const readiness = artifacts['release-readiness'].value
@@ -242,19 +253,19 @@ function assessDecommissionReadiness({ dir, aoGateFile }) {
   const drillCheckOk = drillCheck?.ok === true
 
   if (artifacts['release-evidence-pack'].present && packStatus !== 'ready') {
-    blockers.push(`release-evidence-pack.json status is ${packStatus || 'missing'} (expected ready)`)
+    automationBlockers.push(`release-evidence-pack.json status is ${packStatus || 'missing'} (expected ready)`)
   }
   if (artifacts['release-readiness'].present && readinessStatus !== 'ready') {
-    blockers.push(`release-readiness.json status is ${readinessStatus || 'missing'} (expected ready)`)
+    automationBlockers.push(`release-readiness.json status is ${readinessStatus || 'missing'} (expected ready)`)
   }
   if (artifacts['release-drill-manifest'].present && manifestStatus !== 'ready') {
-    blockers.push(`release-drill-manifest.json status is ${manifestStatus || 'missing'} (expected ready)`)
+    automationBlockers.push(`release-drill-manifest.json status is ${manifestStatus || 'missing'} (expected ready)`)
   }
   if (artifacts['release-drill-check'].present && !drillCheckOk) {
-    blockers.push('release-drill-check.json is not ok')
+    automationBlockers.push('release-drill-check.json is not ok')
   }
   if (artifacts['release-evidence-ledger'].present && ledgerStatus !== 'ready') {
-    blockers.push(`release-evidence-ledger.json status is ${ledgerStatus || 'missing'} (expected ready)`)
+    automationBlockers.push(`release-evidence-ledger.json status is ${ledgerStatus || 'missing'} (expected ready)`)
   }
 
   const releaseValues = uniqueStrings([
@@ -265,11 +276,23 @@ function assessDecommissionReadiness({ dir, aoGateFile }) {
     gate?.release,
   ])
   if (releaseValues.length > 1) {
-    blockers.push(`release mismatch across drill artifacts: ${releaseValues.join(', ')}`)
+    automationBlockers.push(`release mismatch across drill artifacts: ${releaseValues.join(', ')}`)
   }
 
   const release = releaseValues[0] || ''
-  const status = blockers.length === 0 ? 'ready' : 'blocked'
+  const automationState = automationBlockers.length === 0 ? 'complete' : 'blocked'
+  const aoManualState = gateSummary.status
+  const closeoutState =
+    automationState === 'complete'
+      ? aoManualState === 'complete'
+        ? 'ready'
+        : aoManualState === 'pending'
+          ? 'ao-manual-pending'
+          : 'ao-manual-blocked'
+      : 'automation-blocked'
+  const status = closeoutState === 'ready' ? 'ready' : 'blocked'
+  blockers.push(...automationBlockers)
+  blockers.push(...aoManualBlockers)
 
   return {
     checkedAtUtc: new Date().toISOString(),
@@ -277,9 +300,31 @@ function assessDecommissionReadiness({ dir, aoGateFile }) {
     aoGateFile: resolvedGate,
     release,
     status,
+    closeoutState,
+    automationState,
+    aoManualState,
     blockerCount: blockers.length,
     blockers,
+    automationBlockers,
+    aoManualBlockers,
     checks: {
+      automation: {
+        status: automationState,
+        blockerCount: automationBlockers.length,
+        blockers: automationBlockers,
+        artifactCount: REQUIRED_ARTIFACTS.length,
+        releaseAligned: releaseValues.length <= 1,
+      },
+      aoManual: {
+        status: aoManualState,
+        blockerCount: aoManualBlockers.length,
+        blockers: aoManualBlockers,
+        requiredCount: gateSummary.requiredCount,
+        closedCount: gateSummary.closedCount,
+        openCount: gateSummary.openCount,
+        missingRequiredChecks: [...gateSummary.missingRequiredChecks],
+        openChecks: [...gateSummary.openChecks],
+      },
       releaseEvidencePack: {
         present: artifacts['release-evidence-pack'].present,
         valid: artifacts['release-evidence-pack'].valid,
@@ -328,7 +373,19 @@ function renderHuman(summary) {
   lines.push(`- AO gate: \`${summary.aoGateFile}\``)
   if (isNonEmptyString(summary.release)) lines.push(`- Release: \`${summary.release}\``)
   lines.push(`- Status: \`${summary.status}\``)
+  lines.push(`- Closeout state: \`${summary.closeoutState}\``)
+  lines.push(`- Automation state: \`${summary.automationState}\``)
+  lines.push(`- AO/manual state: \`${summary.aoManualState}\``)
   lines.push(`- Blockers: ${summary.blockerCount}`)
+  lines.push('')
+
+  lines.push('## State split')
+  lines.push(
+    `- Automation: ${summary.checks.automation.status} (${summary.checks.automation.blockerCount} blocker${summary.checks.automation.blockerCount === 1 ? '' : 's'})`,
+  )
+  lines.push(
+    `- AO/manual: ${summary.checks.aoManual.status} (${summary.checks.aoManual.openCount} open, ${summary.checks.aoManual.missingRequiredChecks.length} missing required)`,
+  )
   lines.push('')
 
   lines.push('## Artifact checks')

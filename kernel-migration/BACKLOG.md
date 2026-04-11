@@ -51,8 +51,9 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] `blackcat-crypto-js`: client boundary exists under `src/clients/crypto-sdk/client.ts` with focused tests (`tests/clients-crypto-sdk.test.ts`); next is ownership documentation and removal evidence before any decommission status change.
   - Progress note: client boundary now enforces URL safety and optional host allowlists with deterministic body parsing.
   - Progress note: client hardening now enforces URL safety + optional host allowlist and deterministic response parsing behavior.
-- [~] `blackcat-mailing`: queue/transport/delivery groundwork exists (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`, `src/runtime/mailing/delivery.ts`); the remaining open item is the final gateway-owned vs worker-owned dispatch decision before decommission.
+- [~] `blackcat-mailing`: queue/transport/delivery groundwork exists (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`, `src/runtime/mailing/delivery.ts`); ownership and request-path secret boundary are now explicit, and the remaining open item is final decommission evidence packaging.
   - Progress note: delivery outcome states, deterministic retry cadence/backoff, and a delivery orchestrator helper now exist (`src/runtime/mailing/delivery.ts`, `tests/runtime-mailing-delivery.test.ts`).
+  - Progress note: ownership is now fixed to gateway public queue/transport + worker-owned secret credentials (`ops/worker-secrets-trust-model.md`), with machine enforcement via `scripts/check-mailing-secret-boundary.js` and `tests/check-mailing-secret-boundary.test.ts`.
 - [~] `blackcat-gopay`: provider/validator helpers now have webhook verification and idempotency groundwork (`src/runtime/payments/gopayWebhook.ts`, `src/runtime/payments/webhookIdempotency.ts`, `/webhook/gopay` in `src/handler.ts`, `tests/handler-gopay-webhook.test.ts`); the remaining open item is the final payment-boundary decommission evidence.
 - [~] `blackcat-analytics`: sink/export boundary now has a runtime retention/drop helper and coverage; keep the final destination decision and decommission evidence aligned once accepted/dropped paths stay deterministic.
 - [~] `blackcat-installer`: keep installer logic ops-only (`ops/` + `scripts/`), and enforce zero request-path imports from installer snapshot.
@@ -73,7 +74,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] mailing queue + transport progression:
   - Finalize the runtime queue/transport boundary (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`) and document the configuration contract (endpoint/token/timeout).
   - Keep and expand focused queue/transport coverage (`tests/runtime-mailing-transport.test.ts`) plus one delivery-path integration assertion.
-  - Decide and document whether dispatch remains gateway-owned or delegated to worker-only path before decommissioning `blackcat-mailing`.
+  - Decision recorded: gateway keeps public-safe queue/transport/delivery intent; worker owns secret-bearing dispatch credentials, enforced by the mailing secret-boundary check.
 - [~] GoPay webhook + idempotency adapter progression:
   - Keep `/webhook/gopay` verification path on the runtime-owned helper (`src/runtime/payments/gopayWebhook.ts`) with focused route tests (`tests/handler-gopay-webhook.test.ts`).
   - [~] Extract provider-agnostic webhook idempotency adapter under `src/runtime/payments/` and use it for GoPay duplicate-write defense.

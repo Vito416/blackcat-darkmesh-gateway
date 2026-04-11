@@ -125,10 +125,56 @@ describe('check-decommission-readiness.js', () => {
 
     expect(res.status).toBe(0)
     expect(payload.status).toBe('ready')
+    expect(payload.closeoutState).toBe('ready')
+    expect(payload.automationState).toBe('complete')
+    expect(payload.aoManualState).toBe('complete')
     expect(payload.blockerCount).toBe(0)
+    expect(payload.checks.automation.status).toBe('complete')
+    expect(payload.checks.aoManual.status).toBe('complete')
     expect(payload.checks.releaseEvidencePack.status).toBe('ready')
     expect(payload.checks.aoGate.closedCount).toBe(3)
     expect(payload.checks.aoGate.openCount).toBe(0)
+  })
+
+  it('separates automation-complete from ao-manual-pending when the gate is still open', () => {
+    const dir = seedDrillDir({
+      gateStatuses: ['closed', 'in_progress', 'closed'],
+    })
+    const gateFile = join(dir, 'ao-dependency-gate.json')
+
+    const res = runCli(['--dir', dir, '--ao-gate', gateFile, '--json'])
+    const payload = JSON.parse(res.stdout)
+
+    expect(res.status).toBe(0)
+    expect(payload.status).toBe('blocked')
+    expect(payload.closeoutState).toBe('ao-manual-pending')
+    expect(payload.automationState).toBe('complete')
+    expect(payload.aoManualState).toBe('pending')
+    expect(payload.checks.automation.status).toBe('complete')
+    expect(payload.checks.aoManual.status).toBe('pending')
+    expect(payload.checks.aoManual.openCount).toBe(1)
+    expect(payload.checks.aoManual.openChecks).toEqual(['p1_1_authority_rotation_workflow'])
+    expect(payload.blockers.some((blocker: string) => blocker.includes('ao gate required check is not closed'))).toBe(true)
+  })
+
+  it('separates machine blockers from ao/manual completeness', () => {
+    const dir = seedDrillDir({
+      omit: ['release-drill-check.json'],
+      gateStatuses: ['closed', 'closed', 'closed'],
+    })
+    const gateFile = join(dir, 'ao-dependency-gate.json')
+
+    const res = runCli(['--dir', dir, '--ao-gate', gateFile, '--json'])
+    const payload = JSON.parse(res.stdout)
+
+    expect(res.status).toBe(0)
+    expect(payload.status).toBe('blocked')
+    expect(payload.closeoutState).toBe('automation-blocked')
+    expect(payload.automationState).toBe('blocked')
+    expect(payload.aoManualState).toBe('complete')
+    expect(payload.checks.automation.status).toBe('blocked')
+    expect(payload.checks.aoManual.status).toBe('complete')
+    expect(payload.blockers.some((blocker: string) => blocker.includes('missing required drill artifact: release-drill-check.json'))).toBe(true)
   })
 
   it('collects blockers for missing artifacts and open AO checks', () => {
@@ -148,6 +194,9 @@ describe('check-decommission-readiness.js', () => {
 
     expect(res.status).toBe(0)
     expect(payload.status).toBe('blocked')
+    expect(payload.closeoutState).toBe('automation-blocked')
+    expect(payload.automationState).toBe('blocked')
+    expect(payload.aoManualState).toBe('pending')
     expect(payload.blockerCount).toBeGreaterThan(0)
     expect(payload.blockers.some((blocker: string) => blocker.includes('missing required drill artifact: release-drill-check.json'))).toBe(true)
     expect(payload.blockers.some((blocker: string) => blocker.includes('missing required drill artifact: release-evidence-ledger.json'))).toBe(true)
@@ -167,6 +216,7 @@ describe('check-decommission-readiness.js', () => {
 
     expect(res.status).toBe(3)
     expect(res.stdout).toContain('# Decommission Readiness')
+    expect(res.stdout).toContain('## State split')
     expect(res.stdout).toContain('## Blockers')
     expect(res.stdout).toContain('ao gate required check is not closed')
     expect(res.stdout).toContain('release-evidence-pack.json status is warning')

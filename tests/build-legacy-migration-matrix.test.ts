@@ -5,7 +5,10 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import {
+  parseLegacyCorePrimitiveMap,
   parseLegacyManifestModules,
+  renderLegacyMigrationMatrix,
+  summarizeLegacyCorePrimitiveMap,
   summarizeLegacyRiskInput,
 } from '../scripts/build-legacy-migration-matrix.js'
 
@@ -45,6 +48,7 @@ function seedWorkspace() {
     '| `blackcat-analytics` | `9f69f1d` |',
     '| `blackcat-auth` | `14534b4` |',
     '| `blackcat-auth-js` | `ff46aa7` |',
+    '| `blackcat-core` | `f1c3dc7` |',
     '',
     '## Included content classes',
     '',
@@ -53,6 +57,39 @@ function seedWorkspace() {
 
   writeFileSync(join(root, 'libs', 'legacy', 'MANIFEST.md'), `${manifest}\n`, 'utf8')
   return root
+}
+
+function seedCorePrimitiveMap(root: string) {
+  writeFileSync(
+    join(root, 'kernel-migration', 'core-primitive-map.json'),
+    JSON.stringify(
+      {
+        module: 'blackcat-core',
+        sourceCommit: 'f1c3dc7',
+        status: 'in progress',
+        requestPathProof: 'rg -n "libs/legacy/blackcat-core" src',
+        primitiveGroups: [
+          {
+            name: 'byte helpers',
+            legacySymbols: ['readPositiveInteger', 'utf8ByteLength', 'bodyExceedsUtf8Limit'],
+            gatewayPaths: ['src/runtime/core/bytes.ts'],
+            tests: ['tests/runtime-core-bytes.test.ts'],
+            proof: 'byte sizing and positive-integer parsing are gateway-owned and covered by focused tests',
+          },
+          {
+            name: 'template helpers',
+            legacySymbols: ['template action guards', 'template backend validation'],
+            gatewayPaths: ['src/runtime/template/actions.ts', 'src/runtime/template/validators.ts'],
+            tests: ['tests/template-api.test.ts', 'tests/validate-template-backend-contract.test.ts'],
+            proof: 'template runtime remains gateway-owned and contract-checked before legacy removal',
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  )
 }
 
 describe('build-legacy-migration-matrix.js', () => {
@@ -97,8 +134,67 @@ describe('build-legacy-migration-matrix.js', () => {
     })
   })
 
+  it('parses and summarizes machine-readable core primitive mappings', () => {
+    const parsed = parseLegacyCorePrimitiveMap({
+      module: 'blackcat-core',
+      sourceCommit: 'f1c3dc7',
+      status: 'in progress',
+      requestPathProof: 'rg -n "libs/legacy/blackcat-core" src',
+      primitiveGroups: [
+        {
+          name: 'byte helpers',
+          legacySymbols: ['readPositiveInteger', 'utf8ByteLength'],
+          gatewayPaths: ['src/runtime/core/bytes.ts'],
+          tests: ['tests/runtime-core-bytes.test.ts'],
+          proof: 'byte helper coverage',
+        },
+      ],
+    })
+
+    expect(parsed.module).toBe('blackcat-core')
+    expect(parsed.primitiveGroups).toHaveLength(1)
+    expect(parsed.primitiveGroups[0]).toMatchObject({
+      name: 'byte helpers',
+      status: 'mapped',
+    })
+
+    const summary = summarizeLegacyCorePrimitiveMap({
+      module: 'blackcat-core',
+      sourceCommit: 'f1c3dc7',
+      status: 'in progress',
+      requestPathProof: 'rg -n "libs/legacy/blackcat-core" src',
+      primitiveGroups: [
+        {
+          name: 'byte helpers',
+          legacySymbols: ['readPositiveInteger', 'utf8ByteLength'],
+          gatewayPaths: ['src/runtime/core/bytes.ts'],
+          tests: ['tests/runtime-core-bytes.test.ts'],
+          proof: 'byte helper coverage',
+        },
+        {
+          name: 'template helpers',
+          legacySymbols: ['template action guards'],
+          gatewayPaths: ['src/runtime/template/actions.ts'],
+          tests: ['tests/template-api.test.ts'],
+          proof: 'template contract coverage',
+          status: 'validated',
+        },
+      ],
+    })
+
+    expect(summary).toMatchObject({
+      module: 'blackcat-core',
+      sourceCommit: 'f1c3dc7',
+      primitiveGroupCount: 2,
+      mappedGroupCount: 2,
+      testCount: 2,
+    })
+    expect(summary.tableSummary).toBe('2 primitive groups, 2 tests')
+  })
+
   it('writes the default matrix file and prints JSON summary when requested', () => {
     const root = seedWorkspace()
+    seedCorePrimitiveMap(root)
     const riskPath = join(root, 'risk.json')
     writeFileSync(
       riskPath,
@@ -122,12 +218,18 @@ describe('build-legacy-migration-matrix.js', () => {
     const summary = JSON.parse(res.stdout)
     expect(summary.manifestPath).toBe(resolve(root, 'libs', 'legacy', 'MANIFEST.md'))
     expect(summary.outPath).toBe(resolve(root, 'kernel-migration', 'legacy-libs-matrix.md'))
-    expect(summary.moduleCount).toBe(3)
+    expect(summary.moduleCount).toBe(4)
     expect(summary.modules.map((entry: { module: string }) => entry.module)).toEqual([
       'blackcat-analytics',
       'blackcat-auth',
       'blackcat-auth-js',
+      'blackcat-core',
     ])
+    expect(summary.corePrimitiveSummary).toMatchObject({
+      module: 'blackcat-core',
+      primitiveGroupCount: 2,
+      testCount: 3,
+    })
     expect(summary.riskSummary.total).toBe(4)
     expect(summary.riskSummary.severityCounts.high).toBe(2)
     expect(Number.isNaN(Date.parse(summary.generatedAt))).toBe(false)
@@ -135,23 +237,39 @@ describe('build-legacy-migration-matrix.js', () => {
     const markdown = readFileSync(join(root, 'kernel-migration', 'legacy-libs-matrix.md'), 'utf8')
     expect(markdown).toContain('# Legacy Migration Matrix')
     expect(markdown).toContain('| `blackcat-analytics` | `9f69f1d` | pending |')
+    expect(markdown).toContain('| `blackcat-core` | `f1c3dc7` | 2 primitive groups, 3 tests |')
+    expect(markdown).toContain('## Core primitive evidence')
+    expect(markdown).toContain('| byte helpers |')
     expect(markdown).toContain('- high: 2')
     expect(markdown).toContain('- Total findings: 4')
   })
 
   it('supports custom paths and help output', () => {
     const root = seedWorkspace()
+    seedCorePrimitiveMap(root)
     const manifestPath = join(root, 'libs', 'legacy', 'MANIFEST.md')
     const outPath = join(root, 'kernel-migration', 'custom-matrix.md')
 
-    const res = runMatrix(['--manifest', manifestPath, '--out', outPath], root)
+    const res = runMatrix(['--manifest', manifestPath, '--core-map', join(root, 'kernel-migration', 'core-primitive-map.json'), '--out', outPath], root)
     expect(res.status).toBe(0)
     expect(readFileSync(outPath, 'utf8')).toContain('| `blackcat-auth-js` | `ff46aa7` | pending |')
+    expect(readFileSync(outPath, 'utf8')).toContain('| `blackcat-core` | `f1c3dc7` | 2 primitive groups, 3 tests |')
     expect(res.stdout).toContain('# Legacy Migration Matrix')
 
     const helpRes = runMatrix(['--help'], root)
     expect(helpRes.status).toBe(0)
     expect(helpRes.stdout).toContain('build-legacy-migration-matrix.js')
     expect(helpRes.stdout).toContain('--risk <FILE>')
+    expect(helpRes.stdout).toContain('--core-map <FILE>')
+  })
+
+  it('fails when an explicit core primitive map path is missing', () => {
+    const root = seedWorkspace()
+    const manifestPath = join(root, 'libs', 'legacy', 'MANIFEST.md')
+    const missingCoreMap = join(root, 'kernel-migration', 'missing-core-map.json')
+
+    const res = runMatrix(['--manifest', manifestPath, '--core-map', missingCoreMap], root)
+    expect(res.status).not.toBe(0)
+    expect(res.stderr).toContain('missing-core-map.json')
   })
 })

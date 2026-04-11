@@ -73,6 +73,8 @@ Be explicit. If a risk is deferred, say why and how it is monitored.
 - **Decision:** `GO` / `NO-GO`
 - **Decision time (UTC):** `YYYY-MM-DDTHH:MM:SSZ`
 - **Final status:** `complete / partial / blocked`
+- **Automation state:** `complete / blocked`
+- **AO/manual state:** `complete / pending / blocked`
 - **Blockers remaining:** `...`
 - **Archive / cleanup reference:** `...`
 
@@ -80,4 +82,5 @@ Be explicit. If a risk is deferred, say why and how it is monitored.
 
 - Keep every evidence link stable and reviewable after the migration window closes.
 - If the decision is `NO-GO`, include the exact blocker and the next verification step.
+- If the automation finished but AO/manual proof links are still open, record that explicitly as `automation-complete` plus `ao-manual-pending` instead of collapsing it into a generic blocked note.
 - If the decision is `GO`, the rollback reference must still be present and reachable.
