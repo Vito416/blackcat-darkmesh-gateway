@@ -7,7 +7,7 @@ This plan is the working guide for moving code in `libs/legacy/` into gateway-ow
 Move legacy snapshots into the gateway in a way that is:
 
 - auditable: every imported snapshot has a clear owner, destination, and exit criteria
-- incremental: adapters land before runtime extraction
+- incremental: integration modules land before runtime extraction
 - fail-closed: security-sensitive paths do not keep legacy fallback behavior
 - decommissionable: each snapshot can be removed once the gateway-owned replacement is live
 
@@ -17,13 +17,13 @@ Move legacy snapshots into the gateway in a way that is:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `blackcat-config` | Runtime config and profile loading | PHP | `src/runtime/config/` | High | High | P0 | Gateway boots from gateway-owned config loader; no security-critical path depends on env-only bypasses; profile and secret resolution are covered by the gateway contract. |
 | `blackcat-core` | Shared kernel primitives and low-level utilities | PHP | `src/runtime/core/` with narrow shared helpers only | High | High | P0 | Request-path code no longer imports legacy kernel primitives directly; any reused primitive has a gateway-owned wrapper or replacement; no hidden global state is introduced. |
-| `blackcat-crypto` | AEAD, HMAC, key rotation, envelope handling | PHP | `src/runtime/crypto/` | High | High | P0 | All crypto and signing calls go through a gateway-owned facade; raw key handling is removed from callers; fail-closed verification is enforced before serving protected data. |
+| `blackcat-crypto` | AEAD, HMAC, key rotation, envelope handling | PHP | `src/runtime/crypto/` | High | High | P0 | All crypto and signing calls go through a gateway-owned integration module; raw key handling is removed from callers; fail-closed verification is enforced before serving protected data. |
 | `blackcat-auth` | Authentication, authorization, token/session policy | PHP | `src/runtime/auth/` | High | High | P0 | Login, token, and policy decisions are gateway-owned; session and role checks no longer rely on legacy imports; auth failures remain deterministic and auditable. |
 | `blackcat-sessions` | DB-backed session lifecycle | PHP | `src/runtime/sessions/` | High | High | P0 | Session create/read/rotate/revoke flow uses gateway-owned storage and policy; no legacy shim is required in request handlers; invalid or stale sessions fail closed. |
-| `blackcat-auth-js` | TypeScript/JavaScript auth SDK/client helpers | TypeScript / JavaScript | `src/clients/auth-sdk/` or an adapter boundary, not hot-path runtime | Medium | Medium | P1 | Gateway runtime does not depend on the snapshot at runtime; any client helper is isolated behind a documented interface and can be versioned independently. |
-| `blackcat-crypto-js` | TypeScript/JavaScript crypto SDK/client helpers | TypeScript / JavaScript | `src/clients/crypto-sdk/` or an adapter boundary, not hot-path runtime | Medium | Medium | P1 | Gateway runtime no longer imports the snapshot directly; envelope and slot helpers are either gateway-owned or kept strictly as client-side support code. |
-| `blackcat-mailing` | Outbox, SMTP transport, queue worker | PHP | `src/runtime/mailing/` | Medium | Medium | P1 | Queue enqueue and SMTP dispatch are gateway-owned; mail payload handling stays behind a single adapter; secrets and SMTP config are not read from ad-hoc legacy paths. |
-| `blackcat-gopay` | Payment adapter and idempotent gateway integration | PHP | `src/runtime/payments/` | Medium | High | P1 | Payment creation, callback handling, and idempotency are gateway-owned; any external gateway client is isolated behind a single payment interface; duplicate writes are blocked. |
+| `blackcat-auth-js` | TypeScript/JavaScript auth SDK/client helpers | TypeScript / JavaScript | `src/clients/auth-sdk/` or an integration boundary, not hot-path runtime | Medium | Medium | P1 | Gateway runtime does not depend on the snapshot at runtime; any client helper is isolated behind a documented interface and can be versioned independently. |
+| `blackcat-crypto-js` | TypeScript/JavaScript crypto SDK/client helpers | TypeScript / JavaScript | `src/clients/crypto-sdk/` or an integration boundary, not hot-path runtime | Medium | Medium | P1 | Gateway runtime no longer imports the snapshot directly; envelope and slot helpers are either gateway-owned or kept strictly as client-side support code. |
+| `blackcat-mailing` | Outbox, SMTP transport, queue worker | PHP | `src/runtime/mailing/` | Medium | Medium | P1 | Queue enqueue and SMTP dispatch are gateway-owned; mail payload handling stays behind one integration module; secrets and SMTP config are not read from ad-hoc legacy paths. |
+| `blackcat-gopay` | Payment gateway integration and idempotent payment flow | PHP | `src/runtime/payments/` | Medium | High | P1 | Payment creation, callback handling, and idempotency are gateway-owned; any external gateway client is isolated behind one payment interface; duplicate writes are blocked. |
 | `blackcat-analytics` | Event/telemetry collection and reporting support | PHP | `src/runtime/telemetry/analytics/` | Medium | Low | P2 | Gateway emits telemetry through its own sink; analytics consumers no longer require the legacy snapshot; event formatting is stable and documented. |
 | `blackcat-installer` | Environment bootstrap and module installation workflow | PHP + shell helpers | `ops/bootstrap/` or docs-only; do not place in request-path runtime | High | Low | P2 | Installer behavior is excluded from runtime code; any retained logic stays in ops/tooling space only; no runtime import depends on installer commands or templates. |
 
@@ -34,7 +34,7 @@ Move legacy snapshots into the gateway in a way that is:
 1. Enumerate every snapshot module, its current import sites, and the gateway feature it supports.
 2. Classify each module as one of:
    - runtime dependency
-   - adapter-only dependency
+   - integration-only dependency
    - client SDK/helper
    - do-not-port tooling
 3. Record external systems, secrets, file paths, and implicit assumptions for each module.
@@ -46,11 +46,11 @@ Exit criteria:
 - every gateway import from `libs/legacy/` has a planned replacement path
 - all security-sensitive assumptions are written down before extraction starts
 
-### Phase 1: Adapters and facades
+### Phase 1: Integration modules and facades
 
-1. Add gateway-owned adapters that preserve the current contract while hiding the snapshot implementation.
+1. Add gateway-owned integration modules that preserve the current contract while hiding the snapshot implementation.
 2. Keep legacy code behind a small surface area:
-   - config loader adapter
+   - config loader integration module
    - crypto facade
    - auth/session facade
    - mailing transport wrapper
@@ -60,14 +60,14 @@ Exit criteria:
 
 Exit criteria:
 
-- gateway request paths call only gateway-owned adapters
-- no new direct imports from `libs/legacy/` are added outside the adapter boundary
-- adapter behavior is documented with the minimum contract needed for extraction
+- gateway request paths call only gateway-owned integration modules
+- no new direct imports from `libs/legacy/` are added outside the integration boundary
+- integration module behavior is documented with the minimum contract needed for extraction
 
 ### Phase 2: Runtime extraction
 
 1. Move audited code into gateway-owned runtime modules one boundary at a time.
-2. Replace adapter internals with native gateway implementations.
+2. Replace integration internals with native gateway implementations.
 3. Keep the most security-sensitive modules first:
    - config
    - crypto
@@ -110,7 +110,7 @@ Do not copy these into gateway runtime:
 - dynamic eval, reflection-based dispatch, unchecked deserialization, or other runtime code loading tricks
 - direct secret reads from docroot or other unsafe filesystem locations
 - silent fallback from verified crypto/auth/session state to plaintext, unauthenticated, or env-only bypass modes
-- network calls that bypass gateway-owned adapters or bypass policy/audit logging
+- network calls that bypass gateway-owned integration modules or bypass policy/audit logging
 
 Security rule of thumb:
 

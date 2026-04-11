@@ -98,6 +98,7 @@ Configuration (per site)
 - Template custom-backend guardrails:
   - `GATEWAY_TEMPLATE_TOKEN` (optional shared token required on `/template/call`)
   - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1` (default is read-only; write actions blocked unless enabled)
+  - `GATEWAY_TEMPLATE_CONTRACT_FILE` (optional path, default `config/template-backend-contract.json`; template actions must exist in this contract and match route+method)
   - `AO_PUBLIC_API_URL` / `AO_READ_URL` and `WRITE_API_URL` (upstream targets)
   - `GATEWAY_TEMPLATE_HMAC_SECRET` (optional HMAC signature header for forwarded template calls)
 - Notify → Worker:

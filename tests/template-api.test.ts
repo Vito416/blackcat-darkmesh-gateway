@@ -1,19 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { handleRequest } from '../src/handler.js'
 import { proxyTemplateCall } from '../src/templateApi.js'
+import { resetTemplateContractCacheForTests } from '../src/templateContract.js'
 import { reset, snapshot } from '../src/metrics.js'
 
 describe('template api policy gateway', () => {
   const originalEnv = { ...process.env }
+  const tempDirs: string[] = []
 
   beforeEach(() => {
     process.env = { ...originalEnv }
+    resetTemplateContractCacheForTests()
     reset()
   })
 
   afterEach(() => {
     vi.useRealTimers()
     process.env = { ...originalEnv }
+    resetTemplateContractCacheForTests()
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop()
+      if (dir) rmSync(dir, { recursive: true, force: true })
+    }
     reset()
     vi.restoreAllMocks()
   })
@@ -21,6 +32,14 @@ describe('template api policy gateway', () => {
   async function loadHandler() {
     vi.resetModules()
     return import('../src/handler.js')
+  }
+
+  function writeContractFile(contract: unknown): string {
+    const dir = mkdtempSync(join(tmpdir(), 'gateway-template-contract-'))
+    tempDirs.push(dir)
+    const filePath = join(dir, 'template-contract.json')
+    writeFileSync(filePath, `${JSON.stringify(contract, null, 2)}\n`, 'utf8')
+    return filePath
   }
 
   it('blocks unknown template action', async () => {
@@ -31,6 +50,51 @@ describe('template api policy gateway', () => {
     })
     const res = await handleRequest(req)
     expect(res.status).toBe(403)
+  })
+
+  it('blocks template actions when contract file is missing', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_TEMPLATE_CONTRACT_FILE = '/tmp/does-not-exist-template-contract.json'
+    resetTemplateContractCacheForTests()
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      payload: { host: 'example.com', path: '/' },
+    })
+
+    expect(res.status).toBe(403)
+    await expect(res.text()).resolves.toContain('action_not_allowed')
+  })
+
+  it('blocks template actions when contract definition mismatches policy route', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_TEMPLATE_CONTRACT_FILE = writeContractFile({
+      schemaVersion: '1.0.0',
+      templateId: 'test-template',
+      templateVersion: '1.0.0',
+      allowedActions: [
+        {
+          name: 'public.resolve-route',
+          method: 'POST',
+          path: '/api/public/wrong-route',
+          auth: { requiredRole: 'public' },
+          requestSchemaRef: 'schema.request.json',
+          responseSchemaRef: 'schema.response.json',
+          ratelimitProfile: 'template_public_read',
+          idempotency: { mode: 'optional' },
+        },
+      ],
+      forbiddenCapabilities: ['raw-sql', 'arbitrary-outbound-http', 'eval', 'secret-access'],
+    })
+    resetTemplateContractCacheForTests()
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      payload: { host: 'example.com', path: '/' },
+    })
+
+    expect(res.status).toBe(403)
+    await expect(res.text()).resolves.toContain('action_not_allowed')
   })
 
   it('requires x-template-token when configured', async () => {

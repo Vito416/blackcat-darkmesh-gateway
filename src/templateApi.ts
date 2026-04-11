@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 
 import { inc } from './metrics.js'
+import { getTemplateContractAction } from './templateContract.js'
 
 type BackendTarget = 'ao' | 'write' | 'worker'
 type ActionKind = 'read' | 'write'
@@ -106,7 +107,16 @@ const policies: TemplateActionPolicy[] = [
 ]
 
 function getPolicy(action: string): TemplateActionPolicy | undefined {
-  return policies.find((p) => p.action === action)
+  const localPolicy = policies.find((p) => p.action === action)
+  if (!localPolicy) return undefined
+
+  const contractPolicy = getTemplateContractAction(action)
+  if (!contractPolicy) return undefined
+
+  if (contractPolicy.method !== localPolicy.method) return undefined
+  if (contractPolicy.path !== localPolicy.path) return undefined
+
+  return localPolicy
 }
 
 function resolveBaseUrl(target: BackendTarget): string | undefined {

@@ -56,3 +56,11 @@ The contract should be validated in three places:
   template/backend contract is defined, validated, and mapped to the live gateway API.
 
 This keeps the contract visible both during development and during final closeout.
+
+## Runtime enforcement path
+
+- Default contract file: `config/template-backend-contract.json`
+- Optional override: `GATEWAY_TEMPLATE_CONTRACT_FILE`
+- Gateway template call path (`/template/call`) should reject actions that are:
+  - missing in the contract
+  - method/path mismatched against the gateway action policy
