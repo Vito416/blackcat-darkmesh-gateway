@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 
 import { inc } from './metrics.js'
+import { bodyExceedsUtf8Limit, readPositiveInteger, utf8ByteLength } from './runtime/core/bytes.js'
 import { getTemplateActionPolicy, type BackendTarget, type TemplateActionPolicy } from './runtime/template/actions.js'
 import { getTemplateContractAction } from './templateContract.js'
 
@@ -38,13 +39,6 @@ function hmacBody(body: string): string | undefined {
   const secret = process.env.GATEWAY_TEMPLATE_HMAC_SECRET
   if (!secret) return undefined
   return crypto.createHmac('sha256', secret).update(body).digest('hex')
-}
-
-function readPositiveInteger(raw: string | undefined, fallback: number): number {
-  if (raw === undefined) return fallback
-  const parsed = Number.parseInt(raw, 10)
-  if (!Number.isFinite(parsed) || parsed < 1) return fallback
-  return parsed
 }
 
 function getTemplateMaxBodyBytes(): number {
@@ -131,9 +125,9 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     siteId: input.siteId,
     actor: input.actor,
   })
-  const bodyBytes = Buffer.byteLength(body)
   const maxBodyBytes = getTemplateMaxBodyBytes()
-  if (bodyBytes > maxBodyBytes) {
+  if (bodyExceedsUtf8Limit(body, maxBodyBytes)) {
+    const bodyBytes = utf8ByteLength(body)
     inc('gateway_template_reject_size')
     return jsonError(413, 'template_body_too_large', {
       detail: 'template call body exceeds the configured byte limit',

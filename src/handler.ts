@@ -10,6 +10,7 @@ import { fetchIntegritySnapshot } from './integrity/client.js'
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
 import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
 import { applySecurityHeaders } from './securityHeaders.js'
+import { verifyGoPayWebhook } from './runtime/payments/gopayWebhook.js'
 import {
   basicCredentialsMatch,
   checkToken,
@@ -836,6 +837,28 @@ export async function handleRequest(request: Request): Promise<Response> {
       const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
       if (replayKey && markAndCheck(`paypal:${replayKey}`)) return respond('replay', { status: 200 })
       inc('gateway_webhook_paypal_ok')
+      return respond('ok', { status: 200 })
+    })
+  }
+  if (url.pathname === '/webhook/gopay') {
+    if (integrityPaused) return policyPausedResponse()
+    const limited = rateLimitResponse(`webhook:gopay:${requestIp(request)}`)
+    if (limited) return limited
+    return wrapWebhook('gopay', async () => {
+      const body = await request.text()
+      if (bodyExceedsLimit(body, readWebhookMaxBodyBytes())) {
+        return webhookBodyTooLargeResponse()
+      }
+      const signatureHeader = request.headers.get('x-gopay-signature') || request.headers.get('gopay-signature')
+      const ok = verifyGoPayWebhook(body, signatureHeader, process.env.GOPAY_WEBHOOK_SECRET || '')
+      if (!ok) {
+        inc('gateway_webhook_gopay_verify_fail')
+        const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
+        return respond('sig invalid', { status: shadow ? 202 : 401 })
+      }
+      const replayKey = request.headers.get('x-gopay-event-id')
+      if (replayKey && markAndCheck(`gopay:${replayKey}`)) return respond('replay', { status: 200 })
+      inc('gateway_webhook_gopay_ok')
       return respond('ok', { status: 200 })
     })
   }
