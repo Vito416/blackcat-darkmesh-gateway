@@ -88,6 +88,42 @@ function normalizeStringList(value, fieldName) {
   return value.filter(isNonEmptyString).map((entry) => entry.trim())
 }
 
+function normalizeOptionalSection(value, fieldName) {
+  if (typeof value === 'undefined' || value === null) return null
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be a JSON object`)
+  }
+
+  if (!isNonEmptyString(value.status)) {
+    throw new Error(`${fieldName}.status must be a non-empty string`)
+  }
+
+  const status = value.status.trim().toLowerCase()
+  const reason = isNonEmptyString(value.reason) ? value.reason.trim() : ''
+  const findingCount =
+    Number.isInteger(value.findingCount) && value.findingCount >= 0 ? value.findingCount : undefined
+
+  return {
+    status,
+    reason,
+    findingCount,
+  }
+}
+
+function formatBoundaryMessage(label, section) {
+  const reason =
+    section.reason ||
+    (typeof section.findingCount === 'number'
+      ? `${section.findingCount} finding${section.findingCount === 1 ? '' : 's'}`
+      : 'no additional details')
+
+  if (section.status === 'warn' || section.status === 'warning' || section.status === 'degraded') {
+    return `${label} warning: ${reason}`
+  }
+
+  return `${label} status=${section.status}: ${reason}`
+}
+
 export async function readReleasePack(path) {
   const resolvedPath = resolve(path)
   const raw = await readJson(resolvedPath)
@@ -106,12 +142,28 @@ export async function readReleasePack(path) {
     release: raw.release.trim(),
     blockers: normalizeStringList(raw.blockers ?? [], 'release pack.blockers'),
     warnings: normalizeStringList(raw.warnings ?? [], 'release pack.warnings'),
+    installerRuntimeBoundary: normalizeOptionalSection(
+      raw.installerRuntimeBoundary ?? raw.installerBoundary,
+      'release pack.installerRuntimeBoundary',
+    ),
   }
 }
 
 export function assessReleaseReadiness(pack) {
-  const blockerCount = pack.blockers.length
-  const warningCount = pack.warnings.length
+  const blockers = [...pack.blockers]
+  const warnings = [...pack.warnings]
+
+  if (pack.installerRuntimeBoundary) {
+    const section = pack.installerRuntimeBoundary
+    if (section.status === 'warn' || section.status === 'warning' || section.status === 'degraded') {
+      warnings.push(formatBoundaryMessage('installer runtime boundary', section))
+    } else if (section.status !== 'pass' && section.status !== 'ok' && section.status !== 'closed') {
+      blockers.push(formatBoundaryMessage('installer runtime boundary', section))
+    }
+  }
+
+  const blockerCount = blockers.length
+  const warningCount = warnings.length
   const status = blockerCount > 0 ? 'blocked' : warningCount > 0 ? 'warning' : 'ready'
 
   return {
@@ -119,8 +171,8 @@ export function assessReleaseReadiness(pack) {
     blockerCount,
     warningCount,
     release: pack.release,
-    blockers: pack.blockers,
-    warnings: pack.warnings,
+    blockers,
+    warnings,
   }
 }
 

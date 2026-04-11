@@ -1,4 +1,5 @@
 import { inc, gauge } from './metrics.js'
+import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
 
 export type CacheIntegrityMeta = {
   verified: boolean
@@ -38,16 +39,17 @@ gauge('gateway_cache_admission_mode', ADMISSION_MODE === 'evict_lru' ? 1 : 0)
 
 function readPositiveEnvInt(names: string[], fallback: number): number {
   for (const name of names) {
-    const raw = process.env[name]
-    if (!raw) continue
-    const parsed = Number.parseInt(raw, 10)
-    if (Number.isFinite(parsed) && parsed > 0) return parsed
+    const loaded = loadIntegerConfig(name)
+    if (!loaded.ok || loaded.value === undefined) continue
+    if (Number.isFinite(loaded.value) && loaded.value > 0) return Math.floor(loaded.value)
   }
   return fallback
 }
 
 function readAdmissionMode(): AdmissionMode {
-  const raw = (process.env.GATEWAY_CACHE_ADMISSION_MODE || '').trim().toLowerCase()
+  const loaded = loadStringConfig('GATEWAY_CACHE_ADMISSION_MODE')
+  if (!loaded.ok || typeof loaded.value !== 'string') return 'reject'
+  const raw = loaded.value.trim().toLowerCase()
   if (raw === 'evict_lru') return 'evict_lru'
   return 'reject'
 }

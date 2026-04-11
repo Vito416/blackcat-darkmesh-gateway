@@ -10,7 +10,7 @@ async function loadHandler() {
   return import('../src/handler.js')
 }
 
-describe('handler gopay webhook route', () => {
+describe.sequential('handler gopay webhook route', () => {
   const originalEnv = { ...process.env }
   const webhookSecret = 'gopay_test_secret'
 
@@ -71,6 +71,25 @@ describe('handler gopay webhook route', () => {
     await expect(second.text()).resolves.toBe('replay')
   })
 
+  it('rejects a repeated GoPay event id when reject policy is configured', async () => {
+    process.env.GOPAY_WEBHOOK_SECRET = webhookSecret
+    process.env.GOPAY_WEBHOOK_IDEMPOTENCY_POLICY = 'reject'
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'event-reject', status: 'PAID' })
+    const headers = new Headers({
+      'x-gopay-signature': gopaySignature(body, webhookSecret),
+      'x-gopay-event-id': 'gopay-event-002',
+    })
+
+    const first = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body, headers }))
+    expect(first.status).toBe(200)
+    await expect(first.text()).resolves.toBe('ok')
+
+    const second = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body, headers }))
+    expect(second.status).toBe(409)
+    await expect(second.text()).resolves.toBe('duplicate event id')
+  })
+
   it('rejects a GoPay webhook without an event id', async () => {
     process.env.GOPAY_WEBHOOK_SECRET = webhookSecret
     const { handleRequest } = await loadHandler()
@@ -122,5 +141,14 @@ describe('handler gopay webhook route', () => {
     const res = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body, headers }))
     expect(res.status).toBe(413)
     await expect(res.text()).resolves.toBe('payload too large')
+  })
+
+  it('falls back to the default key-size limit when replay config is invalid', async () => {
+    process.env.GATEWAY_WEBHOOK_REPLAY_KEY_MAX_BYTES = 'not-a-number'
+    const { classifyGoPayWebhookIdempotency } = await import('../src/runtime/payments/gopayWebhook.js')
+
+    const decision = classifyGoPayWebhookIdempotency('x'.repeat(513), '{}')
+    expect(decision.status).toBe('missing-id')
+    expect(decision.httpStatus).toBe(400)
   })
 })

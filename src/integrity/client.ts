@@ -15,6 +15,7 @@ import {
   type IntegrityFetchControl,
   type IntegrityFetchLike,
 } from './fetch-control.js'
+import { loadStringConfig } from '../runtime/config/loader.js'
 import { inc } from '../metrics.js'
 
 export type IntegrityErrorCode =
@@ -169,15 +170,32 @@ function normalizeTrustedRoot(value: string): string {
   return value.trim()
 }
 
+function readStringConfig(name: string): string | undefined {
+  const loaded = loadStringConfig(name)
+  if (!loaded.ok || typeof loaded.value !== 'string') return undefined
+
+  const trimmed = loaded.value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function isMirrorUrlCandidate(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 function parseMirrorSettings(): IntegrityMirrorSettings {
-  const urls = (process.env.AO_INTEGRITY_MIRROR_URLS || '')
+  const urls = (readStringConfig('AO_INTEGRITY_MIRROR_URLS') || '')
     .split(',')
     .map((value) => value.trim())
-    .filter(Boolean)
+    .filter((value) => value.length > 0 && isMirrorUrlCandidate(value))
 
   return {
     urls,
-    strict: (process.env.AO_INTEGRITY_MIRROR_STRICT || '').trim() === '1',
+    strict: readStringConfig('AO_INTEGRITY_MIRROR_STRICT') === '1',
   }
 }
 
@@ -327,7 +345,7 @@ function compareMirrorSnapshot(primary: IntegritySnapshot, mirror: IntegritySnap
 }
 
 export async function fetchIntegritySnapshot(opts: FetchIntegritySnapshotOptions = {}): Promise<IntegritySnapshot> {
-  const url = opts.url || process.env.AO_INTEGRITY_URL
+  const url = opts.url || readStringConfig('AO_INTEGRITY_URL')
   if (!url) {
     throw new IntegritySnapshotError('integrity_fetch_failed', 'AO_INTEGRITY_URL is not configured')
   }

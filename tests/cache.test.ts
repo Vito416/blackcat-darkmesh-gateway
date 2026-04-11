@@ -35,6 +35,23 @@ describe('cache TTL, budgets, and rate-limit', () => {
     expect(get(key)).toBeNull()
   })
 
+  it('falls back deterministically when cache env values are invalid', async () => {
+    process.env.GATEWAY_CACHE_TTL_MS = 'not-a-number'
+    process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '32'
+    process.env.GATEWAY_CACHE_MAX_ENTRIES = '1'
+    process.env.GATEWAY_CACHE_ADMISSION_MODE = 'maybe'
+    const { put, get } = await loadCache()
+
+    expect(put('k1', bufferOf(2))).toBe(true)
+    expect(put('k2', bufferOf(2))).toBe(false)
+    expect(get('k1')).not.toBeNull()
+
+    vi.advanceTimersByTime(299999)
+    expect(get('k1')).not.toBeNull()
+    vi.advanceTimersByTime(2)
+    expect(get('k1')).toBeNull()
+  })
+
   it('rejects payloads that exceed the entry size budget', async () => {
     process.env.GATEWAY_CACHE_MAX_ENTRY_BYTES = '4'
     process.env.GATEWAY_CACHE_MAX_ENTRIES = '8'

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
+import { loadIntegerConfig, loadStringConfig } from '../runtime/config/loader.js'
 import type { IntegritySnapshot } from './types.js'
 
 export type IntegrityCheckpointMetadata = {
@@ -38,19 +39,26 @@ type CheckpointEnvelopeBody = {
 }
 
 function isDisklessCheckpointMode(): boolean {
-  if (process.env.GATEWAY_INTEGRITY_DISKLESS === '1') return true
-  const rawMode = (process.env.GATEWAY_INTEGRITY_CHECKPOINT_MODE || '').trim().toLowerCase()
+  if (readCheckpointEnvString('GATEWAY_INTEGRITY_DISKLESS') === '1') return true
+  const rawMode = (readCheckpointEnvString('GATEWAY_INTEGRITY_CHECKPOINT_MODE') || '').toLowerCase()
   return rawMode === 'disabled' || rawMode === 'diskless' || rawMode === 'memory-only'
 }
 
 function resolvePath(path?: string): string | undefined {
-  const value = path || process.env.GATEWAY_INTEGRITY_CHECKPOINT_PATH
+  const value = path || readCheckpointEnvString('GATEWAY_INTEGRITY_CHECKPOINT_PATH')
   return value && value.trim().length > 0 ? value : undefined
 }
 
 function resolveSecret(secret?: string): string | undefined {
-  const value = secret || process.env.GATEWAY_INTEGRITY_CHECKPOINT_SECRET
+  const value = secret || readCheckpointEnvString('GATEWAY_INTEGRITY_CHECKPOINT_SECRET')
   return value && value.trim().length > 0 ? value : undefined
+}
+
+function readCheckpointEnvString(name: string): string | undefined {
+  const loaded = loadStringConfig(name)
+  if (!loaded.ok || typeof loaded.value !== 'string') return undefined
+  const value = loaded.value.trim()
+  return value.length > 0 ? value : undefined
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -73,15 +81,11 @@ function canonicalize(value: unknown): string {
 }
 
 function resolveMaxAgeSeconds(): number | null | undefined {
-  const raw = process.env.GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS
-  if (raw === undefined || raw.trim().length === 0) return undefined
-
-  const trimmed = raw.trim()
-  if (!/^[0-9]+$/.test(trimmed)) return null
-
-  const parsed = Number(trimmed)
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) return null
-  return parsed
+  const loaded = loadIntegerConfig('GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS')
+  if (!loaded.ok) return null
+  if (loaded.value === undefined) return undefined
+  if (!Number.isSafeInteger(loaded.value) || loaded.value <= 0) return null
+  return loaded.value
 }
 
 function isValidCheckpointMetadata(value: unknown): value is IntegrityCheckpointMetadata {

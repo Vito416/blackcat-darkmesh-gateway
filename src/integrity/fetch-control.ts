@@ -1,9 +1,9 @@
 import {
   normalizeBoundedInteger,
-  parseBoundedInteger,
   resolveGatewayResourceProfile,
   type GatewayResourceProfile,
 } from '../runtime/config/profile.js'
+import { loadIntegerConfig, loadStringConfig } from '../runtime/config/loader.js'
 
 export type IntegrityFetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
@@ -37,35 +37,40 @@ const PROFILE_DEFAULTS: Record<GatewayResourceProfile, IntegrityFetchControl> = 
 export function resolveIntegrityFetchControl(
   overrides: Partial<IntegrityFetchControl> = {},
 ): IntegrityFetchControl {
-  const profile = resolveGatewayResourceProfile(process.env.GATEWAY_RESOURCE_PROFILE)
+  const profileLoaded = loadStringConfig('GATEWAY_RESOURCE_PROFILE')
+  const profile = resolveGatewayResourceProfile(profileLoaded.ok ? profileLoaded.value : undefined)
   const profileDefaults = profile ? PROFILE_DEFAULTS[profile] : PROFILE_DEFAULTS.wedos_medium
 
-  const timeoutMs =
-    normalizeBoundedInteger(
-      overrides.timeoutMs,
-      parseBoundedInteger(process.env.AO_INTEGRITY_FETCH_TIMEOUT_MS, profileDefaults.timeoutMs, 1, MAX_TIMEOUT_MS),
-      1,
-      MAX_TIMEOUT_MS,
-    )
+  function readBoundedInteger(name: string, fallback: number, min: number, max: number): number {
+    const loaded = loadIntegerConfig(name, { fallbackValue: fallback })
+    const value = loaded.ok && typeof loaded.value === 'number' ? loaded.value : fallback
+    return normalizeBoundedInteger(value, fallback, min, max)
+  }
 
-  const retryAttempts =
-    normalizeBoundedInteger(
-      overrides.retryAttempts,
-      parseBoundedInteger(process.env.AO_INTEGRITY_FETCH_RETRY_ATTEMPTS, profileDefaults.retryAttempts, 1, MAX_RETRY_ATTEMPTS),
-      1,
-      MAX_RETRY_ATTEMPTS,
-    )
+  const timeoutMs = normalizeBoundedInteger(
+    overrides.timeoutMs,
+    readBoundedInteger('AO_INTEGRITY_FETCH_TIMEOUT_MS', profileDefaults.timeoutMs, 1, MAX_TIMEOUT_MS),
+    1,
+    MAX_TIMEOUT_MS,
+  )
+
+  const retryAttempts = normalizeBoundedInteger(
+    overrides.retryAttempts,
+    readBoundedInteger('AO_INTEGRITY_FETCH_RETRY_ATTEMPTS', profileDefaults.retryAttempts, 1, MAX_RETRY_ATTEMPTS),
+    1,
+    MAX_RETRY_ATTEMPTS,
+  )
 
   const retryBackoffMs = normalizeBoundedInteger(
     overrides.retryBackoffMs,
-    parseBoundedInteger(process.env.AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS, profileDefaults.retryBackoffMs, 0, MAX_RETRY_BACKOFF_MS),
+    readBoundedInteger('AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS', profileDefaults.retryBackoffMs, 0, MAX_RETRY_BACKOFF_MS),
     0,
     MAX_RETRY_BACKOFF_MS,
   )
 
   const retryJitterMs = normalizeBoundedInteger(
     overrides.retryJitterMs,
-    parseBoundedInteger(process.env.AO_INTEGRITY_FETCH_RETRY_JITTER_MS, profileDefaults.retryJitterMs, 0, MAX_RETRY_JITTER_MS),
+    readBoundedInteger('AO_INTEGRITY_FETCH_RETRY_JITTER_MS', profileDefaults.retryJitterMs, 0, MAX_RETRY_JITTER_MS),
     0,
     MAX_RETRY_JITTER_MS,
   )

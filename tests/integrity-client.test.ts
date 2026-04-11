@@ -106,6 +106,42 @@ describe('integrity snapshot client', () => {
     expect(metricsSnapshot().counters.gateway_integrity_mirror_fetch_fail).toBeUndefined()
   })
 
+  it('filters invalid mirror URLs before checking consistency', async () => {
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    process.env.AO_INTEGRITY_MIRROR_URLS = 'not-a-url, https://mirror.example/integrity'
+    delete process.env.AO_INTEGRITY_MIRROR_STRICT
+
+    const primary = validSnapshot()
+    const mirror = validSnapshot()
+    mirror.release.version = '1.2.1'
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url === process.env.AO_INTEGRITY_URL) {
+        return Promise.resolve(
+          new Response(JSON.stringify(primary), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify(mirror), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    })
+
+    const snapshot = await fetchIntegritySnapshot()
+
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(snapshot.release.root).toBe('root-abc')
+    expect(metricsSnapshot().counters.gateway_integrity_mirror_mismatch).toBe(1)
+    expect(metricsSnapshot().counters.gateway_integrity_mirror_fetch_fail).toBeUndefined()
+  })
+
   it('increments mirror mismatch metrics and returns the primary snapshot in non-strict mode', async () => {
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.AO_INTEGRITY_MIRROR_URLS = 'https://mirror.example/integrity'

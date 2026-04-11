@@ -67,6 +67,27 @@ describe('check-release-readiness.js', () => {
     expect(res.stdout).toContain('- consistency summary should be reviewed')
   })
 
+  it('adds installer runtime boundary warnings to the warning signal', () => {
+    const packPath = writePack({
+      release: '1.4.0',
+      status: 'ready',
+      blockers: [],
+      warnings: [],
+      installerRuntimeBoundary: {
+        status: 'warn',
+        reason: 'installer scan found 1 legacy reference in docs',
+      },
+    })
+
+    const res = runCheck(['--pack', packPath])
+
+    expect(res.status).toBe(0)
+    expect(res.stdout).toContain('Status: `warning`')
+    expect(res.stdout).toContain('Blockers: 0')
+    expect(res.stdout).toContain('Warnings: 1')
+    expect(res.stdout).toContain('installer runtime boundary warning: installer scan found 1 legacy reference in docs')
+  })
+
   it('prints blocked status and exits 3 when blockers are present', () => {
     const packPath = writePack({
       release: '1.4.0',
@@ -83,6 +104,30 @@ describe('check-release-readiness.js', () => {
     expect(res.stdout).toContain('Warnings: 1')
     expect(res.stdout).toContain('## Blockers')
     expect(res.stdout).toContain('- consistency status=fail: 2 failure run(s)')
+  })
+
+  it('adds installer runtime boundary blockers to the blocked signal', () => {
+    const packPath = writePack({
+      release: '1.4.0',
+      status: 'ready',
+      blockers: [],
+      warnings: [],
+      installerRuntimeBoundary: {
+        status: 'fail',
+        reason: 'installer runtime still imports blackcat-installer',
+      },
+    })
+
+    const res = runCheck(['--pack', packPath, '--json'])
+
+    expect(res.status).toBe(3)
+    expect(res.stderr).toBe('')
+    expect(JSON.parse(res.stdout)).toEqual({
+      status: 'blocked',
+      blockerCount: 1,
+      warningCount: 0,
+      release: '1.4.0',
+    })
   })
 
   it('exits 3 in strict mode when the pack is not ready', () => {

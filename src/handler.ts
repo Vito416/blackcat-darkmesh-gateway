@@ -10,7 +10,11 @@ import { fetchIntegritySnapshot } from './integrity/client.js'
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
 import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
 import { applySecurityHeaders } from './securityHeaders.js'
-import { classifyGoPayWebhookIdempotency, verifyGoPayWebhook } from './runtime/payments/gopayWebhook.js'
+import {
+  classifyGoPayWebhookIdempotency,
+  getGoPayWebhookIdempotencyPolicy,
+  verifyGoPayWebhook,
+} from './runtime/payments/gopayWebhook.js'
 import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
 import { parseJsonObject } from './runtime/core/index.js'
 import {
@@ -866,7 +870,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
         return respond('sig invalid', { status: shadow ? 202 : 401 })
       }
-      const replayMode = process.env.GOPAY_WEBHOOK_IDEMPOTENCY_POLICY === 'reject' ? 'reject' : 'dedupe'
+      const replayMode = getGoPayWebhookIdempotencyPolicy()
       const idempotency = classifyGoPayWebhookIdempotency(request.headers.get('x-gopay-event-id'), body, replayMode)
       if (idempotency.status === 'missing-id' || idempotency.status === 'conflict') {
         return respond(idempotency.body, { status: idempotency.httpStatus })

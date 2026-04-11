@@ -1,10 +1,19 @@
 import crypto from 'crypto'
 import { safeCompareHexOrAscii } from '../crypto/safeCompare.js'
+import { loadIntegerConfig, loadStringConfig } from '../config/loader.js'
 import { WebhookIdempotencyBoundary, type WebhookIdempotencyPolicy } from './webhookIdempotency.js'
 
-function positiveInt(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(value || '', 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+function readPositiveIntConfig(name: string, fallback: number): number {
+  const loaded = loadIntegerConfig(name, { fallbackValue: fallback })
+  if (!loaded.ok) return fallback
+  if (!Number.isFinite(loaded.value) || loaded.value <= 0) return fallback
+  return Math.floor(loaded.value)
+}
+
+function readGoPayWebhookIdempotencyPolicy(): WebhookIdempotencyPolicy {
+  const loaded = loadStringConfig('GOPAY_WEBHOOK_IDEMPOTENCY_POLICY')
+  if (!loaded.ok || typeof loaded.value !== 'string') return 'dedupe'
+  return loaded.value.trim() === 'reject' ? 'reject' : 'dedupe'
 }
 
 function fingerprintBody(body: string): string {
@@ -12,9 +21,9 @@ function fingerprintBody(body: string): string {
 }
 
 const gopayWebhookIdempotency = new WebhookIdempotencyBoundary({
-  ttlMs: positiveInt(process.env.GATEWAY_WEBHOOK_REPLAY_TTL_MS, 600000),
-  maxKeys: positiveInt(process.env.GATEWAY_WEBHOOK_REPLAY_MAX_KEYS, 10000),
-  keyMaxBytes: positiveInt(process.env.GATEWAY_WEBHOOK_REPLAY_KEY_MAX_BYTES, 512),
+  ttlMs: readPositiveIntConfig('GATEWAY_WEBHOOK_REPLAY_TTL_MS', 600000),
+  maxKeys: readPositiveIntConfig('GATEWAY_WEBHOOK_REPLAY_MAX_KEYS', 10000),
+  keyMaxBytes: readPositiveIntConfig('GATEWAY_WEBHOOK_REPLAY_KEY_MAX_BYTES', 512),
 })
 
 export type GoPayWebhookIdempotencyDecision = ReturnType<typeof gopayWebhookIdempotency.classify>
@@ -38,4 +47,8 @@ export function classifyGoPayWebhookIdempotency(
   policy: WebhookIdempotencyPolicy = 'dedupe',
 ): GoPayWebhookIdempotencyDecision {
   return gopayWebhookIdempotency.classify(eventId, fingerprintBody(body), policy)
+}
+
+export function getGoPayWebhookIdempotencyPolicy(): WebhookIdempotencyPolicy {
+  return readGoPayWebhookIdempotencyPolicy()
 }

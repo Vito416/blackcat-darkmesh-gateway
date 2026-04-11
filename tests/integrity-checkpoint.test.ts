@@ -157,6 +157,32 @@ describe('integrity checkpoint', () => {
     await expect(readIntegrityCheckpoint(file, secret)).resolves.toBeNull()
   })
 
+  it('returns null when the max-age config is invalid', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'gateway-checkpoint-'))
+    const file = join(dir, 'checkpoint.json')
+    const snapshot = sampleSnapshot()
+    const secret = 'secret-123'
+    const metadata = { writtenAt: Date.parse('2024-01-01T00:00:00Z') }
+    const envelope = {
+      algorithm: 'hmac-sha256',
+      payload: snapshot,
+      metadata,
+      signature: signCheckpointBody(
+        {
+          algorithm: 'hmac-sha256',
+          payload: snapshot,
+          metadata,
+        },
+        secret,
+      ),
+    }
+
+    process.env.GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS = 'not-a-number'
+    await writeFile(file, `${JSON.stringify(envelope)}\n`, 'utf8')
+
+    await expect(readIntegrityCheckpoint(file, secret)).resolves.toBeNull()
+  })
+
   it('returns null when checkpoint metadata is malformed', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'gateway-checkpoint-'))
     const file = join(dir, 'checkpoint.json')
