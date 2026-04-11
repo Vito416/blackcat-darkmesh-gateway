@@ -158,6 +158,7 @@ Progress notes:
 - Profiled cadence defaults are now available via `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskless`.
 - Precedence is explicit: call override > `AO_INTEGRITY_FETCH_*` env > `GATEWAY_RESOURCE_PROFILE` > medium fallback.
 - Alert guidance is now calibrated per profile in `ops/alerts-profiles.md`.
+- Doc/code sync tests now guard profile tuning drift (`tests/profile-tuning-sync.test.ts`) for fetch defaults, anti-flap windows, and checkpoint stale threshold safety.
 - Validation errors still fail closed immediately (no retry on invalid snapshot payloads).
 - No open gateway-side follow-up remains beyond AO-side cadence/input finalization.
 

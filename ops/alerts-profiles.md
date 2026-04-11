@@ -70,6 +70,7 @@ Use this quick map when a panel is noisy and you need the matching alert name wi
 
 ## Notes
 
+- Keep this matrix in sync with `tests/profile-tuning-sync.test.ts`; that guard fails CI when anti-flap windows or checkpoint stale thresholds drift from the profile tuning expectations.
 - Keep thresholds below the hard caps from `ops/resource-budgets.md` so alerts fire before exhaustion.
 - Cache thresholds are early warnings; keep them roughly 10-15% below the entry caps.
 - If cache rejects are mostly size-based, lower `GATEWAY_CACHE_MAX_ENTRY_BYTES`; if they are mostly capacity-based, lower `GATEWAY_CACHE_MAX_ENTRIES`.

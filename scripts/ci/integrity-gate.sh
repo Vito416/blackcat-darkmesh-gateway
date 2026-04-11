@@ -52,6 +52,9 @@ fi
 if [[ -f tests/run-release-drill.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
+if [[ -f tests/profile-tuning-sync.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
 
 echo "[integrity-gate] starting ${STEPS_TOTAL} checks"
 
@@ -102,6 +105,11 @@ fi
 if [[ -f tests/run-release-drill.test.ts ]]; then
   CURRENT_STEP="run-release-drill"
   run_step "$CURRENT_STEP" npx vitest run tests/run-release-drill.test.ts
+fi
+
+if [[ -f tests/profile-tuning-sync.test.ts ]]; then
+  CURRENT_STEP="profile-tuning-sync"
+  run_step "$CURRENT_STEP" npx vitest run tests/profile-tuning-sync.test.ts
 fi
 
 CURRENT_STEP="fetch-control"
