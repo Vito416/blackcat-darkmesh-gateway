@@ -134,6 +134,25 @@ jobs:
       - name: Check mailing secret boundary
         run: npm run ops:check-mailing-secret-boundary -- --strict
 
+  migration-doc-validators:
+    name: Migration doc validators
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Validate final migration summary template shape
+        run: npm run ops:validate-final-migration-summary -- --file kernel-migration/FINAL_MIGRATION_SUMMARY.md
+      - name: Validate signoff record template shape
+        run: npm run ops:validate-signoff-record -- --file kernel-migration/SIGNOFF_RECORD.md
+
   legacy-no-import-evidence:
     name: Legacy no-import evidence
     runs-on: ubuntu-24.04

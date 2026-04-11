@@ -63,6 +63,23 @@ Notes:
 - The gate stops on the first failure and prints the failing step name in the error line.
 - CI runs this gate in its own dedicated `Integrity gate` job, separate from the core `build + full tests` job, so the final `SUCCESS 19/19 checks passed` line is easy to find in logs.
 
+## Signoff record validator
+
+`scripts/validate-signoff-record.js` checks `kernel-migration/SIGNOFF_RECORD.md` for the required closeout sections, tables, and decision metadata. It also supports strict placeholder detection so final signoff can fail closed if the template was not fully filled in.
+
+Usage:
+```bash
+node scripts/validate-signoff-record.js
+node scripts/validate-signoff-record.js --file kernel-migration/SIGNOFF_RECORD.md --json
+node scripts/validate-signoff-record.js --strict
+```
+
+Notes:
+- the default target is `kernel-migration/SIGNOFF_RECORD.md`
+- human output prints a short status summary plus any blockers
+- JSON output is deterministic and includes the parsed section presence map and blockers
+- exit codes are `0` for success, `3` for blockers, and `64` for usage or file access errors
+
 ## Consistency preflight
 
 `scripts/validate-consistency-preflight.js` checks a gateway URL set before a matrix compare or release drill. It validates URL syntax, mode/profile selection, and token or anonymous access rules.
@@ -252,6 +269,18 @@ Exit codes:
 - `0` validation passed, or issues were reported without `--strict`
 - `3` validation issues found in `--strict` mode, or a runtime error occurred
 - `64` usage error
+
+## Final migration summary validation
+
+`scripts/validate-final-migration-summary.js` checks `kernel-migration/FINAL_MIGRATION_SUMMARY.md` for the required headings, bullet fields, and evidence tables that close out the migration record.
+In `--strict` mode it also rejects template placeholders such as `...`, `YYYY-...`, and the option-list guidance that should be replaced before release signoff.
+
+Usage:
+```bash
+node scripts/validate-final-migration-summary.js --file kernel-migration/FINAL_MIGRATION_SUMMARY.md
+node scripts/validate-final-migration-summary.js --file kernel-migration/FINAL_MIGRATION_SUMMARY.md --strict
+node scripts/validate-final-migration-summary.js --file kernel-migration/FINAL_MIGRATION_SUMMARY.md --json
+```
 
 ## Legacy import manifest validation
 
@@ -507,11 +536,17 @@ npm run ops:check-decommission-readiness -- \
 
 `scripts/run-decommission-closeout.js` is the final operator entrypoint for decommission closeout. It is intended to combine the machine checks, evidence log generation, and AO-gate/readiness summaries into one run. The automation can complete while AO checks or manual proofs are still pending, so treat this as the closeout bundle step rather than the final approval itself.
 
+By default it also validates:
+- `kernel-migration/FINAL_MIGRATION_SUMMARY.md`
+- `kernel-migration/SIGNOFF_RECORD.md`
+
 Usage:
 ```bash
 node scripts/run-decommission-closeout.js \
   --dir ./tmp/release-drill \
   --ao-gate ./kernel-migration/ao-dependency-gate.json \
+  --final-summary ./kernel-migration/FINAL_MIGRATION_SUMMARY.md \
+  --signoff-record ./kernel-migration/SIGNOFF_RECORD.md \
   --operator ops-user \
   --decision pending \
   --strict \

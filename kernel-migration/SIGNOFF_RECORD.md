@@ -32,6 +32,9 @@ List the exact artifacts used for signoff.
 | CI / workflow run | `YYYY-MM-DDTHH:MM:SSZ` | `...` | `...` |
 | Rollback proof | `YYYY-MM-DDTHH:MM:SSZ` | `...` | `...` |
 
+- The review set should preserve the evidence split: machine outputs first, then AO/manual proofs, with `automation-complete` and `ao-manual-pending` recorded separately if the two halves do not land together.
+- The validator order should match the closeout path used in the checklist so the signoff trail can be replayed without interpretation drift.
+
 ## Approvals
 
 | Role | Name / handle | UTC approval time | Evidence reviewed | Approval |
@@ -60,3 +63,4 @@ List the exact artifacts used for signoff.
 
 - Keep this record immutable once signoff is complete.
 - If a blocker appears after signoff, append a dated addendum rather than rewriting the decision trail.
+- Do not mark signoff as complete until both the machine validation chain and the AO/manual proof set are attached and reviewable.

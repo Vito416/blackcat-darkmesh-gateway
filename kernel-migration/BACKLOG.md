@@ -11,6 +11,8 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, strict manifest validation log, and drill artifact check JSON as one drill bundle.
 - Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness`, but the final state is still **automation complete, awaiting AO/manual proofs**.
 - Treat that output as machine-checked evidence only; AO gate closure and manual evidence still need separate drill logs, rollback proof, and human sign-off before decommission.
+- Validator ordering for operator drills is now fixed: build the drill bundle, validate the drill manifest, check drill artifacts, build the evidence ledger/log, then run closeout readiness and AO gate evidence checks before any sign-off is recorded.
+- Evidence quality split is mandatory in every note/log: `automation-complete` covers machine outputs only, while `ao-manual-pending` covers AO-side closure, rollback proof, and human approvals that still need to land.
 - Boundary reference for template/public/gateway/worker secret handling: `ops/worker-secrets-trust-model.md`.
 
 ### Gateway libs consolidation workstream

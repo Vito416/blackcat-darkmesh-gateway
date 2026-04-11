@@ -81,6 +81,7 @@ Be explicit. If a risk is deferred, say why and how it is monitored.
 ## Operator notes
 
 - Keep every evidence link stable and reviewable after the migration window closes.
+- Record closeout evidence in the same order as the validators: drill manifest, manifest validation, drill artifact check, evidence ledger/log, readiness, AO gate evidence, then sign-off.
 - If the decision is `NO-GO`, include the exact blocker and the next verification step.
 - If the automation finished but AO/manual proof links are still open, record that explicitly as `automation-complete` plus `ao-manual-pending` instead of collapsing it into a generic blocked note.
 - If the decision is `GO`, the rollback reference must still be present and reachable.

@@ -10,11 +10,15 @@ const VALID_DECISIONS = new Set(['pending', 'go', 'no-go'])
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
+const DEFAULT_FINAL_SUMMARY_PATH = resolve(REPO_ROOT, 'kernel-migration/FINAL_MIGRATION_SUMMARY.md')
+const DEFAULT_SIGNOFF_RECORD_PATH = resolve(REPO_ROOT, 'kernel-migration/SIGNOFF_RECORD.md')
 
 const STEP_SCRIPTS = {
   checkAoGateEvidence: resolve(SCRIPT_DIR, 'check-ao-gate-evidence.js'),
   checkDecommissionReadiness: resolve(SCRIPT_DIR, 'check-decommission-readiness.js'),
   validateWedosReadiness: resolve(SCRIPT_DIR, 'validate-wedos-readiness.js'),
+  validateFinalMigrationSummary: resolve(SCRIPT_DIR, 'validate-final-migration-summary.js'),
+  validateSignoffRecord: resolve(SCRIPT_DIR, 'validate-signoff-record.js'),
   buildDecommissionEvidenceLog: resolve(SCRIPT_DIR, 'build-decommission-evidence-log.js'),
 }
 
@@ -37,7 +41,7 @@ function normalizeTrimmed(value) {
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/run-decommission-closeout.js --dir <DRILL_DIR> --ao-gate <FILE> [--profile wedos_small|wedos_medium|diskless] [--env-file <FILE>] [--operator <NAME>] [--ticket <ID>] [--decision pending|go|no-go] [--notes <TEXT>] [--recovery-drill-link <URL>] [--ao-fallback-link <URL>] [--rollback-proof-link <URL>] [--approvals-link <URL>] [--json] [--strict] [--dry-run] [--help]',
+    '  node scripts/run-decommission-closeout.js --dir <DRILL_DIR> --ao-gate <FILE> [--profile wedos_small|wedos_medium|diskless] [--env-file <FILE>] [--operator <NAME>] [--ticket <ID>] [--decision pending|go|no-go] [--notes <TEXT>] [--final-summary <FILE>] [--signoff-record <FILE>] [--recovery-drill-link <URL>] [--ao-fallback-link <URL>] [--rollback-proof-link <URL>] [--approvals-link <URL>] [--json] [--strict] [--dry-run] [--help]',
     '',
     'Options:',
     '  --dir <DRILL_DIR>          Drill artifact directory (required)',
@@ -48,6 +52,8 @@ function usageText() {
     '  --ticket <ID>              Change/ticket reference for the evidence log',
     '  --decision <VALUE>         pending|go|no-go (default: pending)',
     '  --notes <TEXT>             Short manual notes for the evidence log',
+    '  --final-summary <FILE>     Final migration summary markdown (default: kernel-migration/FINAL_MIGRATION_SUMMARY.md)',
+    '  --signoff-record <FILE>    Signoff record markdown (default: kernel-migration/SIGNOFF_RECORD.md)',
     '  --recovery-drill-link <U>  Link to the recovery drill proof',
     '  --ao-fallback-link <U>     Link to the AO fallback proof',
     '  --rollback-proof-link <U>  Link to the rollback proof',
@@ -61,7 +67,9 @@ function usageText() {
     '  1) check AO gate evidence',
     '  2) check decommission readiness',
     '  3) optional WEDOS readiness validation',
-    '  4) build decommission evidence log',
+    '  4) validate final migration summary',
+    '  5) validate signoff record',
+    '  6) build decommission evidence log',
     '',
     'Exit codes:',
     '  0   success or dry run',
@@ -90,6 +98,8 @@ function parseArgs(argv) {
     ticket: '',
     decision: 'pending',
     notes: '',
+    finalSummary: '',
+    signoffRecord: '',
     recoveryDrillLink: '',
     aoFallbackLink: '',
     rollbackProofLink: '',
@@ -152,6 +162,14 @@ function parseArgs(argv) {
         break
       case '--notes':
         args.notes = readValue()
+        break
+      case '--final-summary':
+      case '--summary':
+        args.finalSummary = readValue()
+        break
+      case '--signoff-record':
+      case '--signoff':
+        args.signoffRecord = readValue()
         break
       case '--recovery-drill-link':
         args.recoveryDrillLink = readValue()
@@ -233,6 +251,13 @@ function stepStatusFromResult(stepId, exitCode, parsed) {
     return exitCode === 0 ? 'passed' : 'failed'
   }
 
+  if (stepId === 'validate-final-migration-summary' || stepId === 'validate-signoff-record') {
+    const status = normalizeTrimmed(parsed?.status).toLowerCase()
+    if (status === 'complete') return 'passed'
+    if (status === 'blocked') return 'blocked'
+    return exitCode === 0 ? 'passed' : 'failed'
+  }
+
   return exitCode === 0 ? 'passed' : 'failed'
 }
 
@@ -249,6 +274,8 @@ function buildCloseoutPlan(options = {}) {
   const ticket = normalizeTrimmed(options.ticket)
   const decision = isNonEmptyString(options.decision) ? options.decision.trim().toLowerCase() : 'pending'
   const notes = normalizeTrimmed(options.notes)
+  const finalSummaryFile = isNonEmptyString(options.finalSummary) ? resolve(options.finalSummary) : DEFAULT_FINAL_SUMMARY_PATH
+  const signoffRecordFile = isNonEmptyString(options.signoffRecord) ? resolve(options.signoffRecord) : DEFAULT_SIGNOFF_RECORD_PATH
   const strict = options.strict === true
   const dryRun = options.dryRun === true
   const json = options.json === true
@@ -305,8 +332,30 @@ function buildCloseoutPlan(options = {}) {
       optional: true,
     },
     {
-      id: 'build-decommission-evidence-log',
+      id: 'validate-final-migration-summary',
       index: 4,
+      label: 'validate final migration summary',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.validateFinalMigrationSummary,
+      displayScriptPath: asRelativePath(STEP_SCRIPTS.validateFinalMigrationSummary),
+      args: () => ['--file', finalSummaryFile, '--json', ...(strict ? ['--strict'] : [])],
+      displayArgs: () => ['--file', finalSummaryFile, '--json', ...(strict ? ['--strict'] : [])],
+      parseJson: true,
+    },
+    {
+      id: 'validate-signoff-record',
+      index: 5,
+      label: 'validate signoff record',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.validateSignoffRecord,
+      displayScriptPath: asRelativePath(STEP_SCRIPTS.validateSignoffRecord),
+      args: () => ['--file', signoffRecordFile, '--json', ...(strict ? ['--strict'] : [])],
+      displayArgs: () => ['--file', signoffRecordFile, '--json', ...(strict ? ['--strict'] : [])],
+      parseJson: true,
+    },
+    {
+      id: 'build-decommission-evidence-log',
+      index: 6,
       label: 'build decommission evidence log',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildDecommissionEvidenceLog,
@@ -340,8 +389,10 @@ function buildCloseoutPlan(options = {}) {
     },
   ]
 
-  const activeSteps = profile ? steps : [steps[0], steps[1], steps[3]]
-  const plannedSteps = profile ? steps : steps.map((step) => (step.id === 'validate-wedos-readiness' ? { ...step, skipped: true } : step))
+  const activeSteps = profile ? steps : [steps[0], steps[1], steps[3], steps[4], steps[5]]
+  const plannedSteps = profile
+    ? steps
+    : steps.map((step) => (step.id === 'validate-wedos-readiness' ? { ...step, skipped: true } : step))
 
   return {
     createdAtUtc: new Date().toISOString(),
@@ -353,6 +404,8 @@ function buildCloseoutPlan(options = {}) {
     ticket,
     decision,
     notes,
+    finalSummaryFile,
+    signoffRecordFile,
     strict,
     dryRun,
     json,
@@ -379,6 +432,8 @@ function formatDryRunPlan(plan) {
   lines.push(`- Decision: \`${plan.decision}\``)
   lines.push(`- Strict: ${plan.strict ? 'yes' : 'no'}`)
   lines.push(`- Dry run: ${plan.dryRun ? 'yes' : 'no'}`)
+  lines.push(`- Final summary: \`${plan.finalSummaryFile}\``)
+  lines.push(`- Signoff record: \`${plan.signoffRecordFile}\``)
   lines.push('')
   lines.push('## Planned steps')
 
@@ -459,6 +514,17 @@ function reduceStepResult(step, spawnResult, plan) {
       result.issues = parsed.issues.slice()
     }
     result.status = stepStatusFromResult(step.id, exitCode, parsed)
+  } else if (step.id === 'validate-final-migration-summary' || step.id === 'validate-signoff-record') {
+    if (parsed && Array.isArray(parsed.issues) && parsed.issues.length > 0) {
+      result.blockers = parsed.issues.map((entry) => entry?.message || String(entry))
+    }
+    if (parsed && Array.isArray(parsed.blockers) && parsed.blockers.length > 0) {
+      result.blockers = [...(result.blockers || []), ...parsed.blockers.slice()]
+    }
+    if (parsed && Array.isArray(parsed.warnings) && parsed.warnings.length > 0) {
+      result.warnings = parsed.warnings.slice()
+    }
+    result.status = stepStatusFromResult(step.id, exitCode, parsed)
   } else if (step.id === 'build-decommission-evidence-log') {
     const logJsonPath = plan.artifacts.decommissionEvidenceLogJson
     if (existsSync(logJsonPath)) {
@@ -503,6 +569,8 @@ function runCloseout(options = {}, deps = {}) {
             ticket: plan.ticket,
             decision: plan.decision,
             notes: plan.notes,
+            finalSummaryFile: plan.finalSummaryFile,
+            signoffRecordFile: plan.signoffRecordFile,
             strict: plan.strict,
             dryRun: true,
             status: 'dry-run',
@@ -517,6 +585,10 @@ function runCloseout(options = {}, deps = {}) {
               status: step.skipped ? 'skipped' : 'planned',
             })),
             artifacts: plan.artifacts,
+            validations: {
+              finalMigrationSummary: null,
+              signoffRecord: null,
+            },
           },
           null,
           2,
@@ -537,6 +609,10 @@ function runCloseout(options = {}, deps = {}) {
       status: 'dry-run',
       blockers: [],
       warnings: [],
+      validations: {
+        finalMigrationSummary: null,
+        signoffRecord: null,
+      },
     }
   }
 
@@ -613,6 +689,29 @@ function runCloseout(options = {}, deps = {}) {
       }
     }
 
+    if (step.id === 'validate-final-migration-summary') {
+      if (reduced.status !== 'passed') {
+        readinessBlocked = true
+        blockers.push('final migration summary validation has blockers')
+      }
+      if (Array.isArray(reduced.payload?.issues) && reduced.payload.issues.length > 0) {
+        blockers.push(...reduced.payload.issues.map((item) => `summary: ${item?.message || String(item)}`))
+      }
+      if (Array.isArray(reduced.payload?.blockers) && reduced.payload.blockers.length > 0) {
+        blockers.push(...reduced.payload.blockers.map((item) => `summary: ${item}`))
+      }
+    }
+
+    if (step.id === 'validate-signoff-record') {
+      if (reduced.status !== 'passed') {
+        readinessBlocked = true
+        blockers.push('signoff record validation has blockers')
+      }
+      if (Array.isArray(reduced.payload?.blockers) && reduced.payload.blockers.length > 0) {
+        blockers.push(...reduced.payload.blockers.map((item) => `signoff: ${item}`))
+      }
+    }
+
     if (step.id === 'build-decommission-evidence-log') {
       const logJsonPath = plan.artifacts.decommissionEvidenceLogJson
       let log = null
@@ -672,6 +771,8 @@ function runCloseout(options = {}, deps = {}) {
             ticket: plan.ticket,
             decision: plan.decision,
             notes: plan.notes,
+            finalSummaryFile: plan.finalSummaryFile,
+            signoffRecordFile: plan.signoffRecordFile,
             strict: plan.strict,
             dryRun: false,
             status,
@@ -680,6 +781,10 @@ function runCloseout(options = {}, deps = {}) {
             warnings,
             steps: stepResults,
             artifacts: plan.artifacts,
+            validations: {
+              finalMigrationSummary: stepResults.find((step) => step.id === 'validate-final-migration-summary')?.payload || null,
+              signoffRecord: stepResults.find((step) => step.id === 'validate-signoff-record')?.payload || null,
+            },
           },
           null,
           2,
@@ -701,6 +806,10 @@ function runCloseout(options = {}, deps = {}) {
             warnings,
             steps: stepResults,
             artifacts: plan.artifacts,
+            validations: {
+              finalMigrationSummary: stepResults.find((step) => step.id === 'validate-final-migration-summary')?.payload || null,
+              signoffRecord: stepResults.find((step) => step.id === 'validate-signoff-record')?.payload || null,
+            },
           })
           return `${stdoutChunks.join('')}${body}`
         })(),
@@ -710,6 +819,10 @@ function runCloseout(options = {}, deps = {}) {
     blockers,
     warnings,
     status,
+    validations: {
+      finalMigrationSummary: stepResults.find((step) => step.id === 'validate-final-migration-summary')?.payload || null,
+      signoffRecord: stepResults.find((step) => step.id === 'validate-signoff-record')?.payload || null,
+    },
   }
 }
 
@@ -733,6 +846,8 @@ function renderHumanResult(summary) {
     lines.push(`- [${step.index}] ${step.label}: \`${step.status}\` (exit ${typeof step.exitCode === 'number' ? step.exitCode : 'n/a'})`)
   }
   lines.push('')
+  lines.push(`- Final summary: \`${summary.validations?.finalMigrationSummary?.path || 'n/a'}\``)
+  lines.push(`- Signoff record: \`${summary.validations?.signoffRecord?.path || 'n/a'}\``)
   lines.push(`- Evidence log markdown: \`${summary.artifacts.decommissionEvidenceLogMd}\``)
   lines.push(`- Evidence log JSON: \`${summary.artifacts.decommissionEvidenceLogJson}\``)
 

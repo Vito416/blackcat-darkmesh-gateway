@@ -92,6 +92,8 @@ Fail criteria:
 - The release sign-off checklist should be generated with `node scripts/build-release-signoff-checklist.js --pack <release-evidence-pack.json> [--strict]` so the pack status and blockers are machine summarized.
 - Consistency drift evidence should include the markdown drift report and JSON drift summary from `node scripts/build-drift-alert-summary.js` (`consistency-drift-report.md`, `consistency-drift-summary.json`).
 - Mandatory archive artifacts for the drill/evidence bundle: matrix, drift report/summary, `ao-dependency-gate.validation.txt`, release pack, signoff checklist, readiness JSON, `release-drill-manifest.json`, strict validation output, `release-drill-check.json`, `release-evidence-ledger.md`, `release-evidence-ledger.json`.
+- Validator flow for closeout evidence is fixed: `build-release-drill-manifest` -> `validate-release-drill-manifest` -> `check-release-drill-artifacts` -> `build-release-evidence-ledger` / `build-decommission-evidence-log` -> `check-decommission-readiness` -> `check-ao-gate-evidence`.
+- If automation passes but AO/manual proof links are still missing, record `automation-complete` plus `ao-manual-pending`; do not collapse that into a generic blocked state.
 
 Pass criteria:
 - release pack status is `ready`
@@ -158,6 +160,7 @@ Use one row per drill or proof item. Keep the artifact link stable and prefer th
 - Every proof should show the command/script, UTC timestamp, operator, and the exact expected outcome.
 - Preferred proof links include immutable artifacts: workflow run, commit, release, or raw log; avoid screenshots unless they supplement a stronger artifact.
 - Not enough: paraphrased notes, chat snippets without a permalink, or files that can be edited in place without history.
+- Automation evidence and AO/manual evidence should be logged separately even when they land in the same drill bundle; the closeout state is only `ready` when both halves are complete.
 
 ## J. Go / No-Go decision template
 

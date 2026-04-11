@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
-import { runCli } from '../scripts/run-decommission-closeout.js'
+import { parseArgs, runCli } from '../scripts/run-decommission-closeout.js'
 
 const tempDirs: string[] = []
 
@@ -58,6 +58,144 @@ function seedCloseoutArtifacts(dir: string) {
       aoGateValidated: true,
     },
   })
+  writeFileSync(
+    join(dir, 'FINAL_MIGRATION_SUMMARY.md'),
+    `# Final Migration Summary
+
+## Migration overview
+
+- **Project:** \`blackcat-darkmesh-gateway\`
+- **Legacy source:** \`blackcat-kernel-contracts\`
+- **Target architecture:** \`AO + gateway + write\`
+- **Summary date (UTC):** \`2026-04-11T12:00:00Z\`
+- **Prepared by:** \`ops-user\`
+- **Release / milestone:** \`1.4.0\`
+
+## Scope completed
+
+- **Included systems:**
+  - \`gateway\`
+- **Excluded systems:**
+  - \`legacy\`
+- **Key architecture changes:**
+  - \`boundary validation\`
+- **User-facing changes:**
+  - \`closeout workflow\`
+
+## Evidence pack
+
+| Evidence item | UTC timestamp | Link | Notes |
+| --- | --- | --- | --- |
+| Final release drill | \`2026-04-11T12:00:00Z\` | \`https://example.com/release-drill\` | \`ok\` |
+| Release evidence ledger | \`2026-04-11T12:00:00Z\` | \`https://example.com/ledger\` | \`ok\` |
+| CI run / workflow | \`2026-04-11T12:00:00Z\` | \`https://example.com/ci\` | \`ok\` |
+| Staging / production-like validation | \`2026-04-11T12:00:00Z\` | \`https://example.com/validation\` | \`ok\` |
+| Manual operator proof | \`2026-04-11T12:00:00Z\` | \`https://example.com/manual\` | \`ok\` |
+
+## Rollback reference
+
+- **Rollback reference:** \`https://example.com/rollback\`
+- **Rollback owner:** \`ops-user\`
+- **Rollback command / procedure:** \`revert\`
+- **Rollback evidence link:** \`https://example.com/rollback-proof\`
+- **Rollback tested at (UTC):** \`2026-04-11T12:00:00Z\`
+
+## Approvals
+
+| Role | Name / handle | UTC approval time | Evidence reviewed | Decision |
+| --- | --- | --- | --- | --- |
+| Security | \`ops-user\` | \`2026-04-11T12:00:00Z\` | \`https://example.com/security\` | \`approved\` |
+| Operations | \`ops-user\` | \`2026-04-11T12:00:00Z\` | \`https://example.com/operations\` | \`approved\` |
+| Architecture | \`ops-user\` | \`2026-04-11T12:00:00Z\` | \`https://example.com/architecture\` | \`approved\` |
+| Product / owner | \`ops-user\` | \`2026-04-11T12:00:00Z\` | \`https://example.com/product\` | \`approved\` |
+
+## Residual risks
+
+- **Residual risk:** \`none\`
+- **Impact:** \`low\`
+- **Likelihood:** \`low\`
+- **Mitigation:** \`monitoring\`
+- **Monitoring / alerting:** \`alerts\`
+- **Expiry / revisit date (UTC):** \`2026-05-11T12:00:00Z\`
+
+## Decommission decision
+
+- **Decision:** \`GO\`
+- **Decision time (UTC):** \`2026-04-11T12:00:00Z\`
+- **Final status:** \`complete\`
+- **Automation state:** \`complete\`
+- **AO/manual state:** \`complete\`
+- **Blockers remaining:** \`none\`
+- **Archive / cleanup reference:** \`https://example.com/archive\`
+
+## Operator notes
+
+- \`closed\`
+`,
+    'utf8',
+  )
+  writeFileSync(
+    join(dir, 'SIGNOFF_RECORD.md'),
+    `# Signoff Record
+
+## Record metadata
+
+- **Record date (UTC):** \`2026-04-11T12:00:00Z\`
+- **Prepared by:** \`ops-user\`
+- **Repo:** \`blackcat-darkmesh-gateway\`
+- **Related release / tag:** \`1.4.0\`
+- **Related migration summary:** \`kernel-migration/FINAL_MIGRATION_SUMMARY.md\`
+- **Related checklist:** \`kernel-migration/DECOMMISSION_CHECKLIST.md\`
+
+## Decision
+
+- **Decision:** \`GO\`
+- **Decision rationale:** \`all checks passed\`
+- **Decision time (UTC):** \`2026-04-11T12:00:00Z\`
+- **Scope covered:** \`closeout\`
+- **Scope excluded:** \`none\`
+
+## Evidence reviewed
+
+| Artifact | UTC timestamp | Link | Notes |
+| --- | --- | --- | --- |
+| Final migration summary | \`2026-04-11T12:00:00Z\` | \`https://example.com/summary\` | \`ok\` |
+| Release evidence ledger | \`2026-04-11T12:00:00Z\` | \`https://example.com/ledger\` | \`ok\` |
+| Release drill manifest | \`2026-04-11T12:00:00Z\` | \`https://example.com/manifest\` | \`ok\` |
+| AO dependency gate validation | \`2026-04-11T12:00:00Z\` | \`https://example.com/gate\` | \`ok\` |
+| CI / workflow run | \`2026-04-11T12:00:00Z\` | \`https://example.com/ci\` | \`ok\` |
+| Rollback proof | \`2026-04-11T12:00:00Z\` | \`https://example.com/rollback\` | \`ok\` |
+
+## Approvals
+
+| Role | Name / handle | UTC approval time | Evidence reviewed | Approval |
+| --- | --- | --- | --- | --- |
+| Security | \`ops-user\` | \`2026-04-11T12:00:00Z\` | \`https://example.com/security\` | \`approved\` |
+| Operations | \`ops-user\` | \`2026-04-11T12:00:00Z\` | \`https://example.com/operations\` | \`approved\` |
+| Architecture | \`ops-user\` | \`2026-04-11T12:00:00Z\` | \`https://example.com/architecture\` | \`approved\` |
+| Product / owner | \`ops-user\` | \`2026-04-11T12:00:00Z\` | \`https://example.com/product\` | \`approved\` |
+
+## Rollback reference
+
+- **Rollback document:** \`https://example.com/rollback-doc\`
+- **Rollback owner:** \`ops-user\`
+- **Rollback tested (UTC):** \`2026-04-11T12:00:00Z\`
+- **Rollback evidence link:** \`https://example.com/rollback-proof\`
+
+## Residual risks
+
+- **Open risk:** \`none\`
+- **Why it remains:** \`n/a\`
+- **Mitigation in place:** \`monitoring\`
+- **Follow-up owner:** \`ops-user\`
+- **Review date (UTC):** \`2026-05-11T12:00:00Z\`
+
+## Final notes
+
+- \`immutable\`
+`,
+    'utf8',
+  )
   writeJson(join(dir, 'ao-dependency-gate.json'), {
     schemaVersion: 1,
     release: '1.4.0',
@@ -102,6 +240,22 @@ function scriptName(args: string[]) {
 }
 
 describe('run-decommission-closeout.js', () => {
+  it('parses summary and signoff paths', () => {
+    const parsed = parseArgs([
+      '--dir',
+      './tmp/decommission-drill',
+      '--ao-gate',
+      './tmp/ao-dependency-gate.json',
+      '--final-summary',
+      './tmp/decommission-drill/FINAL_MIGRATION_SUMMARY.md',
+      '--signoff-record',
+      './tmp/decommission-drill/SIGNOFF_RECORD.md',
+    ])
+
+    expect(parsed.finalSummary).toContain('FINAL_MIGRATION_SUMMARY.md')
+    expect(parsed.signoffRecord).toContain('SIGNOFF_RECORD.md')
+  })
+
   it('prints help text', () => {
     const result = runCli(['--help'])
 
@@ -109,6 +263,8 @@ describe('run-decommission-closeout.js', () => {
     expect(result.stdout).toContain('Usage:')
     expect(result.stdout).toContain('node scripts/run-decommission-closeout.js')
     expect(result.stdout).toContain('Sequence:')
+    expect(result.stdout).toContain('--final-summary <FILE>')
+    expect(result.stdout).toContain('--signoff-record <FILE>')
     expect(result.stdout).toContain('--json')
     expect(result.stderr).toBe('')
   })
@@ -130,6 +286,8 @@ describe('run-decommission-closeout.js', () => {
     expect(result.stdout).toContain('# Decommission Closeout')
     expect(result.stdout).toContain('check AO gate evidence')
     expect(result.stdout).toContain('validate WEDOS readiness (wedos_medium)')
+    expect(result.stdout).toContain('validate final migration summary')
+    expect(result.stdout).toContain('validate signoff record')
     expect(result.stdout).toContain('build decommission evidence log')
     expect(result.stdout).toContain('decommission-evidence-log.json')
     expect(result.stderr).toBe('')
@@ -193,6 +351,35 @@ describe('run-decommission-closeout.js', () => {
               2,
             ),
           )
+        case 'validate-final-migration-summary.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'FINAL_MIGRATION_SUMMARY.md'),
+                ok: true,
+                status: 'complete',
+                issueCount: 0,
+                strictIssueCount: 0,
+                issues: [],
+              },
+              null,
+              2,
+            ),
+          )
+        case 'validate-signoff-record.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'SIGNOFF_RECORD.md'),
+                ok: true,
+                status: 'complete',
+                blockers: [],
+                warnings: [],
+              },
+              null,
+              2,
+            ),
+          )
         case 'build-decommission-evidence-log.js': {
           const logMd = join(dir, 'decommission-evidence-log.md')
           const logJson = join(dir, 'decommission-evidence-log.json')
@@ -220,6 +407,10 @@ describe('run-decommission-closeout.js', () => {
         'wedos_small',
         '--env-file',
         envFile,
+        '--final-summary',
+        join(dir, 'FINAL_MIGRATION_SUMMARY.md'),
+        '--signoff-record',
+        join(dir, 'SIGNOFF_RECORD.md'),
         '--operator',
         'ops-user',
         '--ticket',
@@ -246,15 +437,26 @@ describe('run-decommission-closeout.js', () => {
     expect(result.exitCode).toBe(0)
     expect(payload.status).toBe('ready')
     expect(payload.exitCode).toBe(0)
-    expect(payload.steps).toHaveLength(4)
-    expect(payload.steps.map((step: { status: string }) => step.status)).toEqual(['passed', 'passed', 'passed', 'passed'])
-    expect(payload.steps[3].log.status).toBe('complete')
+    expect(payload.steps).toHaveLength(6)
+    expect(payload.steps.map((step: { status: string }) => step.status)).toEqual([
+      'passed',
+      'passed',
+      'passed',
+      'passed',
+      'passed',
+      'passed',
+    ])
+    expect(payload.validations.finalMigrationSummary.status).toBe('complete')
+    expect(payload.validations.signoffRecord.status).toBe('complete')
+    expect(payload.steps[5].log.status).toBe('complete')
     expect(payload.artifacts.decommissionEvidenceLogJson).toContain('decommission-evidence-log.json')
-    expect(spawnSyncFn).toHaveBeenCalledTimes(4)
+    expect(spawnSyncFn).toHaveBeenCalledTimes(6)
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'check-ao-gate-evidence.js',
       'check-decommission-readiness.js',
       'validate-wedos-readiness.js',
+      'validate-final-migration-summary.js',
+      'validate-signoff-record.js',
       'build-decommission-evidence-log.js',
     ])
   })
@@ -296,6 +498,35 @@ describe('run-decommission-closeout.js', () => {
             '',
             3,
           )
+        case 'validate-final-migration-summary.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'FINAL_MIGRATION_SUMMARY.md'),
+                ok: true,
+                status: 'complete',
+                issueCount: 0,
+                strictIssueCount: 0,
+                issues: [],
+              },
+              null,
+              2,
+            ),
+          )
+        case 'validate-signoff-record.js':
+          return spawnResult(
+            JSON.stringify(
+              {
+                file: join(dir, 'SIGNOFF_RECORD.md'),
+                ok: true,
+                status: 'complete',
+                blockers: [],
+                warnings: [],
+              },
+              null,
+              2,
+            ),
+          )
         case 'build-decommission-evidence-log.js': {
           const logMd = join(dir, 'decommission-evidence-log.md')
           const logJson = join(dir, 'decommission-evidence-log.json')
@@ -319,6 +550,10 @@ describe('run-decommission-closeout.js', () => {
         dir,
         '--ao-gate',
         join(dir, 'ao-dependency-gate.json'),
+        '--final-summary',
+        join(dir, 'FINAL_MIGRATION_SUMMARY.md'),
+        '--signoff-record',
+        join(dir, 'SIGNOFF_RECORD.md'),
         '--operator',
         'ops-user',
         '--decision',
@@ -334,11 +569,20 @@ describe('run-decommission-closeout.js', () => {
     expect(result.exitCode).toBe(3)
     expect(payload.status).toBe('blocked')
     expect(payload.exitCode).toBe(3)
-    expect(payload.steps.map((step: { status: string }) => step.status)).toEqual(['passed', 'blocked', 'skipped', 'passed'])
+    expect(payload.steps.map((step: { status: string }) => step.status)).toEqual([
+      'passed',
+      'blocked',
+      'skipped',
+      'passed',
+      'passed',
+      'passed',
+    ])
     expect(payload.blockers.some((blocker: string) => blocker.includes('decommission readiness has blockers'))).toBe(true)
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'check-ao-gate-evidence.js',
       'check-decommission-readiness.js',
+      'validate-final-migration-summary.js',
+      'validate-signoff-record.js',
       'build-decommission-evidence-log.js',
     ])
   })

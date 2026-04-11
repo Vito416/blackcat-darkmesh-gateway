@@ -35,6 +35,8 @@
     "ops:check-release-drill-artifacts": "node scripts/check-release-drill-artifacts.js",
     "ops:check-decommission-readiness": "node scripts/check-decommission-readiness.js",
     "ops:check-ao-gate-evidence": "node scripts/check-ao-gate-evidence.js",
+    "ops:validate-final-migration-summary": "node scripts/validate-final-migration-summary.js",
+    "ops:validate-signoff-record": "node scripts/validate-signoff-record.js",
     "ops:check-release-readiness": "node scripts/check-release-readiness.js",
     "ops:run-release-drill": "node scripts/run-release-drill.js",
     "ops:validate-wedos-readiness": "node scripts/validate-wedos-readiness.js",
