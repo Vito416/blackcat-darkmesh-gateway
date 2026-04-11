@@ -439,6 +439,30 @@ jobs:
           else
             echo "ops:check-decommission-manual-proofs is not defined in package.json; skipping help check."
           fi
+      - name: "Help: check template worker routing config"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-template-worker-routing-config'] ? 0 : 1)"; then
+            npm run ops:check-template-worker-routing-config -- --help
+          else
+            echo "ops:check-template-worker-routing-config is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: init template worker routing"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:init-template-worker-routing'] ? 0 : 1)"; then
+            npm run ops:init-template-worker-routing -- --help
+          else
+            echo "ops:init-template-worker-routing is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate worker secrets trust model"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-worker-secrets-trust-model'] ? 0 : 1)"; then
+            npm run ops:validate-worker-secrets-trust-model -- --help
+          else
+            echo "ops:validate-worker-secrets-trust-model is not defined in package.json; skipping help check."
+          fi
       - name: "Help: init decommission manual proofs"
         run: |
           set -euo pipefail
@@ -914,6 +938,20 @@ jobs:
             else
               echo "- Result: skipped because decommission evidence log JSON is missing." >> "$GITHUB_STEP_SUMMARY"
             fi
+          fi
+      - name: Check legacy module map sync
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-legacy-module-map-sync'] ? 0 : 1)"; then
+            legacy_sync_json="$RELEASE_PACK_WORKDIR/legacy-module-map-sync.json"
+            mkdir -p "$RELEASE_PACK_WORKDIR"
+            npm run ops:check-legacy-module-map-sync -- --strict --json > "$legacy_sync_json"
+            LEGACY_SYNC_JSON="$legacy_sync_json" node -e "const fs=require('node:fs');const p=process.env.LEGACY_SYNC_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));const docs=Array.isArray(d.documents)?d.documents:[];const missing=docs.reduce((sum,doc)=>sum+(Array.isArray(doc.missing)?doc.missing.length:0),0);const extra=docs.reduce((sum,doc)=>sum+(Array.isArray(doc.extra)?doc.extra.length:0),0);const drift=Number(d.mismatchCount ?? (missing+extra));console.log('### Legacy module map sync');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Missing: '+missing);console.log('- Extra: '+extra);console.log('- Drift: '+drift);" >> "$GITHUB_STEP_SUMMARY"
+            cp "$legacy_sync_json" "$RELEASE_PACK_WORKDIR/legacy-module-map-sync.validation.json"
+          else
+            echo "### Legacy module map sync" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: skipped because ops:check-legacy-module-map-sync is not defined." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Run decommission closeout
         run: |

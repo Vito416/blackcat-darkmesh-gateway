@@ -180,17 +180,32 @@ function resolveSignerBaseUrl(siteId: string): ResolveResult {
   return { ok: true, value: fallback }
 }
 
-function resolveSignerToken(siteId: string): string | undefined {
+function resolveSignerToken(siteId: string): ResolveResult {
   const mapRaw = readStringEnv('GATEWAY_TEMPLATE_WORKER_TOKEN_MAP')
   if (mapRaw) {
     const parsed = parseStringMap(mapRaw, 'GATEWAY_TEMPLATE_WORKER_TOKEN_MAP')
-    if (parsed.ok) {
-      const mapped = parsed.map[siteId]
-      if (mapped) return mapped
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        status: 500,
+        error: 'worker_token_map_invalid',
+        detail: { message: 'message' in parsed ? parsed.message : 'invalid_map' },
+      }
     }
+    const mapped = parsed.map[siteId]
+    if (mapped) return { ok: true, value: mapped }
   }
 
-  return readStringEnv('WORKER_AUTH_TOKEN') || readStringEnv('WORKER_SIGN_TOKEN')
+  const fallback = readStringEnv('WORKER_AUTH_TOKEN') || readStringEnv('WORKER_SIGN_TOKEN')
+  if (!fallback) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'signer_auth_not_configured',
+      detail: { siteId },
+    }
+  }
+  return { ok: true, value: fallback }
 }
 
 function hmacBody(body: string): string | undefined {
@@ -406,14 +421,15 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     if (signerAllowError) return signerAllowError
 
     const signerToken = resolveSignerToken(resolvedSiteId)
-    if (!signerToken) {
-      return jsonError(503, 'signer_auth_not_configured', { siteId: resolvedSiteId })
+    if (signerToken.ok === false) {
+      const signerTokenError = signerToken as Extract<ResolveResult, { ok: false }>
+      return jsonError(signerTokenError.status, signerTokenError.error, signerTokenError.detail)
     }
 
     effectiveRequestId = effectiveRequestId || `req-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
     const signEnvelope = buildWriteSignEnvelope(input, resolvedSiteId, effectiveRequestId)
     const signerBaseUrl = (signerBase as Extract<ResolveResult, { ok: true }>).value
-    const signed = await signWriteEnvelope(signerBaseUrl, signerToken, signEnvelope, getTemplateSignTimeoutMs())
+    const signed = await signWriteEnvelope(signerBaseUrl, signerToken.value, signEnvelope, getTemplateSignTimeoutMs())
     if (signed.ok === false) {
       const signedError = signed as Extract<SignedWriteEnvelopeResult, { ok: false }>
       return jsonError(signedError.status, signedError.error, signedError.detail)

@@ -43,6 +43,14 @@ This document formalizes the boundary for the gateway/template/worker split.
 - Any cache in gateway must be TTL-bounded and treat encrypted envelopes as opaque; secrets themselves never enter the cache.
 - Mailing runtime checks should fail closed if a local secret source appears in the request path.
 
+## Machine checks
+
+- `check-template-worker-routing-config`: strict CI gate for published URL/token map shape and site coverage; local runs are advisory when exploring a new routing set.
+- `init-template-worker-routing`: scaffold-only helper for operators; it prepares maps and does not enforce policy by itself.
+- `validate-worker-secrets-trust-model`: strict CI gate for the trust-model doc and boundary references once wired; local runs should be treated as a preflight, not as enforcement.
+- `check-mailing-secret-boundary`: strict CI gate for request-path secret access in mailing code; this is the active enforcement example for the trust model.
+- `check-config-loader-runtime-boundary`: strict CI gate for request-path env access; it is the complementary runtime-secret boundary check.
+
 ## Operational rules
 
 - If a flow needs a secret, the worker owns the secret and performs the secret-dependent step.
@@ -70,3 +78,7 @@ This document formalizes the boundary for the gateway/template/worker split.
 - `ops/README.md`
 - `kernel-migration/BACKLOG.md`
 - `libs/legacy/TEMPLATE_BACKEND_GUARDRAILS.md`
+
+## Optional notes
+
+- This trust model is an enforcement baseline; environment-specific rollout notes can be tracked alongside release drill evidence when needed.

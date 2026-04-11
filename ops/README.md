@@ -20,6 +20,9 @@
 - Decommission manual-proof checker: `npm run ops:check-decommission-manual-proofs -- --file <drill-dir>/decommission-evidence-log.json [--strict] [--json]` validates recovery/fallback/rollback/approvals links and returns `pending` (non-strict) vs hard failure (strict).
 - Decommission readiness summary: `npm run ops:check-decommission-readiness -- --dir <drill-dir> --ao-gate kernel-migration/ao-dependency-gate.json [--strict] [--json]` emits `automationState`, `aoManualState`, and `closeoutState` so `automation-complete`, `ao-manual-pending`, and `ao-manual-blocked` are not conflated.
 - Decommission closeout artifact validator: `npm run ops:validate-decommission-closeout -- --file <drill-dir>/decommission-closeout.json [--strict] [--json]` verifies closeout shape and can hard-fail when closeout is not `ready`.
+- Worker-routing config checker: `node scripts/check-template-worker-routing-config.js --url-map <json> [--token-map <json>] [--strict] [--json]` validates tenant URL/token map shape before routing is published.
+- Worker-routing scaffold helper: `node scripts/init-template-worker-routing.js --sites <csv> [--url-map-out <file>] [--token-map-out <file>] [--force]` generates the routing map skeleton for a new site set.
+- Worker-secrets trust-model validator: `npm run ops:validate-worker-secrets-trust-model -- --help` is the companion machine check for `ops/worker-secrets-trust-model.md` and should stay a strict CI gate once wired.
 - AO gate evidence quality check: `npm run ops:check-ao-gate-evidence -- --file kernel-migration/ao-dependency-gate.json [--strict] [--json]`.
 - Final migration summary validator: `npm run ops:validate-final-migration-summary -- --file kernel-migration/FINAL_MIGRATION_SUMMARY.md [--strict] [--json]`.
 - Signoff record validator: `npm run ops:validate-signoff-record -- --file kernel-migration/SIGNOFF_RECORD.md [--strict] [--json]`.

@@ -2,6 +2,12 @@
 
 Operator and test helpers live here. Keep them dependency-light, explicit, and safe to run from a shell.
 
+## Worker-routing and secret-boundary helpers
+
+- `scripts/check-template-worker-routing-config.js` validates tenant URL/token routing maps before they are published.
+- `scripts/init-template-worker-routing.js` scaffolds a new routing map for a site set.
+- `npm run ops:validate-worker-secrets-trust-model` is the machine-check companion for `ops/worker-secrets-trust-model.md`; keep it CI-gated once the script is wired in.
+
 ## Integrity incident helper
 
 `scripts/integrity-incident.js` sends signed operator requests to the integrity endpoints:
