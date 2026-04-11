@@ -43,6 +43,7 @@ function seedDrillDir(options = {}) {
     'consistency-drift-report.md': '# Drift report\n',
     'consistency-drift-summary.json': JSON.stringify({ status: 'ok', counts: { total: 1 } }),
     'latest-evidence-bundle.json': JSON.stringify({ bundleDir: join(dir, 'evidence', 'bundle-1'), bundleName: 'bundle-1' }),
+    'ao-dependency-gate.validation.txt': 'valid dependency gate: ./kernel-migration/ao-dependency-gate.json\n',
     'release-evidence-pack.md': '# Release pack\n',
     'release-evidence-pack.json': JSON.stringify({ release, status: 'ready', blockers: [], warnings: [] }),
     'release-signoff-checklist.md': '# Checklist\n',
@@ -94,6 +95,17 @@ describe('check-release-drill-artifacts.js', () => {
     expect(result.exitCode).toBe(3)
     expect(payload.ok).toBe(false)
     expect(payload.issues.some((issue: string) => issue.includes('release mismatch'))).toBe(true)
+  })
+
+  it('fails strict mode when AO gate validation output is malformed', () => {
+    const dir = seedDrillDir()
+    writeFileSync(join(dir, 'ao-dependency-gate.validation.txt'), 'gate failed\n', 'utf8')
+    const result = runCli(['--dir', dir, '--strict', '--json'])
+    const payload = JSON.parse(result.stdout)
+
+    expect(result.exitCode).toBe(3)
+    expect(payload.ok).toBe(false)
+    expect(payload.issues).toContain('ao-dependency-gate.validation.txt does not confirm valid dependency gate')
   })
 
   it('returns usage error when --dir is missing', () => {

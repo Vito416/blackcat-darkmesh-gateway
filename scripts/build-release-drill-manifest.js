@@ -10,6 +10,7 @@ const REQUIRED_ARTIFACTS = [
   'consistency-drift-report.md',
   'consistency-drift-summary.json',
   'latest-evidence-bundle.json',
+  'ao-dependency-gate.validation.txt',
   'release-evidence-pack.md',
   'release-evidence-pack.json',
   'release-signoff-checklist.md',

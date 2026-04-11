@@ -514,6 +514,7 @@ jobs:
       RELEASE_PACK_WORKDIR: ${{ runner.temp }}/release-pack/work
       RELEASE_PACK_MD: ${{ runner.temp }}/release-pack/release-evidence-pack.md
       RELEASE_PACK_JSON: ${{ runner.temp }}/release-pack/release-evidence-pack.json
+      RELEASE_AO_GATE_VALIDATE: ${{ runner.temp }}/release-pack/ao-dependency-gate.validation.txt
       RELEASE_READINESS_JSON: ${{ runner.temp }}/release-pack/release-readiness.json
       RELEASE_DRILL_MANIFEST_JSON: ${{ runner.temp }}/release-pack/release-drill-manifest.json
       RELEASE_DRILL_MANIFEST_VALIDATE: ${{ runner.temp }}/release-pack/release-drill-manifest.validation.txt
@@ -558,6 +559,10 @@ jobs:
           node scripts/build-release-signoff-checklist.js \
             --pack "$RELEASE_PACK_JSON" \
             --out "$RELEASE_SIGNOFF_MD"
+      - name: Validate AO dependency gate
+        run: |
+          set -euo pipefail
+          node scripts/validate-ao-dependency-gate.js --file "./kernel-migration/ao-dependency-gate.json" | tee "$RELEASE_AO_GATE_VALIDATE"
       - name: Check release readiness
         run: |
           set -euo pipefail
@@ -599,6 +604,7 @@ jobs:
             [ -f "$RELEASE_PACK_MD" ] && cp "$RELEASE_PACK_MD" "$RELEASE_PACK_WORKDIR/release-evidence-pack.md"
             [ -f "$RELEASE_PACK_JSON" ] && cp "$RELEASE_PACK_JSON" "$RELEASE_PACK_WORKDIR/release-evidence-pack.json"
             [ -f "$RELEASE_SIGNOFF_MD" ] && cp "$RELEASE_SIGNOFF_MD" "$RELEASE_PACK_WORKDIR/release-signoff-checklist.md"
+            [ -f "$RELEASE_AO_GATE_VALIDATE" ] && cp "$RELEASE_AO_GATE_VALIDATE" "$RELEASE_PACK_WORKDIR/ao-dependency-gate.validation.txt"
             [ -f "$RELEASE_READINESS_JSON" ] && cp "$RELEASE_READINESS_JSON" "$RELEASE_PACK_WORKDIR/release-readiness.json"
 
             latest_bundle_json="$RELEASE_PACK_WORKDIR/latest-evidence-bundle.json"
@@ -703,6 +709,7 @@ jobs:
             ${{ env.RELEASE_PACK_MD }}
             ${{ env.RELEASE_PACK_JSON }}
             ${{ env.RELEASE_SIGNOFF_MD }}
+            ${{ env.RELEASE_AO_GATE_VALIDATE }}
             ${{ env.RELEASE_READINESS_JSON }}
             ${{ env.RELEASE_DRILL_MANIFEST_JSON }}
             ${{ env.RELEASE_DRILL_MANIFEST_VALIDATE }}

@@ -15,6 +15,7 @@
 - Release-drill artifact completeness check: `npm run ops:check-release-drill-artifacts -- --dir <drill-dir> --strict --json` verifies the final mandatory artifact set and strict cross-file consistency.
 - AO dependency gate source: `kernel-migration/ao-dependency-gate.json` provides machine-readable P0.1/P1.1/P1.2 status for release gating.
 - AO dependency gate validation: `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json` checks gate structure and closed-check evidence references.
+- AO dependency gate validation artifact: archive `ao-dependency-gate.validation.txt` from drills as the machine output proof for gate checks.
 - Release sign-off checklist generator: `npm run ops:build-release-signoff-checklist -- --pack <release-evidence-pack.json> [--strict]`.
 - Release readiness evaluator: `npm run ops:check-release-readiness -- --pack <release-evidence-pack.json> [--strict] [--json]`.
 - One-shot release drill orchestrator: `npm run ops:run-release-drill -- --urls <CSV> --out-dir <DIR> [--profile ...] [--mode ...] [--token ...] [--allow-anon] [--release ...] [--strict]`.

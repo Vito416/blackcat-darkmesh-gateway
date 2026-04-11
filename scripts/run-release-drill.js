@@ -219,6 +219,7 @@ function buildDrillPlan({
   const reportMd = join(resolvedOutDir, 'consistency-drift-report.md')
   const summaryJson = join(resolvedOutDir, 'consistency-drift-summary.json')
   const latestBundleJson = join(resolvedOutDir, 'latest-evidence-bundle.json')
+  const aoGateValidationTxt = join(resolvedOutDir, 'ao-dependency-gate.validation.txt')
   const readinessJson = join(resolvedOutDir, 'release-readiness.json')
   const drillManifestJson = join(resolvedOutDir, 'release-drill-manifest.json')
   const drillManifestValidation = join(resolvedOutDir, 'release-drill-manifest.validation.txt')
@@ -308,6 +309,7 @@ function buildDrillPlan({
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.validateAoGate),
       args: ['--file', DEFAULT_AO_GATE_FILE],
       displayArgs: ['--file', DEFAULT_AO_GATE_FILE],
+      outputFile: aoGateValidationTxt,
     },
     {
       id: 'build-pack',
@@ -422,6 +424,7 @@ function buildDrillPlan({
       summaryJson,
       evidenceRoot,
       latestBundleJson,
+      aoGateValidationTxt,
       packMd,
       packJson,
       checklistMd,
@@ -549,6 +552,9 @@ function runReleaseDrill(options = {}, deps = {}) {
         const readiness = JSON.parse(childStdout || '{}')
         writeTextFile(plan.artifacts.readinessJson, `${JSON.stringify(readiness, null, 2)}\n`)
       }
+      if (step.id === 'validate-ao-gate') {
+        writeTextFile(plan.artifacts.aoGateValidationTxt, childStdout || `valid dependency gate: ${plan.artifacts.aoGateFile}\n`)
+      }
       if (step.id === 'validate-drill-manifest') {
         writeTextFile(plan.artifacts.drillManifestValidation, childStdout || 'valid release drill manifest\n')
       }
@@ -571,6 +577,7 @@ function runReleaseDrill(options = {}, deps = {}) {
         ensureFile(plan.artifacts.packMd, step.label)
         ensureFile(plan.artifacts.packJson, step.label)
       }
+      if (step.id === 'validate-ao-gate') ensureFile(plan.artifacts.aoGateValidationTxt, step.label)
       if (step.id === 'build-checklist') ensureFile(plan.artifacts.checklistMd, step.label)
       if (step.id === 'readiness') ensureFile(plan.artifacts.readinessJson, step.label)
       if (step.id === 'build-drill-manifest') ensureFile(plan.artifacts.drillManifestJson, step.label)

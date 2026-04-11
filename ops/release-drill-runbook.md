@@ -157,8 +157,9 @@ Artifacts:
 Make sure the release gate file is structurally valid and all required checks are closed.
 
 ```bash
+AO_GATE_VALIDATE="$DRILL_DIR/ao-dependency-gate.validation.txt"
 npm run ops:validate-ao-dependency-gate -- \
-  --file kernel-migration/ao-dependency-gate.json
+  --file kernel-migration/ao-dependency-gate.json | tee "$AO_GATE_VALIDATE"
 ```
 
 Expected output:
@@ -166,7 +167,7 @@ Expected output:
 - Exit code `0`
 
 Artifacts:
-- None
+- `$DRILL_DIR/ao-dependency-gate.validation.txt`
 
 ## 7) Build the release evidence pack
 
@@ -216,10 +217,11 @@ Artifacts:
 Use the readiness evaluator as the final machine check before sign-off.
 
 ```bash
+READINESS_JSON="$DRILL_DIR/release-readiness.json"
 npm run ops:check-release-readiness -- \
   --pack "$DRILL_DIR/release-evidence-pack.json" \
   --strict \
-  --json
+  --json | tee "$READINESS_JSON"
 ```
 
 Expected output:
@@ -227,7 +229,7 @@ Expected output:
 - Exit code `0` only when readiness is `ready`
 
 Artifacts:
-- None, unless you redirect stdout to a file for archival
+- `$DRILL_DIR/release-readiness.json`
 
 ## 10) Build and validate the drill manifest
 
@@ -285,7 +287,7 @@ Artifacts:
 | `ops:export-integrity-evidence` | Child compare or attestation script failed; token/HMAC mismatch is the common cause | Open the bundle `compare.txt` and check the recorded child exit codes |
 | `ops:latest-evidence-bundle` | No timestamped bundle exists yet, or the bundle root points at the wrong directory | Confirm `ops:export-integrity-evidence` wrote a bundle under `$DRILL_DIR/evidence` |
 | `ops:check-evidence-bundle` | Bundle files are missing, the manifest is malformed, or attestation validation failed | Open `manifest.json` and `attestation.json` in the latest bundle |
-| `ops:validate-ao-dependency-gate` | Gate JSON malformed or a required AO check is not closed | Inspect `required` versus `checks` in `kernel-migration/ao-dependency-gate.json` |
+| `ops:validate-ao-dependency-gate` | Gate JSON malformed or a required AO check is not closed | Inspect `required` versus `checks` in `kernel-migration/ao-dependency-gate.json`, then check `ao-dependency-gate.validation.txt` |
 | `ops:build-release-evidence-pack` | Missing consistency evidence, missing evidence bundle, or an AO gate that is not closed | Verify the latest bundle directory and the release pack status fields |
 | `ops:build-release-signoff-checklist` | Pack JSON missing, unreadable, or not `ready` under `--strict` | Read the pack blockers and warnings before retrying |
 | `ops:check-release-readiness` | Pack contains blockers, or warnings remain under strict mode | Inspect `blockers` and `warnings` in `release-evidence-pack.json` |
@@ -299,7 +301,7 @@ Artifacts:
 | --- | --- | --- |
 | Confirm consistency is acceptable | `ops:validate-consistency-preflight`, `ops:compare-integrity-matrix`, `ops:export-consistency-report` | `consistency-matrix.json`, `consistency-drift-report.md`, `consistency-drift-summary.json` |
 | Confirm evidence bundle is acceptable | `ops:export-integrity-evidence`, `ops:latest-evidence-bundle`, `ops:check-evidence-bundle` | Timestamped bundle containing `compare.txt`, `attestation.json`, and `manifest.json` |
-| Confirm AO dependency gate is acceptable | `ops:validate-ao-dependency-gate` | `kernel-migration/ao-dependency-gate.json` with all required checks closed |
+| Confirm AO dependency gate is acceptable | `ops:validate-ao-dependency-gate` | `kernel-migration/ao-dependency-gate.json` with all required checks closed + `$DRILL_DIR/ao-dependency-gate.validation.txt` |
 | Confirm archive manifest is acceptable | `ops:build-release-drill-manifest`, `ops:validate-release-drill-manifest` | `$DRILL_DIR/release-drill-manifest.json` and `$DRILL_DIR/release-drill-manifest.validation.txt` |
 | Confirm drill artifact completeness is acceptable | `ops:check-release-drill-artifacts` | `$DRILL_DIR/release-drill-check.json` |
 | Review blockers and warnings | `ops:build-release-evidence-pack`, `ops:check-release-readiness` | `release-evidence-pack.md`, `release-evidence-pack.json`, readiness output, and drill manifest artifacts |

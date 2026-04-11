@@ -9,6 +9,7 @@ const REQUIRED_FILES = [
   'consistency-drift-report.md',
   'consistency-drift-summary.json',
   'latest-evidence-bundle.json',
+  'ao-dependency-gate.validation.txt',
   'release-evidence-pack.md',
   'release-evidence-pack.json',
   'release-signoff-checklist.md',
@@ -109,6 +110,7 @@ function validateStrict(summary, strictChecks) {
   const readinessPath = join(dir, 'release-readiness.json')
   const packPath = join(dir, 'release-evidence-pack.json')
   const validationPath = join(dir, 'release-drill-manifest.validation.txt')
+  const aoGateValidationPath = join(dir, 'ao-dependency-gate.validation.txt')
 
   const manifest = safeReadJson(manifestPath, 'release-drill-manifest.json', issues)
   const readiness = safeReadJson(readinessPath, 'release-readiness.json', issues)
@@ -146,6 +148,15 @@ function validateStrict(summary, strictChecks) {
     }
   } catch (_) {
     issues.push('release-drill-manifest.validation.txt is unreadable')
+  }
+
+  try {
+    const aoGateValidationText = readFileSync(aoGateValidationPath, 'utf8')
+    if (!aoGateValidationText.toLowerCase().includes('valid dependency gate')) {
+      issues.push('ao-dependency-gate.validation.txt does not confirm valid dependency gate')
+    }
+  } catch (_) {
+    issues.push('ao-dependency-gate.validation.txt is unreadable')
   }
 
   strictChecks.performed = true
