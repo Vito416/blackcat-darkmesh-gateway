@@ -2,6 +2,7 @@
 
 - Endpoint: `/metrics` (Prom text). Protect with `METRICS_BASIC_USER`/`METRICS_BASIC_PASS` or `METRICS_BEARER_TOKEN`; responds 401 if missing when set.
 - Integrity operations runbook: `ops/integrity-runbook.md`.
+- Worker secrets trust model: `ops/worker-secrets-trust-model.md`.
 - Resource budgets and limited-hosting guidance: `ops/resource-budgets.md`.
 - Default alert thresholds: `ops/alerts.md` (targets `wedos_medium`).
 - Profile-specific alert thresholds and tuning notes: `ops/alerts-profiles.md`.
@@ -20,6 +21,7 @@
 - Decommission closeout one-shot: `node scripts/run-decommission-closeout.js --dir <drill-dir> --ao-gate kernel-migration/ao-dependency-gate.json [--operator ...] [--decision pending|go|no-go] [--strict]` assembles the final machine closeout log, but AO/manual proofs may still be open and must be recorded separately.
 - WEDOS profile readiness validator: `npm run ops:validate-wedos-readiness -- --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--strict]`.
 - Legacy import manifest validator: `npm run ops:validate-legacy-manifest -- [--manifest libs/legacy/MANIFEST.md] [--legacy-dir libs/legacy] [--strict] [--json]`.
+- Legacy no-import evidence checker: `npm run ops:check-legacy-no-import-evidence -- [--root src] [--manifest libs/legacy/MANIFEST.md] [--modules <csv>] [--strict] [--json]` scans `src/**` for references to `libs/legacy/<module>` and emits machine-readable evidence for the legacy boundary check.
 - Legacy risk audit helper: `npm run ops:audit-legacy-risk -- [--dir libs/legacy] [--strict] [--json]`.
 - Legacy migration matrix generator: `npm run ops:build-legacy-migration-matrix -- [--manifest libs/legacy/MANIFEST.md] [--risk <audit-json>] [--out kernel-migration/legacy-libs-matrix.md] [--json]`.
 - Runtime config boundary check: `npm run ops:check-config-loader-runtime-boundary -- [--root src] [--strict] [--json]` flags any raw `process.env` usage under `src/runtime/**` outside `src/runtime/config/loader.ts`.

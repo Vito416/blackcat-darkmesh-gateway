@@ -39,6 +39,20 @@ describe.sequential('handler gopay webhook route', () => {
     const res = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body, headers }))
     expect(res.status).toBe(200)
     await expect(res.text()).resolves.toBe('ok')
+  }, 15000)
+
+  it('accepts a prefixed and padded gopay signature', async () => {
+    process.env.GOPAY_WEBHOOK_SECRET = webhookSecret
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'event-prefix', amount: 1000 })
+    const headers = new Headers({
+      'x-gopay-signature': ` sha256=${gopaySignature(body, webhookSecret)} `,
+      'x-gopay-event-id': 'gopay-event-000-prefix',
+    })
+
+    const res = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body, headers }))
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('ok')
   })
 
   it('returns 401 when gopay signature is invalid', async () => {

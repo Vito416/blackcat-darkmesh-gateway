@@ -44,8 +44,7 @@ export type WorkerNotifyConfig = {
 }
 
 function readRawEnv(name: string, env?: Record<string, string | undefined>): string | undefined {
-  if (env) return env[name]
-  const loaded = loadStringConfig(name)
+  const loaded = loadStringConfig(name, { env })
   return loaded.ok ? loaded.value : undefined
 }
 

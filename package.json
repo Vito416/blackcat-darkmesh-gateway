@@ -22,6 +22,7 @@
     "ops:check-legacy-runtime-boundary": "node scripts/check-legacy-runtime-boundary.js",
     "ops:check-installer-runtime-boundary": "node scripts/check-installer-runtime-boundary.js",
     "ops:check-config-loader-runtime-boundary": "node scripts/check-config-loader-runtime-boundary.js",
+    "ops:check-legacy-no-import-evidence": "node scripts/check-legacy-no-import-evidence.js",
     "ops:audit-legacy-risk": "node scripts/audit-legacy-risk.js",
     "ops:build-legacy-migration-matrix": "node scripts/build-legacy-migration-matrix.js",
     "ops:build-release-evidence-pack": "node scripts/build-release-evidence-pack.js",
