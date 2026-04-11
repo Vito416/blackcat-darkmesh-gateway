@@ -271,6 +271,33 @@ describe('template api policy gateway', () => {
     expect(String(url)).toBe('https://allowed.example/api/public/resolve-route')
   })
 
+  it('rejects secret-smuggling fields in template payloads before upstream fetch', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      payload: {
+        host: 'example.com',
+        path: '/shop',
+        customer: {
+          profile: {
+            apiKey: 'secret-value',
+          },
+        },
+      },
+    })
+
+    expect(res.status).toBe(400)
+    await expect(res.text()).resolves.toContain('payload_contains_forbidden_secret_fields')
+    expect(spy).not.toHaveBeenCalled()
+  })
+
   it('blocks write actions unless explicitly enabled', async () => {
     process.env.WRITE_API_URL = 'https://write.example'
     const req = new Request('http://gateway/template/call', {

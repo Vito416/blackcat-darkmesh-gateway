@@ -26,6 +26,13 @@
       "proof": "deterministic canonical JSON is used for integrity evidence and checkpoint signing"
     },
     {
+      "name": "hash primitives",
+      "legacySymbols": ["sha256Hex", "sha256Utf8", "hashJsonCanonical"],
+      "gatewayPaths": ["src/runtime/core/hash.ts"],
+      "tests": ["tests/runtime-core-hash.test.ts"],
+      "proof": "deterministic SHA-256 helpers now live in the gateway runtime and are covered by known vectors plus canonical JSON parity tests"
+    },
+    {
       "name": "template helpers",
       "legacySymbols": ["template action guards", "template backend validation"],
       "gatewayPaths": ["src/runtime/template/actions.ts", "src/runtime/template/validators.ts"],

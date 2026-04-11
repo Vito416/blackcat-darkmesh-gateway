@@ -10,11 +10,18 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.
 - Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, strict manifest validation log, and drill artifact check JSON as one drill bundle.
 - Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-manual-proofs`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness`, but the final state is still split as `automation-complete` plus `ao-manual-pending` until the AO/manual proofs land.
-- Worker-routing and secrets-boundary tooling is now being tracked alongside the gateway libs workstream: `check-template-worker-routing-config`, `init-template-worker-routing`, and the trust-model validator hook are in place or in-flight, but they are guardrails only and do not change AO blocker status.
+- Worker-routing and secrets-boundary tooling is now being tracked alongside the gateway libs workstream: `check-template-worker-routing-config`, `init-template-worker-routing`, and `validate-worker-secrets-trust-model` form the public-template/worker boundary checks, but they are guardrails only and do not change AO blocker status.
 - Treat that output as machine-checked evidence only; AO gate closure and manual evidence still need separate drill logs, rollback proof, and human sign-off before decommission.
 - Validator ordering for operator drills is now fixed: build the drill bundle, validate the drill manifest, check drill artifacts, build the evidence ledger/log, then run closeout readiness and AO gate evidence checks before any sign-off is recorded.
 - Evidence quality split is mandatory in every note/log: `automation-complete` covers machine outputs only, while `ao-manual-pending` and `ao-manual-blocked` cover AO-side closure, rollback proof, and human approvals that still need to land or are still blocked.
 - Boundary reference for template/public/gateway/worker secret handling: `ops/worker-secrets-trust-model.md`.
+
+### Worker-routing and trust-model enforcement
+
+- `check-template-worker-routing-config` validates the published tenant URL/token map before routing is published.
+- `init-template-worker-routing` is scaffold-only and exists to prepare a new routing set without granting extra privileges.
+- `validate-worker-secrets-trust-model` documents the public-template/gateway/worker split and should be treated as the machine companion to `ops/worker-secrets-trust-model.md`.
+- Final decommission still needs the archived routing map/token map, the trust-model validation log, and the closeout bundle that proves worker secrets stayed out of request-path runtime.
 
 ### Gateway libs consolidation workstream
 
@@ -39,10 +46,11 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] `blackcat-config`: keep the gateway-owned config loader/profile contract aligned with request-path usage, then capture decommission proof once the removal evidence is archived.
   - Progress note: typed config loader with source metadata now lives in `src/runtime/config/loader.ts` and is covered by `tests/runtime-config-loader.test.ts`.
   - Progress note: loader wiring is active in request-path modules (`src/templateApi.ts`, `src/handler.ts`, `src/webhooks.ts`, `src/ratelimit.ts`, `src/replay.ts`).
-- [~] `blackcat-core`: groundwork exists (`src/runtime/core/bytes.ts`, `tests/runtime-core-bytes.test.ts`); next is expanding `src/runtime/core/` primitive coverage and keeping the template helper contract aligned with `tests/template-api.test.ts`.
+- [~] `blackcat-core`: partially extracted; byte, JSON, canonical JSON, hash, and template helpers now live in gateway-owned runtime code, and the remaining work is removal evidence.
   - Progress note: JSON-safe core parsing helpers landed in `src/runtime/core/json.ts` with focused tests in `tests/runtime-core-json.test.ts`.
   - Progress note: the canonical JSON primitive now has a gateway-owned implementation in `src/runtime/core/canonicalJson.ts`; keep primitive-by-primitive mapping notes aligned as coverage expands.
-- [~] `blackcat-crypto`: expand from safe-compare and signature-ref helpers to the full runtime crypto boundary (verification/signing key handling), then add module decommission proof.
+  - Progress note: deterministic SHA-256 helpers now live in `src/runtime/core/hash.ts` with focused coverage in `tests/runtime-core-hash.test.ts`.
+- [~] `blackcat-crypto`: partially extracted; signature comparison, HMAC, and signature-ref helpers now live in gateway-owned runtime code, and the remaining work is verification/signing-key handling plus decommission proof.
   - Progress note: signature-ref normalization/validation helpers now live in `src/runtime/crypto/signatureRefs.ts` with focused coverage in `tests/runtime-crypto-signatureRefs.test.ts`; the verification boundary stays independent from wallet/private-key logic.
   - Progress note: HMAC verification now has a gateway-owned helper in `src/runtime/crypto/hmac.ts` with focused coverage in `tests/runtime-crypto-hmac.test.ts`.
 - [~] `blackcat-auth`: keep the HTTP auth and role/signature policy helpers aligned with request-path modules, then capture the removal proof once the snapshot stays unused.
@@ -59,7 +67,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
   - Progress note: ownership is now fixed to gateway public queue/transport + worker-owned secret credentials (`ops/worker-secrets-trust-model.md`), with machine enforcement via `scripts/check-mailing-secret-boundary.js` and `tests/check-mailing-secret-boundary.test.ts`.
 - [~] `blackcat-gopay`: provider/validator helpers now have webhook verification and idempotency groundwork (`src/runtime/payments/gopayWebhook.ts`, `src/runtime/payments/webhookIdempotency.ts`, `/webhook/gopay` in `src/handler.ts`, `tests/handler-gopay-webhook.test.ts`); the remaining open item is the final payment-boundary decommission evidence.
 - [~] `blackcat-analytics`: sink/export boundary now has a runtime retention/drop helper and coverage; keep the final destination decision and decommission evidence aligned once accepted/dropped paths stay deterministic.
-- [~] `blackcat-installer`: keep installer logic ops-only (`ops/` + `scripts/`), and enforce zero request-path imports from installer snapshot.
+- [~] `blackcat-installer`: do-not-port candidate; keep installer logic ops-only (`ops/` + `scripts/`), and enforce zero request-path imports from installer snapshot.
   - Progress note: runtime boundary check exists via `scripts/check-installer-runtime-boundary.js` with coverage in `tests/check-installer-runtime-boundary.test.ts`.
 
 ### Current wave next actions (core + client boundaries + mailing/GoPay)
@@ -73,7 +81,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] auth-js/crypto-js client boundaries:
   - Harden and merge the current client boundaries (`src/clients/auth-sdk/client.ts`, `src/clients/crypto-sdk/client.ts`) with explicit ownership notes and zero request-path runtime coupling.
   - Keep and expand boundary contract coverage (`tests/clients-auth-sdk.test.ts`, `tests/clients-crypto-sdk.test.ts`) before any legacy JS snapshot removal decision.
-  - Wire docs so map/plan/decommission files all point to the same boundary paths and status (`in progress`, not done).
+  - Wire docs so map/plan/decommission files all point to the same boundary paths and status (`partially extracted` for core/crypto, `pending (do-not-port candidate)` for installer).
 - [~] mailing queue + transport progression:
   - Finalize the runtime queue/transport boundary (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`) and document the configuration contract (endpoint/token/timeout).
   - Keep and expand focused queue/transport coverage (`tests/runtime-mailing-transport.test.ts`) plus one delivery-path integration assertion.

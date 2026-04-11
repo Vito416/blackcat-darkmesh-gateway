@@ -10,6 +10,7 @@ import { fetchIntegritySnapshot } from './integrity/client.js'
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
 import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
 import { applySecurityHeaders } from './securityHeaders.js'
+import { forwardForgetEvent, readForgetForwardConfig } from './runtime/sessions/forgetForward.js'
 import {
   classifyGoPayWebhookIdempotency,
   getGoPayWebhookIdempotencyPolicy,
@@ -745,7 +746,23 @@ export async function handleRequest(request: Request): Promise<Response> {
     let removed = 0
     if (subject) removed = forgetSubject(subject)
     if (key) removed = dropKey(key) ? 1 : removed
-    return respond(JSON.stringify({ removed }), { status: 200, headers: { 'content-type': 'application/json' } })
+    const forwardConfig = readForgetForwardConfig()
+    const forwardResult = await forwardForgetEvent(
+      {
+        ...(subject ? { subject } : {}),
+        ...(key ? { key } : {}),
+        removed,
+        ts: new Date().toISOString(),
+      },
+      forwardConfig,
+    )
+    return respond(
+      JSON.stringify({
+        removed,
+        forwarded: forwardResult.forwarded,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
   }
   if (url.pathname.startsWith('/cache/')) {
     const key = url.pathname.replace('/cache/', '')

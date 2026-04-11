@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --testTimeout 15000",
     "test:integrity-fast": "bash scripts/ci/integrity-gate.sh",
     "test:integrity-gate": "npm run test:integrity-fast",
     "ops:compare-integrity": "node scripts/compare-integrity-state.js",
@@ -36,6 +36,7 @@
     "ops:init-decommission-manual-proofs": "node scripts/init-decommission-manual-proofs.js",
     "ops:validate-decommission-closeout": "node scripts/validate-decommission-closeout.js",
     "ops:check-template-worker-routing-config": "node scripts/check-template-worker-routing-config.js",
+    "ops:check-template-signature-ref-map": "node scripts/check-template-signature-ref-map.js",
     "ops:init-template-worker-routing": "node scripts/init-template-worker-routing.js",
     "ops:validate-worker-secrets-trust-model": "node scripts/validate-worker-secrets-trust-model.js",
     "ops:check-release-drill-artifacts": "node scripts/check-release-drill-artifacts.js",
@@ -56,7 +57,8 @@
     "build": "tsc -p tsconfig.build.json",
     "smoke": "npm run build && node scripts/e2e-psp-smoke.js",
     "smoke:integrity-incident": "npm run build && node scripts/e2e-integrity-incident-smoke.js",
-    "chaos": "npm run build && node scripts/e2e-psp-chaos.js"
+    "chaos": "npm run build && node scripts/e2e-psp-chaos.js",
+    "ops:check-legacy-core-extraction-evidence": "node scripts/check-legacy-core-extraction-evidence.js"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

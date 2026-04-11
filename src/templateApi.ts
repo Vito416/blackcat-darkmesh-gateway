@@ -5,6 +5,7 @@ import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
 import { requireAllowedRole } from './runtime/auth/policy.js'
 import { bodyExceedsUtf8Limit, utf8ByteLength } from './runtime/core/index.js'
 import { getTemplateActionPolicy, type BackendTarget, type TemplateActionPolicy } from './runtime/template/actions.js'
+import { inspectTemplateSecretPayload, type TemplateSecretGuardResult } from './runtime/template/secretGuard.js'
 import { getTemplateContractAction, type TemplateContractAction } from './templateContract.js'
 
 type TemplateCallInput = {
@@ -379,6 +380,12 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   if (!valid.ok) {
     const detail = 'error' in valid ? valid.error : 'invalid_payload'
     return jsonError(400, 'invalid_payload', { detail })
+  }
+
+  const secretGuard = inspectTemplateSecretPayload(input.payload)
+  if (!secretGuard.ok) {
+    const blocked = secretGuard as Extract<TemplateSecretGuardResult, { ok: false }>
+    return jsonError(blocked.status, blocked.error, blocked.detail)
   }
 
   const requestId = asNonEmptyString(input.requestId)

@@ -56,8 +56,9 @@
   - Integrity incidents/state: `gateway_integrity_incident_total`, `gateway_integrity_incident_duplicate_total`, `gateway_integrity_incident_auth_blocked_total`, `gateway_integrity_incident_role_blocked_total`, `gateway_integrity_incident_notify_fail_total`, `gateway_integrity_state_read_total`, `gateway_integrity_mirror_mismatch_total`, `gateway_integrity_mirror_fetch_fail_total`.
   - Integrity audit tracking: `gateway_integrity_audit_seq_from`, `gateway_integrity_audit_seq_to`, `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `gateway_integrity_audit_stream_anomaly_total`.
 - WAL/DLQ (from Write export): see Write dashboards for `write.webhook.dlq_size` and `write.wal.bytes` to spot downstream backlog.
-- Cache purge: `/cache/forget` (POST) with `GATEWAY_FORGET_TOKEN` bearer; body `{subject?, key?}`; returns `{removed}`.
+- Cache purge: `/cache/forget` (POST) with `GATEWAY_FORGET_TOKEN` bearer; body `{subject?, key?}`; returns `{removed, forwarded}`.
 - AO hook: configure AO ForgetSubject to POST to `/cache/forget` with the same token to wipe subject-indexed blobs.
+- Optional forward hook: set `GATEWAY_FORGET_FORWARD_URL` plus `GATEWAY_FORGET_FORWARD_TOKEN` and (optionally) `GATEWAY_FORGET_FORWARD_TIMEOUT_MS` to relay successful forgets to a per-site worker; the local forget stays 200 even if the forward times out or fails.
 - PSP certs: allowlist prefixes `PAYPAL_CERT_ALLOW_PREFIXES`, pins `GW_CERT_PIN_SHA256`, TTL `GW_CERT_CACHE_TTL_MS`; cert cache size exported.
 - Diskless mode: `GATEWAY_INTEGRITY_DISKLESS=1` (or `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`) disables checkpoint file IO and keeps integrity state memory-only.
 - Checkpoint age: compare `gateway_integrity_checkpoint_age_seconds` against your max-age policy; stale checkpoints should be treated as absent.

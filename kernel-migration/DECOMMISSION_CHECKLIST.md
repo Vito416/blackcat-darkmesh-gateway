@@ -13,8 +13,8 @@ For each module below, require the same three proof types before marking it reti
 | Legacy module | Module-specific proof expectations |
 | --- | --- |
 | `blackcat-config` | Replacement in `src/runtime/config/`; pass `tests/runtime-config-loader.test.ts`, `tests/runtime-config-profile.test.ts`, and `tests/profile-tuning-sync.test.ts`; attach `rg -n "libs/legacy/blackcat-config" src` output. |
-| `blackcat-core` | Replacement in `src/runtime/core/` and template helpers in `src/runtime/template/`; keep `kernel-migration/core-primitive-map.json` aligned with the gateway runtime, pass `tests/runtime-core-bytes.test.ts`, `tests/runtime-core-json.test.ts`, `tests/runtime-core-canonicalJson.test.ts`, `tests/template-api.test.ts`, and `tests/validate-template-backend-contract.test.ts`; attach `rg -n "libs/legacy/blackcat-core" src` output. |
-| `blackcat-crypto` | Replacement in `src/runtime/crypto/`; pass `tests/runtime-crypto-safeCompare.test.ts`, `tests/runtime-crypto-hmac.test.ts`, `tests/runtime-crypto-signatureRefs.test.ts`, `tests/runtime-crypto-boundary.test.ts`, and `tests/webhooks.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto" src` output plus runtime boundary proof (`verification-only`, no wallet/private-key signing). |
+| `blackcat-core` | Replacement in `src/runtime/core/` and template helpers in `src/runtime/template/`; keep `kernel-migration/core-primitive-map.json` aligned with the gateway runtime, pass `tests/runtime-core-bytes.test.ts`, `tests/runtime-core-json.test.ts`, `tests/runtime-core-canonicalJson.test.ts`, `tests/runtime-core-hash.test.ts`, `tests/template-api.test.ts`, and `tests/validate-template-backend-contract.test.ts`; attach `rg -n "libs/legacy/blackcat-core" src` output. |
+| `blackcat-crypto` | Replacement in `src/runtime/crypto/`; pass `tests/runtime-crypto-safeCompare.test.ts`, `tests/runtime-crypto-hmac.test.ts`, `tests/runtime-crypto-signatureRefs.test.ts`, and `tests/webhooks.test.ts`; attach `rg -n "libs/legacy/blackcat-crypto" src` output plus runtime boundary proof (`verification-only`, no wallet/private-key signing). |
 | `blackcat-auth` | Replacement in `src/runtime/auth/`; pass `tests/runtime-auth-httpAuth.test.ts`, `tests/runtime-auth-policy.test.ts`, and `tests/metrics-auth.test.ts`; attach `rg -n "libs/legacy/blackcat-auth" src` output. |
 | `blackcat-sessions` | Replacement in `src/runtime/sessions/`; pass `tests/runtime-sessions-replayStore.test.ts`, `tests/runtime-sessions-lifecycle.test.ts`, and `tests/rate-replay-limits.test.ts`; attach `rg -n "libs/legacy/blackcat-sessions" src` output. |
 | `blackcat-auth-js` | Gateway-owned client boundary exists (`src/clients/auth-sdk/` or documented equivalent); pass `tests/clients-auth-sdk.test.ts`; attach `rg -n "libs/legacy/blackcat-auth-js" src` output. |
@@ -22,7 +22,7 @@ For each module below, require the same three proof types before marking it reti
 | `blackcat-mailing` | Replacement in `src/runtime/mailing/`; pass `tests/runtime-mailing-policy.test.ts`, `tests/runtime-mailing-transport.test.ts`, `tests/runtime-mailing-delivery.test.ts`, `tests/runtime-mailing-integration.test.ts`, and `tests/check-mailing-secret-boundary.test.ts`; attach `rg -n "libs/legacy/blackcat-mailing" src` output plus `npm run ops:check-mailing-secret-boundary -- --strict`. |
 | `blackcat-gopay` | Replacement in `src/runtime/payments/`; pass `tests/runtime-payments-validators.test.ts` and `tests/handler-gopay-webhook.test.ts`; attach `rg -n "libs/legacy/blackcat-gopay" src` output. |
 | `blackcat-analytics` | Replacement in `src/runtime/telemetry/analytics/`; pass `tests/runtime-telemetry-analytics.test.ts`; attach `rg -n "libs/legacy/blackcat-analytics" src` output. |
-| `blackcat-installer` | Explicit ops-only classification (`ops/` + `scripts/` references only); pass `npm run ops:check-installer-runtime-boundary -- --strict`; attach `rg -n "blackcat-installer|libs/legacy/blackcat-installer" src` output showing no request-path usage. |
+| `blackcat-installer` | Explicit ops-only classification (`ops/` + `scripts/` references only); pass `npm run ops:check-installer-runtime-boundary -- --strict`; attach `rg -n "blackcat-installer|libs/legacy/blackcat-installer" src` output showing no request-path usage. Treat this as a do-not-port candidate unless scope is explicitly approved. |
 
 ## A. Knowledge preservation
 
@@ -47,6 +47,13 @@ For each module below, require the same three proof types before marking it reti
 - [ ] Template-backend contract is defined and validated before legacy repos are retired.
 - [x] Replay/idempotency checks exist for privileged integrity actions.
 - [x] Incident path exists (report + operational response).
+
+### C.1 Worker-routing and trust-model boundary
+
+- `check-template-worker-routing-config` validates the published tenant URL/token map before routing is published.
+- `init-template-worker-routing` is scaffold-only and prepares a routing set without changing trust policy.
+- `validate-worker-secrets-trust-model` is the machine companion to `ops/worker-secrets-trust-model.md` and should remain a strict gate once wired into release checks.
+- Before final decommission, archive the final routing map/token map, the trust-model validation log, and proof that worker secrets stayed out of request-path runtime.
 
 ## D. Observability
 

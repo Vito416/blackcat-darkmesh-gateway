@@ -6,7 +6,16 @@ Operator and test helpers live here. Keep them dependency-light, explicit, and s
 
 - `scripts/check-template-worker-routing-config.js` validates tenant URL/token routing maps before they are published.
 - `scripts/init-template-worker-routing.js` scaffolds a new routing map for a site set.
+- `scripts/check-template-signature-ref-map.js` validates `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` before release signoff so every required site has a non-empty signature ref.
 - `npm run ops:validate-worker-secrets-trust-model` is the machine-check companion for `ops/worker-secrets-trust-model.md`; keep it CI-gated once the script is wired in.
+
+Usage:
+```bash
+npm run ops:check-template-signature-ref-map -- --json
+npm run ops:check-template-signature-ref-map -- --require-sites alpha,beta --strict
+GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP='{"alpha":"sig-alpha","beta":"sig-beta"}' \
+  node scripts/check-template-signature-ref-map.js --require-sites alpha,beta --json
+```
 
 ## Integrity incident helper
 
@@ -319,6 +328,22 @@ npm run ops:check-legacy-runtime-boundary -- --root src --json
 Exit codes:
 - `0` pass, or findings without `--strict`
 - `3` findings in `--strict` mode, or a runtime error occurred
+- `64` usage error
+
+## Legacy core extraction evidence
+
+`scripts/check-legacy-core-extraction-evidence.js` machine-checks the blackcat-core extraction boundary by verifying required runtime files, required tests, and the absence of `libs/legacy/blackcat-core` references under `src/`.
+
+Usage:
+```bash
+npm run ops:check-legacy-core-extraction-evidence
+npm run ops:check-legacy-core-extraction-evidence -- --strict
+npm run ops:check-legacy-core-extraction-evidence -- --root . --json
+```
+
+Exit codes:
+- `0` evidence is complete, or issues were reported without `--strict`
+- `3` evidence gaps found in `--strict` mode, or a runtime error occurred
 - `64` usage error
 
 ## Mailing secret boundary check

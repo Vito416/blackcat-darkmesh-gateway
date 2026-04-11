@@ -31,6 +31,11 @@ describe('metrics exporter', () => {
     expect(prom).toContain('# HELP gateway_webhook_replay_pruned_total Replay detector keys pruned by expiry/cap')
     expect(prom).toContain('# HELP gateway_ratelimit_max_buckets Configured max rate-limit bucket count')
     expect(prom).toContain('# HELP gateway_webhook_replay_max_keys Configured replay detector max key count')
+    expect(prom).toContain('# HELP gateway_cache_forget_forward_attempt_total Cache forget events attempted for worker forwarding')
+    expect(prom).toContain('# HELP gateway_cache_forget_forward_success_total Cache forget events successfully forwarded to worker')
+    expect(prom).toContain('# HELP gateway_cache_forget_forward_failed_total Cache forget events that failed worker forwarding')
+    expect(prom).toContain('# HELP gateway_cache_forget_forward_timeout_total Cache forget events that timed out during worker forwarding')
+    expect(prom).toContain('# HELP gateway_cache_forget_forward_skipped_total Cache forget events skipped because forwarding is not configured')
     expect(prom).toContain(
       '# HELP gateway_integrity_checkpoint_age_seconds Age of the last integrity checkpoint/snapshot audit in seconds',
     )

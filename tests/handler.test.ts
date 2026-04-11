@@ -2,10 +2,24 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 describe('handler cache and shadow modes', () => {
   const originalEnv = { ...process.env }
+  let fetchMock: ReturnType<typeof vi.fn>
   beforeEach(() => {
     vi.resetModules()
+    delete process.env.GATEWAY_FORGET_FORWARD_URL
+    delete process.env.GATEWAY_FORGET_FORWARD_TOKEN
+    delete process.env.GATEWAY_FORGET_FORWARD_TIMEOUT_MS
+    delete process.env.AO_INTEGRITY_URL
+    delete process.env.AO_INTEGRITY_MIRROR_URLS
+    delete process.env.AO_INTEGRITY_MIRROR_STRICT
+    delete process.env.GATEWAY_INTEGRITY_CHECKPOINT_PATH
+    delete process.env.GATEWAY_INTEGRITY_CHECKPOINT_SECRET
+    delete process.env.GATEWAY_INTEGRITY_DISKLESS
+    delete process.env.GATEWAY_INTEGRITY_CHECKPOINT_MODE
+    fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
   })
   afterEach(() => {
+    vi.unstubAllGlobals()
     process.env = { ...originalEnv }
   })
 
@@ -30,6 +44,45 @@ describe('handler cache and shadow modes', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.removed).toBe(1)
+    expect(body.forwarded).toBe(false)
+  })
+
+  it('forwards cache forget events when configured', async () => {
+    process.env.GATEWAY_FORGET_TOKEN = 'secret'
+    process.env.GATEWAY_FORGET_FORWARD_URL = 'https://worker.example/cache/forget'
+    process.env.GATEWAY_FORGET_FORWARD_TOKEN = 'forward-secret'
+    const { handleRequest } = await import('../src/handler.js')
+
+    const putReq = new Request('http://gateway/cache/foo', {
+      method: 'PUT',
+      body: 'abc',
+      headers: { 'content-type': 'application/octet-stream', 'x-subject': 'subj1' },
+    })
+    await handleRequest(putReq)
+
+    const forgetReq = new Request('http://gateway/cache/forget', {
+      method: 'POST',
+      body: JSON.stringify({ subject: 'subj1', key: 'foo' }),
+      headers: { 'content-type': 'application/json', 'x-forget-token': 'secret' },
+    })
+    const res = await handleRequest(forgetReq)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.removed).toBe(1)
+    expect(body.forwarded).toBe(true)
+    const forwardCall = fetchMock.mock.calls.find(([url]) => String(url) === 'https://worker.example/cache/forget')
+    expect(forwardCall).toBeDefined()
+    const [, init] = forwardCall || []
+    expect(init?.method).toBe('POST')
+    expect(init?.headers).toMatchObject({
+      authorization: 'Bearer forward-secret',
+      'content-type': 'application/json',
+    })
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      subject: 'subj1',
+      key: 'foo',
+      removed: 1,
+    })
   })
 
   it('uses timing-safe matching for metrics auth tokens', async () => {

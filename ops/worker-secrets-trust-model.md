@@ -38,6 +38,7 @@ This document formalizes the boundary for the gateway/template/worker split.
 
 - Templates must be verified against a trusted manifest or equivalent signed/public proof before serving.
 - Gateway request handlers must reject any payload that tries to smuggle worker-secret fields.
+- Template `/template/call` payloads are scanned recursively for secret-like keys and fail closed before any upstream call.
 - Worker-facing calls must be explicit, site-scoped, and authenticated.
 - Secret-bearing values must stay on the worker side unless they are transformed into a public-safe result.
 - Any cache in gateway must be TTL-bounded and treat encrypted envelopes as opaque; secrets themselves never enter the cache.
