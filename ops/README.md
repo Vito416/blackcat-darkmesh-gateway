@@ -22,7 +22,12 @@
 - Decommission closeout artifact validator: `npm run ops:validate-decommission-closeout -- --file <drill-dir>/decommission-closeout.json [--strict] [--json]` verifies closeout shape and can hard-fail when closeout is not `ready`.
 - Worker-routing config checker: `node scripts/check-template-worker-routing-config.js --url-map <json> [--token-map <json>] [--strict] [--json]` validates tenant URL/token map shape before routing is published.
 - Worker-routing scaffold helper: `node scripts/init-template-worker-routing.js --sites <csv> [--url-map-out <file>] [--token-map-out <file>] [--force]` generates the routing map skeleton for a new site set.
+- Template signature-ref map checker: `npm run ops:check-template-signature-ref-map -- --strict --json` reads `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` from repo vars/secrets in CI; when it is unset, the checker reports a deterministic `blocked` status instead of guessing.
 - Worker-secrets trust-model validator: `npm run ops:validate-worker-secrets-trust-model -- --help` is the companion machine check for `ops/worker-secrets-trust-model.md` and should stay a strict CI gate once wired.
+- Template secret-smuggling guard: `/template/call` recursively scans payloads for secret-like fields and fail-closes before any upstream fetch; keep the matching tests in `tests/runtime-template-secretGuard.test.ts` and `tests/template-api.test.ts` green.
+- Forget-forward semantics: `/cache/forget` stays local-200 even if the optional worker forward skips, times out, or fails; the relay is best-effort only and uses the `GATEWAY_FORGET_FORWARD_*` settings when enabled.
+- Core hash evidence: `src/runtime/core/hash.ts` and `tests/runtime-core-hash.test.ts` provide the gateway-owned SHA-256 helpers that replace the remaining black-box core hashing path.
+- TypeScript config migration: `tsconfig.json` now uses `NodeNext`, which removes the deprecated `moduleResolution=node10` path and keeps the repo aligned with current TypeScript tooling.
 - AO gate evidence quality check: `npm run ops:check-ao-gate-evidence -- --file kernel-migration/ao-dependency-gate.json [--strict] [--json]`.
 - Final migration summary validator: `npm run ops:validate-final-migration-summary -- --file kernel-migration/FINAL_MIGRATION_SUMMARY.md [--strict] [--json]`.
 - Signoff record validator: `npm run ops:validate-signoff-record -- --file kernel-migration/SIGNOFF_RECORD.md [--strict] [--json]`.
@@ -59,6 +64,7 @@
 - Cache purge: `/cache/forget` (POST) with `GATEWAY_FORGET_TOKEN` bearer; body `{subject?, key?}`; returns `{removed, forwarded}`.
 - AO hook: configure AO ForgetSubject to POST to `/cache/forget` with the same token to wipe subject-indexed blobs.
 - Optional forward hook: set `GATEWAY_FORGET_FORWARD_URL` plus `GATEWAY_FORGET_FORWARD_TOKEN` and (optionally) `GATEWAY_FORGET_FORWARD_TIMEOUT_MS` to relay successful forgets to a per-site worker; the local forget stays 200 even if the forward times out or fails.
+- Forget-forward config checker: `npm run ops:check-forget-forward-config -- [--strict] [--json]` validates the optional relay boundary and treats a missing URL as pending while still flagging invalid URLs, blank tokens, and out-of-range timeouts.
 - PSP certs: allowlist prefixes `PAYPAL_CERT_ALLOW_PREFIXES`, pins `GW_CERT_PIN_SHA256`, TTL `GW_CERT_CACHE_TTL_MS`; cert cache size exported.
 - Diskless mode: `GATEWAY_INTEGRITY_DISKLESS=1` (or `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`) disables checkpoint file IO and keeps integrity state memory-only.
 - Checkpoint age: compare `gateway_integrity_checkpoint_age_seconds` against your max-age policy; stale checkpoints should be treated as absent.

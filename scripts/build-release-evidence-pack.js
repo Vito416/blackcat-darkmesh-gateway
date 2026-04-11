@@ -11,6 +11,18 @@ const DEFAULT_REQUIRED_AO_CHECKS = [
   'p1_1_authority_rotation_workflow',
   'p1_2_audit_commitments_stream',
 ]
+const OPTIONAL_EVIDENCE_FILES = {
+  coreExtraction: [
+    'check-legacy-core-extraction-evidence.json',
+    'legacy-core-extraction-evidence.json',
+    'core-extraction-evidence.json',
+  ],
+  templateSignatureRefMap: [
+    'check-template-signature-ref-map.json',
+    'template-signature-ref-map.json',
+    'signature-ref-map-check.json',
+  ],
+}
 
 function usage(exitCode = 0) {
   console.log(
@@ -178,6 +190,140 @@ function normalizeRequiredAoChecks(value) {
   return out.length > 0 ? out : DEFAULT_REQUIRED_AO_CHECKS.slice()
 }
 
+function normalizeOptionalEvidenceStatus(value) {
+  if (!isNonEmptyString(value)) return 'missing'
+  const status = value.trim().toLowerCase()
+  switch (status) {
+    case 'pass':
+    case 'complete':
+    case 'closed':
+    case 'ready':
+    case 'ok':
+      return 'pass'
+    case 'warn':
+    case 'warning':
+    case 'pending':
+    case 'issues-found':
+    case 'issue':
+    case 'issues':
+      return 'warn'
+    case 'fail':
+    case 'blocked':
+    case 'invalid':
+      return 'fail'
+    case 'missing':
+      return 'missing'
+    default:
+      return status
+  }
+}
+
+function summarizeCoreExtractionEvidence(payload, filePath) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return {
+      present: true,
+      status: 'invalid',
+      reason: 'core extraction evidence payload must be a JSON object',
+      filePath,
+    }
+  }
+
+  const ok = payload.ok === true || payload.status === 'pass'
+  if (ok) {
+    return {
+      present: true,
+      status: 'pass',
+      reason: 'all required runtime files, tests, and import scans passed',
+      filePath,
+    }
+  }
+
+  const runtimeMissingCount = Array.isArray(payload.runtimeMissing) ? payload.runtimeMissing.length : null
+  const testMissingCount = Array.isArray(payload.testMissing) ? payload.testMissing.length : null
+  const importFindingCount = Number.isInteger(payload.importFindingCount) ? payload.importFindingCount : null
+  const scanIssue = isNonEmptyString(payload.importScan?.issue) ? payload.importScan.issue.trim() : ''
+  const parts = []
+
+  if (runtimeMissingCount !== null && runtimeMissingCount > 0) {
+    parts.push(`${runtimeMissingCount} runtime file(s) missing`)
+  }
+  if (testMissingCount !== null && testMissingCount > 0) {
+    parts.push(`${testMissingCount} test file(s) missing`)
+  }
+  if (importFindingCount !== null && importFindingCount > 0) {
+    parts.push(`${importFindingCount} legacy import finding(s)`)
+  }
+  if (scanIssue) {
+    parts.push(`scan issue: ${scanIssue}`)
+  }
+  if (parts.length === 0) {
+    parts.push(`status=${isNonEmptyString(payload.status) ? payload.status.trim() : 'unknown'}`)
+  }
+
+  const strict = payload.strict === true
+  return {
+    present: true,
+    status: strict ? 'fail' : 'warn',
+    reason: parts.join(', '),
+    filePath,
+    runtimeMissingCount,
+    testMissingCount,
+    importFindingCount,
+    strict,
+  }
+}
+
+function summarizeTemplateSignatureRefMapEvidence(payload, filePath) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return {
+      present: true,
+      status: 'invalid',
+      reason: 'template signature-ref map evidence payload must be a JSON object',
+      filePath,
+    }
+  }
+
+  const parsedStatus = normalizeOptionalEvidenceStatus(payload.status)
+  const issues = Array.isArray(payload.issues) ? payload.issues.filter(isNonEmptyString).map((item) => item.trim()) : []
+  const warnings = Array.isArray(payload.warnings) ? payload.warnings.filter(isNonEmptyString).map((item) => item.trim()) : []
+
+  if (parsedStatus === 'pass' || payload.ok === true) {
+    return {
+      present: true,
+      status: 'pass',
+      reason: 'all required signature refs are present',
+      filePath,
+    }
+  }
+
+  const strict = payload.strict === true
+  const missingSites = Array.isArray(payload.missingSites) ? payload.missingSites.filter(isNonEmptyString).map((item) => item.trim()) : []
+  const parts = [...issues, ...warnings]
+  if (missingSites.length > 0) {
+    parts.unshift(`missing signature refs for: ${missingSites.join(', ')}`)
+  }
+  if (parts.length === 0) {
+    parts.push(`status=${isNonEmptyString(payload.status) ? payload.status.trim() : 'unknown'}`)
+  }
+
+  return {
+    present: true,
+    status: strict || parsedStatus === 'fail' ? 'fail' : 'warn',
+    reason: parts.join('; '),
+    filePath,
+    missingSites,
+    strict,
+  }
+}
+
+async function findFirstExistingFileByNames(rootDir, fileNames) {
+  for (const fileName of fileNames) {
+    const found = await findFileByName(rootDir, fileName)
+    if (found) return found
+  }
+  return ''
+}
+
 async function findFileByName(rootDir, fileName) {
   const root = resolve(rootDir)
   if (!(await pathExists(root))) return ''
@@ -192,6 +338,69 @@ async function findFileByName(rootDir, fileName) {
     if (await pathExists(candidate)) return candidate
   }
   return ''
+}
+
+async function collectOptionalEvidenceArtifacts(rootDir) {
+  if (!rootDir) {
+    return {
+      coreExtraction: { present: false, status: 'missing', reason: 'not provided', files: {} },
+      templateSignatureRefMap: { present: false, status: 'missing', reason: 'not provided', files: {} },
+    }
+  }
+
+  const root = resolve(rootDir)
+  const coreExtractionFile = await findFirstExistingFileByNames(root, OPTIONAL_EVIDENCE_FILES.coreExtraction)
+  const signatureRefMapFile = await findFirstExistingFileByNames(root, OPTIONAL_EVIDENCE_FILES.templateSignatureRefMap)
+
+  const coreExtraction = await (async () => {
+    if (!coreExtractionFile) {
+      return {
+        present: false,
+        status: 'missing',
+        reason: 'artifact file not found',
+        filePath: '',
+        files: {},
+      }
+    }
+
+    try {
+      const payload = await readJson(coreExtractionFile)
+      return summarizeCoreExtractionEvidence(payload, coreExtractionFile)
+    } catch (err) {
+      return {
+        present: true,
+        status: 'invalid',
+        reason: err instanceof Error ? err.message : String(err),
+        filePath: coreExtractionFile,
+      }
+    }
+  })()
+
+  const templateSignatureRefMap = await (async () => {
+    if (!signatureRefMapFile) {
+      return {
+        present: false,
+        status: 'missing',
+        reason: 'artifact file not found',
+        filePath: '',
+        files: {},
+      }
+    }
+
+    try {
+      const payload = await readJson(signatureRefMapFile)
+      return summarizeTemplateSignatureRefMapEvidence(payload, signatureRefMapFile)
+    } catch (err) {
+      return {
+        present: true,
+        status: 'invalid',
+        reason: err instanceof Error ? err.message : String(err),
+        filePath: signatureRefMapFile,
+      }
+    }
+  })()
+
+  return { coreExtraction, templateSignatureRefMap }
 }
 
 function resolveConsistencyStatus(matrix) {
@@ -474,6 +683,28 @@ function combineReadiness(consistency, evidence, aoGate, requireBoth, requireAoG
   return { status, blockers, warnings }
 }
 
+function combineOptionalEvidenceSignals(optionalEvidence) {
+  const blockers = []
+  const warnings = []
+
+  for (const [key, entry] of Object.entries(optionalEvidence || {})) {
+    if (!entry || typeof entry !== 'object') continue
+    if (entry.present === false) continue
+
+    const label = key === 'coreExtraction' ? 'core extraction evidence' : 'template signature-ref map evidence'
+    if (entry.status === 'invalid') {
+      blockers.push(`${label} invalid JSON: ${entry.reason}`)
+      continue
+    }
+
+    if (entry.status !== 'pass') {
+      warnings.push(`${label} status=${entry.status}: ${entry.reason}`)
+    }
+  }
+
+  return { blockers, warnings }
+}
+
 function renderMarkdown(pack) {
   const lines = []
   lines.push('# Release Evidence Pack')
@@ -526,6 +757,20 @@ function renderMarkdown(pack) {
   }
   lines.push('')
 
+  lines.push('## Optional evidence')
+  const optionalEvidenceEntries = [
+    ['Core extraction evidence', pack.optionalEvidence?.coreExtraction],
+    ['Template signature-ref map evidence', pack.optionalEvidence?.templateSignatureRefMap],
+  ]
+  for (const [label, entry] of optionalEvidenceEntries) {
+    lines.push(`- ${label}:`)
+    lines.push(`  - Present: ${entry?.present ? 'yes' : 'no'}`)
+    lines.push(`  - Status: ${entry?.status ?? 'missing'}`)
+    lines.push(`  - Reason: ${entry?.reason ?? 'not provided'}`)
+    if (entry?.filePath) lines.push(`  - File: ${entry.filePath}`)
+  }
+  lines.push('')
+
   if (pack.blockers.length > 0) {
     lines.push('## Blockers')
     for (const blocker of pack.blockers) lines.push(`- ${blocker}`)
@@ -546,19 +791,17 @@ function renderMarkdown(pack) {
   return `${lines.join('\n')}\n`
 }
 
-async function writeText(path, content) {
-  const outputPath = resolve(path)
-  await mkdir(dirname(outputPath), { recursive: true })
-  await writeFile(outputPath, content, 'utf8')
-  return outputPath
-}
-
-async function runCli(argv = process.argv.slice(2)) {
-  const args = parseArgs(argv)
+async function buildReleaseEvidencePack(args) {
   const consistency = await collectConsistencyEvidence(args.consistencyDir)
   const evidence = await collectEvidenceBundle(args.evidenceDir)
   const aoGate = await collectAoDependencyGate(args.aoGateFile)
+  const optionalEvidence = await collectOptionalEvidenceArtifacts(args.consistencyDir)
   const readiness = combineReadiness(consistency, evidence, aoGate, args.requireBoth, args.requireAoGate)
+  const optionalSignals = combineOptionalEvidenceSignals(optionalEvidence)
+
+  readiness.blockers.push(...optionalSignals.blockers)
+  readiness.warnings.push(...optionalSignals.warnings)
+  readiness.status = readiness.blockers.length > 0 ? 'not-ready' : readiness.warnings.length > 0 ? 'warning' : 'ready'
 
   const pack = {
     createdAt: new Date().toISOString(),
@@ -569,14 +812,31 @@ async function runCli(argv = process.argv.slice(2)) {
     consistency,
     evidence,
     aoGate,
+    optionalEvidence,
   }
 
-  const markdown = renderMarkdown(pack)
+  return {
+    pack,
+    markdown: renderMarkdown(pack),
+    readiness,
+  }
+}
+
+async function writeText(path, content) {
+  const outputPath = resolve(path)
+  await mkdir(dirname(outputPath), { recursive: true })
+  await writeFile(outputPath, content, 'utf8')
+  return outputPath
+}
+
+async function runCli(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv)
+  const { pack, markdown } = await buildReleaseEvidencePack(args)
   if (args.out) await writeText(args.out, markdown)
   if (args.jsonOut) await writeText(args.jsonOut, `${JSON.stringify(pack, null, 2)}\n`)
 
   process.stdout.write(args.json ? `${JSON.stringify(pack, null, 2)}\n` : markdown)
-  if (readiness.status === 'not-ready') process.exit(3)
+  if (pack.status === 'not-ready') process.exit(3)
 }
 
 async function main() {
@@ -593,8 +853,10 @@ if (isMain) {
 }
 
 export {
+  buildReleaseEvidencePack,
   combineReadiness,
   collectAoDependencyGate,
+  collectOptionalEvidenceArtifacts,
   normalizeAoStatus,
   parseArgs,
   parseTimestampFromDir,

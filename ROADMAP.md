@@ -6,6 +6,7 @@
 - Added replay pruning, webhook/body size caps, and clearer integrity metrics.
 - Split CI into build/tests and the dedicated integrity gate for faster diagnosis.
 - Tuned integrity fetch cadence and alert profiles for WEDOS-style hosting limits.
+- Documented the template secret-smuggling guard, the optional forget-forward relay semantics, the gateway-owned core hash primitive evidence, and the TS `NodeNext` migration so operator docs match the current runtime shape.
 
 ## Phase 1 – MVP (parity with current AO/Write/Worker)
 - Serve Arweave template (hash-verified) + cache with TTL.

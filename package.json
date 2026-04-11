@@ -37,6 +37,7 @@
     "ops:validate-decommission-closeout": "node scripts/validate-decommission-closeout.js",
     "ops:check-template-worker-routing-config": "node scripts/check-template-worker-routing-config.js",
     "ops:check-template-signature-ref-map": "node scripts/check-template-signature-ref-map.js",
+    "ops:check-forget-forward-config": "node scripts/check-forget-forward-config.js",
     "ops:init-template-worker-routing": "node scripts/init-template-worker-routing.js",
     "ops:validate-worker-secrets-trust-model": "node scripts/validate-worker-secrets-trust-model.js",
     "ops:check-release-drill-artifacts": "node scripts/check-release-drill-artifacts.js",

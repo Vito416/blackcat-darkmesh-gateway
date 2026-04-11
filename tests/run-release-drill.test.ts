@@ -6,14 +6,35 @@ import { basename, join } from 'node:path'
 import { runCli, runReleaseDrill } from '../scripts/run-release-drill.js'
 
 const tempDirs: string[] = []
+const TEMPLATE_SIGNATURE_REF_MAP_ENV = 'GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP'
 
 afterEach(() => {
   vi.restoreAllMocks()
+  delete process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV]
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop()
     if (dir) rmSync(dir, { recursive: true, force: true })
   }
 })
+
+function withTemplateSignatureRefMapEnv(value: string | undefined, fn: () => void) {
+  const previous = process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV]
+  if (typeof value === 'undefined') {
+    delete process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV]
+  } else {
+    process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV] = value
+  }
+
+  try {
+    fn()
+  } finally {
+    if (typeof previous === 'undefined') {
+      delete process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV]
+    } else {
+      process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV] = previous
+    }
+  }
+}
 
 function makeTempDir() {
   const dir = mkdtempSync(join(tmpdir(), 'release-drill-'))
@@ -43,37 +64,43 @@ describe('run-release-drill.js', () => {
   })
 
   it('prints a dry-run plan without executing child steps', () => {
-    const result = runCli([
-      '--urls',
-      'https://gw-a.example/integrity/state,https://gw-b.example/integrity/state',
-      '--out-dir',
-      './tmp/release-drill',
-      '--profile',
-      'diskless',
-      '--mode',
-      'all',
-      '--allow-anon',
-      '--release',
-      '2.0.0',
-      '--strict',
-      '--dry-run',
-    ])
+    let result
+    withTemplateSignatureRefMapEnv(undefined, () => {
+      result = runCli([
+        '--urls',
+        'https://gw-a.example/integrity/state,https://gw-b.example/integrity/state',
+        '--out-dir',
+        './tmp/release-drill',
+        '--profile',
+        'diskless',
+        '--mode',
+        'all',
+        '--allow-anon',
+        '--release',
+        '2.0.0',
+        '--strict',
+        '--dry-run',
+      ])
+    })
 
-    expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain('Dry run: release drill')
-    expect(result.stdout).toContain('1) validate consistency preflight')
-    expect(result.stdout).toContain('scripts/compare-integrity-matrix.js')
-    expect(result.stdout).toContain('scripts/export-integrity-evidence.js')
-    expect(result.stdout).toContain('scripts/latest-evidence-bundle.js')
-    expect(result.stdout).toContain('scripts/check-evidence-bundle.js')
-    expect(result.stdout).toContain('release-evidence-pack.json')
-    expect(result.stdout).toContain('release-readiness.json')
-    expect(result.stdout).toContain('scripts/build-release-drill-manifest.js')
-    expect(result.stdout).toContain('scripts/validate-release-drill-manifest.js')
-    expect(result.stdout).toContain('scripts/check-release-drill-artifacts.js')
-    expect(result.stdout).toContain('scripts/build-release-evidence-ledger.js')
-    expect(result.stdout).toContain('Strict readiness: yes')
-    expect(result.stderr).toBe('')
+    expect(result?.exitCode).toBe(0)
+    expect(result?.stdout).toContain('Dry run: release drill')
+    expect(result?.stdout).toContain('1) validate consistency preflight')
+    expect(result?.stdout).toContain('scripts/compare-integrity-matrix.js')
+    expect(result?.stdout).toContain('scripts/export-integrity-evidence.js')
+    expect(result?.stdout).toContain('scripts/latest-evidence-bundle.js')
+    expect(result?.stdout).toContain('scripts/check-evidence-bundle.js')
+    expect(result?.stdout).toContain('scripts/check-legacy-core-extraction-evidence.js')
+    expect(result?.stdout).toContain('scripts/check-template-signature-ref-map.js --json')
+    expect(result?.stdout).toContain('release-drill-checks.json')
+    expect(result?.stdout).toContain('release-evidence-pack.json')
+    expect(result?.stdout).toContain('release-readiness.json')
+    expect(result?.stdout).toContain('scripts/build-release-drill-manifest.js')
+    expect(result?.stdout).toContain('scripts/validate-release-drill-manifest.js')
+    expect(result?.stdout).toContain('scripts/check-release-drill-artifacts.js')
+    expect(result?.stdout).toContain('scripts/build-release-evidence-ledger.js')
+    expect(result?.stdout).toContain('Strict readiness: yes')
+    expect(result?.stderr).toBe('')
   })
 
   it('returns a usage error when required arguments are missing', () => {
@@ -158,6 +185,63 @@ describe('run-release-drill.js', () => {
 
       if (scriptName === 'validate-ao-dependency-gate.js') {
         return makeSpawnResult(`valid dependency gate: ${args[2]}`)
+      }
+
+      if (scriptName === 'check-legacy-core-extraction-evidence.js') {
+        return makeSpawnResult(
+          JSON.stringify(
+            {
+              ok: true,
+              status: 'complete',
+              strict: true,
+              envVar: 'GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP',
+              requiredSites: [],
+              providedSites: [],
+              missingSites: [],
+              counts: {
+                providedCount: 0,
+                requiredCount: 0,
+                missingCount: 0,
+                emptyValueCount: 0,
+              },
+              issues: [],
+              warnings: [],
+              findings: [],
+            },
+            null,
+            2,
+          ),
+        )
+      }
+
+      if (scriptName === 'check-template-signature-ref-map.js') {
+        return makeSpawnResult(
+          JSON.stringify(
+            {
+              ok: true,
+              status: 'complete',
+              strict: true,
+              envVar: 'GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP',
+              requiredSites: ['alpha', 'beta'],
+              providedSites: ['alpha', 'beta'],
+              missingSites: [],
+              counts: {
+                providedCount: 2,
+                requiredCount: 2,
+                missingCount: 0,
+                emptyValueCount: 0,
+              },
+              issues: [],
+              warnings: [],
+              map: {
+                alpha: 'sig-alpha',
+                beta: 'sig-beta',
+              },
+            },
+            null,
+            2,
+          ),
+        )
       }
 
       if (scriptName === 'build-release-evidence-pack.js') {
@@ -267,22 +351,31 @@ describe('run-release-drill.js', () => {
       return makeSpawnResult('', `unexpected script: ${scriptName}`, 3)
     })
 
-    const result = runReleaseDrill(
-      {
-        urlsCsv: 'https://gw-a.example/integrity/state,https://gw-b.example/integrity/state',
-        outDir,
-        profile: 'wedos_medium',
-        mode: 'pairwise',
-        token: 'shared-token',
-        allowAnon: false,
-        release: '2.0.0',
-        strict: true,
+    let result
+    withTemplateSignatureRefMapEnv(
+      JSON.stringify({
+        alpha: 'sig-alpha',
+        beta: 'sig-beta',
+      }),
+      () => {
+        result = runReleaseDrill(
+          {
+            urlsCsv: 'https://gw-a.example/integrity/state,https://gw-b.example/integrity/state',
+            outDir,
+            profile: 'wedos_medium',
+            mode: 'pairwise',
+            token: 'shared-token',
+            allowAnon: false,
+            release: '2.0.0',
+            strict: true,
+          },
+          { spawnSyncFn },
+        )
       },
-      { spawnSyncFn },
     )
 
-    expect(result.exitCode).toBe(0)
-    expect(spawnSyncFn).toHaveBeenCalledTimes(14)
+    expect(result?.exitCode).toBe(0)
+    expect(spawnSyncFn).toHaveBeenCalledTimes(16)
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'validate-consistency-preflight.js',
       'compare-integrity-matrix.js',
@@ -291,6 +384,8 @@ describe('run-release-drill.js', () => {
       'latest-evidence-bundle.js',
       'check-evidence-bundle.js',
       'validate-ao-dependency-gate.js',
+      'check-legacy-core-extraction-evidence.js',
+      'check-template-signature-ref-map.js',
       'build-release-evidence-pack.js',
       'build-release-signoff-checklist.js',
       'check-release-readiness.js',
@@ -299,14 +394,17 @@ describe('run-release-drill.js', () => {
       'check-release-drill-artifacts.js',
       'build-release-evidence-ledger.js',
     ])
-    expect(result.stdout).toContain('[1/14] validate consistency preflight')
-    expect(result.stdout).toContain('# Release Evidence Pack')
-    expect(result.stdout).toContain('# Release Sign-off Checklist')
-    expect(result.stdout).toContain('# Release Evidence Ledger')
-    expect(result.stdout).toContain('"status": "ready"')
-    expect(result.stderr).toBe('')
+    expect(result?.stdout).toContain('[1/16] validate consistency preflight')
+    expect(result?.stdout).toContain('# Release Evidence Pack')
+    expect(result?.stdout).toContain('# Release Sign-off Checklist')
+    expect(result?.stdout).toContain('# Release Evidence Ledger')
+    expect(result?.stdout).toContain('"status": "ready"')
+    expect(result?.stderr).toBe('')
 
     const matrix = JSON.parse(readFileSync(join(outDir, 'consistency-matrix.json'), 'utf8'))
+    const legacyCoreEvidence = JSON.parse(readFileSync(join(outDir, 'legacy-core-extraction-evidence.json'), 'utf8'))
+    const signatureRefMap = JSON.parse(readFileSync(join(outDir, 'template-signature-ref-map.json'), 'utf8'))
+    const drillChecks = JSON.parse(readFileSync(join(outDir, 'release-drill-checks.json'), 'utf8'))
     const pack = JSON.parse(readFileSync(join(outDir, 'release-evidence-pack.json'), 'utf8'))
     const latest = JSON.parse(readFileSync(join(outDir, 'latest-evidence-bundle.json'), 'utf8'))
     const readiness = JSON.parse(readFileSync(join(outDir, 'release-readiness.json'), 'utf8'))
@@ -316,6 +414,12 @@ describe('run-release-drill.js', () => {
     const ledger = JSON.parse(readFileSync(join(outDir, 'release-evidence-ledger.json'), 'utf8'))
     const ledgerMd = readFileSync(join(outDir, 'release-evidence-ledger.md'), 'utf8')
     const aoGateValidation = readFileSync(join(outDir, 'ao-dependency-gate.validation.txt'), 'utf8')
+    expect(legacyCoreEvidence.ok).toBe(true)
+    expect(signatureRefMap.ok).toBe(true)
+    expect(signatureRefMap.requiredSites).toEqual(['alpha', 'beta'])
+    expect(drillChecks.legacyCoreExtractionEvidence.status).toBe('complete')
+    expect(drillChecks.templateSignatureRefMap.configured).toBe(true)
+    expect(drillChecks.templateSignatureRefMap.requiredSites).toEqual(['alpha', 'beta'])
     expect(matrix.counts.total).toBe(1)
     expect(pack.status).toBe('ready')
     expect(latest.bundleName).toBe('2026-04-11T12-00-00Z-abc')

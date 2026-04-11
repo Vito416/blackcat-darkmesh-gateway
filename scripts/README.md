@@ -7,6 +7,7 @@ Operator and test helpers live here. Keep them dependency-light, explicit, and s
 - `scripts/check-template-worker-routing-config.js` validates tenant URL/token routing maps before they are published.
 - `scripts/init-template-worker-routing.js` scaffolds a new routing map for a site set.
 - `scripts/check-template-signature-ref-map.js` validates `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` before release signoff so every required site has a non-empty signature ref.
+- `scripts/check-forget-forward-config.js` validates the optional forget-forward relay boundary (`GATEWAY_FORGET_FORWARD_URL`, `GATEWAY_FORGET_FORWARD_TOKEN`, `GATEWAY_FORGET_FORWARD_TIMEOUT_MS`) before enabling per-site forwarding.
 - `npm run ops:validate-worker-secrets-trust-model` is the machine-check companion for `ops/worker-secrets-trust-model.md`; keep it CI-gated once the script is wired in.
 
 Usage:
@@ -15,6 +16,12 @@ npm run ops:check-template-signature-ref-map -- --json
 npm run ops:check-template-signature-ref-map -- --require-sites alpha,beta --strict
 GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP='{"alpha":"sig-alpha","beta":"sig-beta"}' \
   node scripts/check-template-signature-ref-map.js --require-sites alpha,beta --json
+
+npm run ops:check-forget-forward-config -- --json
+GATEWAY_FORGET_FORWARD_URL='https://worker.example/cache/forget' \
+  GATEWAY_FORGET_FORWARD_TOKEN='forward-secret' \
+  GATEWAY_FORGET_FORWARD_TIMEOUT_MS=5000 \
+  node scripts/check-forget-forward-config.js --strict
 ```
 
 ## Integrity incident helper
@@ -413,6 +420,12 @@ npm run ops:check-legacy-module-map-sync -- --strict
 
 `scripts/build-release-evidence-pack.js` merges consistency and evidence artifacts into a single release-ready summary (`markdown` + optional JSON) for sign-off.
 
+It also picks up two optional drill artifacts when they are present in the drill root (`--consistency-dir` in `scripts/run-release-drill.js`):
+- `check-legacy-core-extraction-evidence.json`
+- `check-template-signature-ref-map.json`
+
+Missing optional artifacts are additive and do not block the pack. If either file exists but is not valid JSON, the pack is marked not-ready so the drill stops on a deterministic parse failure instead of silently ignoring it.
+
 Usage:
 ```bash
 node scripts/build-release-evidence-pack.js \
@@ -458,7 +471,9 @@ npm run ops:check-release-readiness -- \
 
 ## One-shot release drill
 
-`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation output, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, strict manifest validation output, strict artifact-set validation, and final release-evidence ledger generation.
+`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation output, legacy core extraction evidence, template signature-ref map validation, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, strict manifest validation output, strict artifact-set validation, and final release-evidence ledger generation.
+
+The drill also writes a bundled metadata file, `release-drill-checks.json`, that captures the JSON outputs from the two extra checks alongside the drill context. When `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` is present, the signature-ref check runs in strict mode and requires the configured site keys; otherwise it runs as a non-strict informational check with an empty map payload.
 
 Usage:
 ```bash
@@ -471,6 +486,8 @@ npm run ops:run-release-drill -- \
   --release 1.4.0 \
   --strict
 ```
+
+The drill directory will also contain `legacy-core-extraction-evidence.json`, `template-signature-ref-map.json`, and `release-drill-checks.json` for downstream review and archiving.
 
 ## Release drill manifest build
 

@@ -6,6 +6,15 @@ Gateway-side implementation and test coverage are ahead of the AO-side registry/
 
 Machine-validated release evidence can now be generated, but the readiness tooling intentionally splits the result into two phases: `automation-complete` for the archive/build/drill evidence, and `ao-manual-pending` / `ao-manual-blocked` when AO-side checks or proof links are still open. Use that split in notes and logs instead of a generic "blocked" label whenever the automation itself has already finished.
 
+Latest hardening wave notes to keep visible during closeout:
+
+- `/template/call` now scans payloads recursively and fails closed on secret-smuggling fields before any upstream fetch.
+- `/cache/forget` still returns `200` for the local purge path even if the optional worker forward skips, times out, or fails.
+- Gateway-owned hash evidence for `blackcat-core` is now anchored by `src/runtime/core/hash.ts` and `tests/runtime-core-hash.test.ts`.
+- `tsconfig.json` has moved to `NodeNext`, which removes the old `moduleResolution=node10` deprecation warning path at the source.
+
+These hardening notes are operational evidence only; they do not close the AO/manual blockers below.
+
 ## Legacy module exit criteria
 
 For each module below, require the same three proof types before marking it retired: (1) replacement path evidence, (2) targeted test log with exit code `0`, and (3) `rg` output showing no request-path import from `libs/legacy/<module>` in `src/`. Attach one global runtime-boundary proof per bundle: `npm run ops:check-legacy-runtime-boundary -- --strict` with `Findings: 0`.

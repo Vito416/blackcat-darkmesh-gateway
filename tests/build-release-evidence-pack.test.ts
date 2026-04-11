@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildReleaseEvidencePack,
   combineReadiness,
   collectAoDependencyGate,
   normalizeAoStatus,
@@ -33,6 +34,31 @@ async function seedEvidence(rootDir: string) {
     JSON.stringify({ summary: { total: 1, ok: 1, failed: 0 } }),
     'utf8',
   )
+}
+
+async function seedOptionalEvidence(
+  rootDir: string,
+  options: { coreExtraction?: unknown; signatureRefMap?: unknown },
+) {
+  if (typeof options.coreExtraction !== 'undefined') {
+    await writeFile(
+      join(rootDir, 'check-legacy-core-extraction-evidence.json'),
+      typeof options.coreExtraction === 'string'
+        ? options.coreExtraction
+        : `${JSON.stringify(options.coreExtraction, null, 2)}\n`,
+      'utf8',
+    )
+  }
+
+  if (typeof options.signatureRefMap !== 'undefined') {
+    await writeFile(
+      join(rootDir, 'check-template-signature-ref-map.json'),
+      typeof options.signatureRefMap === 'string'
+        ? options.signatureRefMap
+        : `${JSON.stringify(options.signatureRefMap, null, 2)}\n`,
+      'utf8',
+    )
+  }
 }
 
 describe('build-release-evidence-pack.js', () => {
@@ -228,5 +254,208 @@ describe('build-release-evidence-pack.js', () => {
     expect(json.status).toBe('ready')
     expect(json.aoGate.status).toBe('pass')
     expect(writeSpy).toHaveBeenCalled()
+  })
+
+  it('includes optional drill evidence when valid JSON artifacts are present', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'release-pack-optional-valid-'))
+    const consistencyDir = join(dir, 'consistency')
+    const evidenceDir = join(dir, 'evidence')
+    await mkdir(consistencyDir, { recursive: true })
+    await mkdir(evidenceDir, { recursive: true })
+
+    await writeFile(
+      join(consistencyDir, 'consistency-matrix.json'),
+      JSON.stringify({
+        mode: 'pairwise',
+        counts: { total: 2, pass: 2, mismatch: 0, failure: 0 },
+      }),
+      'utf8',
+    )
+    await writeFile(
+      join(consistencyDir, 'consistency-drift-summary.json'),
+      JSON.stringify({
+        status: 'ok',
+        counts: { total: 2, pass: 2, mismatch: 0, failure: 0 },
+      }),
+      'utf8',
+    )
+    await seedEvidence(evidenceDir)
+    await seedOptionalEvidence(consistencyDir, {
+      coreExtraction: {
+        ok: true,
+        status: 'pass',
+        strict: true,
+        runtimeMissing: [],
+        testMissing: [],
+        importFindingCount: 0,
+      },
+      signatureRefMap: {
+        ok: true,
+        status: 'complete',
+        strict: true,
+        requiredSites: ['alpha', 'beta'],
+        providedSites: ['alpha', 'beta'],
+        missingSites: [],
+        counts: { providedCount: 2, requiredCount: 2, missingCount: 0, emptyValueCount: 0 },
+        issues: [],
+        warnings: [],
+        map: { alpha: 'sig-alpha', beta: 'sig-beta' },
+      },
+    })
+    const aoGatePath = join(dir, 'ao-dependency-gate.json')
+    await writeFile(
+      aoGatePath,
+      JSON.stringify({
+        required: ['p0_1_registry_contract_surface', 'p1_1_authority_rotation_workflow', 'p1_2_audit_commitments_stream'],
+        checks: [
+          { id: 'p0_1_registry_contract_surface', status: 'closed', evidence: 'ao-pr-101' },
+          { id: 'p1_1_authority_rotation_workflow', status: 'closed', evidence: 'ao-pr-102' },
+          { id: 'p1_2_audit_commitments_stream', status: 'closed', evidence: 'ao-pr-103' },
+        ],
+      }),
+      'utf8',
+    )
+
+    const args = parseArgs([
+      '--release',
+      '1.4.0',
+      '--consistency-dir',
+      consistencyDir,
+      '--evidence-dir',
+      evidenceDir,
+      '--ao-gate-file',
+      aoGatePath,
+      '--require-both',
+      '--require-ao-gate',
+    ])
+    const { pack, markdown } = await buildReleaseEvidencePack(args)
+
+    expect(pack.status).toBe('ready')
+    expect(pack.optionalEvidence.coreExtraction.status).toBe('pass')
+    expect(pack.optionalEvidence.templateSignatureRefMap.status).toBe('pass')
+    expect(pack.blockers).toEqual([])
+    expect(markdown).toContain('## Optional evidence')
+    expect(markdown).toContain('Core extraction evidence')
+    expect(markdown).toContain('Template signature-ref map evidence')
+  })
+
+  it('keeps missing optional drill evidence additive even when require-both is set', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'release-pack-optional-missing-'))
+    const consistencyDir = join(dir, 'consistency')
+    const evidenceDir = join(dir, 'evidence')
+    await mkdir(consistencyDir, { recursive: true })
+    await mkdir(evidenceDir, { recursive: true })
+
+    await writeFile(
+      join(consistencyDir, 'consistency-matrix.json'),
+      JSON.stringify({
+        mode: 'pairwise',
+        counts: { total: 1, pass: 1, mismatch: 0, failure: 0 },
+      }),
+      'utf8',
+    )
+    await writeFile(
+      join(consistencyDir, 'consistency-drift-summary.json'),
+      JSON.stringify({
+        status: 'ok',
+        counts: { total: 1, pass: 1, mismatch: 0, failure: 0 },
+      }),
+      'utf8',
+    )
+    await seedEvidence(evidenceDir)
+    const aoGatePath = join(dir, 'ao-dependency-gate.json')
+    await writeFile(
+      aoGatePath,
+      JSON.stringify({
+        required: ['p0_1_registry_contract_surface', 'p1_1_authority_rotation_workflow', 'p1_2_audit_commitments_stream'],
+        checks: [
+          { id: 'p0_1_registry_contract_surface', status: 'closed' },
+          { id: 'p1_1_authority_rotation_workflow', status: 'closed' },
+          { id: 'p1_2_audit_commitments_stream', status: 'closed' },
+        ],
+      }),
+      'utf8',
+    )
+
+    const args = parseArgs([
+      '--release',
+      '1.4.0',
+      '--consistency-dir',
+      consistencyDir,
+      '--evidence-dir',
+      evidenceDir,
+      '--ao-gate-file',
+      aoGatePath,
+      '--require-both',
+      '--require-ao-gate',
+    ])
+    const { pack, markdown } = await buildReleaseEvidencePack(args)
+
+    expect(pack.status).toBe('ready')
+    expect(pack.optionalEvidence.coreExtraction.status).toBe('missing')
+    expect(pack.optionalEvidence.templateSignatureRefMap.status).toBe('missing')
+    expect(pack.blockers).toEqual([])
+    expect(markdown).toContain('Present: no')
+    expect(markdown).toContain('Reason: artifact file not found')
+  })
+
+  it('fails when an optional drill evidence JSON file is invalid', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'release-pack-optional-invalid-'))
+    const consistencyDir = join(dir, 'consistency')
+    const evidenceDir = join(dir, 'evidence')
+    await mkdir(consistencyDir, { recursive: true })
+    await mkdir(evidenceDir, { recursive: true })
+
+    await writeFile(
+      join(consistencyDir, 'consistency-matrix.json'),
+      JSON.stringify({
+        mode: 'pairwise',
+        counts: { total: 1, pass: 1, mismatch: 0, failure: 0 },
+      }),
+      'utf8',
+    )
+    await writeFile(
+      join(consistencyDir, 'consistency-drift-summary.json'),
+      JSON.stringify({
+        status: 'ok',
+        counts: { total: 1, pass: 1, mismatch: 0, failure: 0 },
+      }),
+      'utf8',
+    )
+    await seedEvidence(evidenceDir)
+    await writeFile(join(consistencyDir, 'check-legacy-core-extraction-evidence.json'), '{not-json', 'utf8')
+    const aoGatePath = join(dir, 'ao-dependency-gate.json')
+    await writeFile(
+      aoGatePath,
+      JSON.stringify({
+        required: ['p0_1_registry_contract_surface', 'p1_1_authority_rotation_workflow', 'p1_2_audit_commitments_stream'],
+        checks: [
+          { id: 'p0_1_registry_contract_surface', status: 'closed' },
+          { id: 'p1_1_authority_rotation_workflow', status: 'closed' },
+          { id: 'p1_2_audit_commitments_stream', status: 'closed' },
+        ],
+      }),
+      'utf8',
+    )
+
+    const args = parseArgs([
+      '--release',
+      '1.4.0',
+      '--consistency-dir',
+      consistencyDir,
+      '--evidence-dir',
+      evidenceDir,
+      '--ao-gate-file',
+      aoGatePath,
+      '--require-both',
+      '--require-ao-gate',
+    ])
+    const { pack, markdown } = await buildReleaseEvidencePack(args)
+
+    expect(pack.status).toBe('not-ready')
+    expect(pack.blockers.some((item) => item.includes('core extraction evidence invalid JSON'))).toBe(true)
+    expect(pack.optionalEvidence.coreExtraction.status).toBe('invalid')
+    expect(markdown).toContain('Status: **NOT-READY**')
+    expect(markdown).toContain('invalid JSON')
   })
 })

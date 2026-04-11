@@ -209,6 +209,30 @@ function resolveSignerToken(siteId: string): ResolveResult {
   return { ok: true, value: fallback }
 }
 
+function resolveExpectedSignatureRef(siteId: string): ResolveResult {
+  const mapRaw = readStringEnv('GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP')
+  if (!mapRaw) {
+    return { ok: true, value: '' }
+  }
+
+  const parsed = parseStringMap(mapRaw, 'GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP')
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      status: 500,
+      error: 'worker_signature_ref_map_invalid',
+      detail: { message: 'message' in parsed ? parsed.message : 'invalid_map' },
+    }
+  }
+
+  const expected = parsed.map[siteId]
+  if (!expected) {
+    return { ok: true, value: '' }
+  }
+
+  return { ok: true, value: expected }
+}
+
 function hmacBody(body: string): string | undefined {
   const secret = readStringEnv('GATEWAY_TEMPLATE_HMAC_SECRET')
   if (!secret) return undefined
@@ -433,6 +457,12 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
       return jsonError(signerTokenError.status, signerTokenError.error, signerTokenError.detail)
     }
 
+    const expectedSignatureRef = resolveExpectedSignatureRef(resolvedSiteId)
+    if (expectedSignatureRef.ok === false) {
+      const expectedSignatureRefError = expectedSignatureRef as Extract<ResolveResult, { ok: false }>
+      return jsonError(expectedSignatureRefError.status, expectedSignatureRefError.error, expectedSignatureRefError.detail)
+    }
+
     effectiveRequestId = effectiveRequestId || `req-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
     const signEnvelope = buildWriteSignEnvelope(input, resolvedSiteId, effectiveRequestId)
     const signerBaseUrl = (signerBase as Extract<ResolveResult, { ok: true }>).value
@@ -440,6 +470,14 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     if (signed.ok === false) {
       const signedError = signed as Extract<SignedWriteEnvelopeResult, { ok: false }>
       return jsonError(signedError.status, signedError.error, signedError.detail)
+    }
+
+    if (expectedSignatureRef.value && signed.signatureRef !== expectedSignatureRef.value) {
+      return jsonError(502, 'worker_sign_signature_ref_mismatch', {
+        siteId: resolvedSiteId,
+        expectedSignatureRef: expectedSignatureRef.value,
+        actualSignatureRef: signed.signatureRef,
+      })
     }
 
     writeEnvelope = {

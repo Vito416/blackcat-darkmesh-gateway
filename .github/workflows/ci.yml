@@ -170,6 +170,27 @@ jobs:
       - name: Check legacy no-import evidence
         run: npm run ops:check-legacy-no-import-evidence -- --strict --json
 
+  ops-evidence-validators:
+    name: Ops evidence validators
+    runs-on: ubuntu-24.04
+    env:
+      GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP: ${{ vars.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || secrets.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || '' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Check legacy core extraction evidence
+        run: npm run ops:check-legacy-core-extraction-evidence -- --strict --json
+      - name: Check template signature-ref map
+        run: npm run ops:check-template-signature-ref-map -- --strict --json
+
   smoke:
     name: Smoke checks
     runs-on: ubuntu-24.04

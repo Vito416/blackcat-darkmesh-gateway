@@ -24,6 +24,14 @@ Describe what was migrated, stabilized, or decommissioned.
 - **User-facing changes:**
   - `...`
 
+## Current hardening notes
+
+- Template request handling now fail-closes on recursive secret-smuggling fields before any upstream fetch.
+- The local forget path remains `200` even when optional per-site worker forwarding times out or fails, so public purge stays available without coupling it to the worker relay.
+- The gateway-owned core hash primitive is now documented and tested via `src/runtime/core/hash.ts` and `tests/runtime-core-hash.test.ts`.
+- `tsconfig.json` has moved to `NodeNext`, which removes the `moduleResolution=node10` deprecation warning path and keeps the editor/build toolchain aligned for the next TypeScript line.
+- AO registry/authority lifecycle blockers remain open and should still be tracked separately in the decommission evidence bundle.
+
 ## Evidence pack
 
 Link only to immutable or stable artifacts.

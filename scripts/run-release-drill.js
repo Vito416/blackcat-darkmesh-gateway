@@ -23,6 +23,8 @@ const STEP_SCRIPTS = {
   latestBundle: resolve(SCRIPT_DIR, 'latest-evidence-bundle.js'),
   checkEvidence: resolve(SCRIPT_DIR, 'check-evidence-bundle.js'),
   validateAoGate: resolve(SCRIPT_DIR, 'validate-ao-dependency-gate.js'),
+  checkLegacyCoreEvidence: resolve(SCRIPT_DIR, 'check-legacy-core-extraction-evidence.js'),
+  checkTemplateSignatureRefMap: resolve(SCRIPT_DIR, 'check-template-signature-ref-map.js'),
   buildPack: resolve(SCRIPT_DIR, 'build-release-evidence-pack.js'),
   buildChecklist: resolve(SCRIPT_DIR, 'build-release-signoff-checklist.js'),
   checkReadiness: resolve(SCRIPT_DIR, 'check-release-readiness.js'),
@@ -69,13 +71,15 @@ function usageText() {
     '  5) select latest evidence bundle',
     '  6) validate latest evidence bundle',
     '  7) validate AO dependency gate',
-    '  8) build release evidence pack',
-    '  9) build release sign-off checklist',
-    '  10) check release readiness',
-    '  11) build release drill manifest',
-    '  12) validate release drill manifest',
-    '  13) check release drill artifacts',
-    '  14) build release evidence ledger',
+    '  8) check legacy core extraction evidence',
+    '  9) check template signature-ref map',
+    '  10) build release evidence pack',
+    '  11) build release sign-off checklist',
+    '  12) check release readiness',
+    '  13) build release drill manifest',
+    '  14) validate release drill manifest',
+    '  15) check release drill artifacts',
+    '  16) build release evidence ledger',
     '',
     'Exit codes:',
     '  0   success',
@@ -193,6 +197,44 @@ function splitUrls(csv) {
     .filter(Boolean)
 }
 
+function parseJsonObject(value) {
+  if (!isNonEmptyString(value)) return null
+
+  try {
+    const parsed = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return parsed
+  } catch (_) {
+    return null
+  }
+}
+
+function buildTemplateSignatureRefMapCheckConfig(rawMap) {
+  const configured = isNonEmptyString(rawMap)
+  if (!configured) {
+    return {
+      configured: false,
+      env: { GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP: '{}' },
+      args: ['--json'],
+      displayArgs: ['--json'],
+      requiredSites: [],
+    }
+  }
+
+  const parsed = parseJsonObject(rawMap)
+  const requiredSites = parsed ? Object.keys(parsed).map((site) => site.trim()).filter(Boolean) : []
+  const args = ['--json', '--strict']
+  if (requiredSites.length > 0) args.push('--require-sites', requiredSites.join(','))
+
+  return {
+    configured: true,
+    env: { GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP: rawMap },
+    args,
+    displayArgs: [...args],
+    requiredSites,
+  }
+}
+
 function stepLabel(step, total) {
   return `[${step.index}/${total}] ${step.label}`
 }
@@ -222,12 +264,18 @@ function buildDrillPlan({
   const summaryJson = join(resolvedOutDir, 'consistency-drift-summary.json')
   const latestBundleJson = join(resolvedOutDir, 'latest-evidence-bundle.json')
   const aoGateValidationTxt = join(resolvedOutDir, 'ao-dependency-gate.validation.txt')
+  const legacyCoreEvidenceJson = join(resolvedOutDir, 'legacy-core-extraction-evidence.json')
+  const templateSignatureRefMapJson = join(resolvedOutDir, 'template-signature-ref-map.json')
+  const drillChecksJson = join(resolvedOutDir, 'release-drill-checks.json')
   const readinessJson = join(resolvedOutDir, 'release-readiness.json')
   const drillManifestJson = join(resolvedOutDir, 'release-drill-manifest.json')
   const drillManifestValidation = join(resolvedOutDir, 'release-drill-manifest.validation.txt')
   const drillCheckJson = join(resolvedOutDir, 'release-drill-check.json')
   const ledgerMd = join(resolvedOutDir, 'release-evidence-ledger.md')
   const ledgerJson = join(resolvedOutDir, 'release-evidence-ledger.json')
+  const templateSignatureRefMapCheck = buildTemplateSignatureRefMapCheckConfig(
+    process.env.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || '',
+  )
 
   const preflightArgs = ['--urls', urlsCsv, '--mode', mode, '--profile', profile]
   if (isNonEmptyString(token)) preflightArgs.push('--token', token)
@@ -316,8 +364,31 @@ function buildDrillPlan({
       outputFile: aoGateValidationTxt,
     },
     {
-      id: 'build-pack',
+      id: 'check-legacy-core-evidence',
       index: 8,
+      label: 'check legacy core extraction evidence',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.checkLegacyCoreEvidence,
+      displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkLegacyCoreEvidence),
+      args: ['--strict', '--json'],
+      displayArgs: ['--strict', '--json'],
+      outputFile: legacyCoreEvidenceJson,
+    },
+    {
+      id: 'check-template-signature-ref-map',
+      index: 9,
+      label: 'check template signature-ref map',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.checkTemplateSignatureRefMap,
+      displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkTemplateSignatureRefMap),
+      args: templateSignatureRefMapCheck.args,
+      displayArgs: templateSignatureRefMapCheck.displayArgs,
+      env: templateSignatureRefMapCheck.env,
+      outputFile: templateSignatureRefMapJson,
+    },
+    {
+      id: 'build-pack',
+      index: 10,
       label: 'build release evidence pack',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildPack,
@@ -358,7 +429,7 @@ function buildDrillPlan({
     },
     {
       id: 'build-checklist',
-      index: 9,
+      index: 11,
       label: 'build release sign-off checklist',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildChecklist,
@@ -369,7 +440,7 @@ function buildDrillPlan({
     },
     {
       id: 'readiness',
-      index: 10,
+      index: 12,
       label: 'check release readiness',
       command: 'node',
       scriptPath: STEP_SCRIPTS.checkReadiness,
@@ -380,7 +451,7 @@ function buildDrillPlan({
     },
     {
       id: 'build-drill-manifest',
-      index: 11,
+      index: 13,
       label: 'build release drill manifest',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildDrillManifest,
@@ -391,7 +462,7 @@ function buildDrillPlan({
     },
     {
       id: 'validate-drill-manifest',
-      index: 12,
+      index: 14,
       label: 'validate release drill manifest',
       command: 'node',
       scriptPath: STEP_SCRIPTS.validateDrillManifest,
@@ -402,7 +473,7 @@ function buildDrillPlan({
     },
     {
       id: 'check-drill-artifacts',
-      index: 13,
+      index: 15,
       label: 'check release drill artifacts',
       command: 'node',
       scriptPath: STEP_SCRIPTS.checkDrillArtifacts,
@@ -413,7 +484,7 @@ function buildDrillPlan({
     },
     {
       id: 'build-ledger',
-      index: 14,
+      index: 16,
       label: 'build release evidence ledger',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildLedger,
@@ -444,6 +515,9 @@ function buildDrillPlan({
       evidenceRoot,
       latestBundleJson,
       aoGateValidationTxt,
+      legacyCoreEvidenceJson,
+      templateSignatureRefMapJson,
+      drillChecksJson,
       packMd,
       packJson,
       checklistMd,
@@ -455,6 +529,7 @@ function buildDrillPlan({
       ledgerJson,
       aoGateFile: DEFAULT_AO_GATE_FILE,
     },
+    templateSignatureRefMapCheck,
     steps,
   }
 }
@@ -480,6 +555,7 @@ function formatDryRunPlan(plan) {
     lines.push('')
   }
 
+  lines.push(`Release drill metadata: ${plan.artifacts.drillChecksJson}`)
   lines.push(`AO gate file: ${plan.artifacts.aoGateFile}`)
   return `${lines.join('\n').trimEnd()}\n`
 }
@@ -504,10 +580,12 @@ function ensureFile(path, label) {
 
 function runChildStep(step, stepArgs, deps = {}) {
   const spawnSyncFn = deps.spawnSyncFn ?? spawnSync
+  const env = step.env ? { ...process.env, ...step.env } : process.env
   return spawnSyncFn(process.execPath, [step.scriptPath, ...stepArgs], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
+    env,
   })
 }
 
@@ -516,7 +594,11 @@ function runReleaseDrill(options = {}, deps = {}) {
   const total = plan.steps.length
   const stdout = []
   const stderr = []
-  const context = { latestBundleDir: '' }
+  const context = {
+    latestBundleDir: '',
+    legacyCoreEvidence: null,
+    templateSignatureRefMap: null,
+  }
 
   if (options.dryRun) {
     return {
@@ -576,6 +658,20 @@ function runReleaseDrill(options = {}, deps = {}) {
       if (step.id === 'validate-ao-gate') {
         writeTextFile(plan.artifacts.aoGateValidationTxt, childStdout || `valid dependency gate: ${plan.artifacts.aoGateFile}\n`)
       }
+      if (step.id === 'check-legacy-core-evidence') {
+        const legacyCoreEvidence = JSON.parse(childStdout || '{}')
+        context.legacyCoreEvidence = legacyCoreEvidence
+        writeTextFile(plan.artifacts.legacyCoreEvidenceJson, `${JSON.stringify(legacyCoreEvidence, null, 2)}\n`)
+      }
+      if (step.id === 'check-template-signature-ref-map') {
+        const templateSignatureRefMap = JSON.parse(childStdout || '{}')
+        context.templateSignatureRefMap = {
+          configured: plan.templateSignatureRefMapCheck.configured,
+          requiredSites: plan.templateSignatureRefMapCheck.requiredSites,
+          ...templateSignatureRefMap,
+        }
+        writeTextFile(plan.artifacts.templateSignatureRefMapJson, `${JSON.stringify(context.templateSignatureRefMap, null, 2)}\n`)
+      }
       if (step.id === 'validate-drill-manifest') {
         writeTextFile(plan.artifacts.drillManifestValidation, childStdout || 'valid release drill manifest\n')
       }
@@ -599,6 +695,8 @@ function runReleaseDrill(options = {}, deps = {}) {
         ensureFile(plan.artifacts.packJson, step.label)
       }
       if (step.id === 'validate-ao-gate') ensureFile(plan.artifacts.aoGateValidationTxt, step.label)
+      if (step.id === 'check-legacy-core-evidence') ensureFile(plan.artifacts.legacyCoreEvidenceJson, step.label)
+      if (step.id === 'check-template-signature-ref-map') ensureFile(plan.artifacts.templateSignatureRefMapJson, step.label)
       if (step.id === 'build-checklist') ensureFile(plan.artifacts.checklistMd, step.label)
       if (step.id === 'readiness') ensureFile(plan.artifacts.readinessJson, step.label)
       if (step.id === 'build-drill-manifest') ensureFile(plan.artifacts.drillManifestJson, step.label)
@@ -614,6 +712,23 @@ function runReleaseDrill(options = {}, deps = {}) {
     }
 
     stdout.push(`${stepLine} done\n`)
+  }
+
+  try {
+    const drillChecks = {
+      release: plan.release,
+      profile: plan.profile,
+      mode: plan.mode,
+      strict: plan.strict,
+      createdAt: new Date().toISOString(),
+      legacyCoreExtractionEvidence: context.legacyCoreEvidence,
+      templateSignatureRefMap: context.templateSignatureRefMap,
+    }
+    writeTextFile(plan.artifacts.drillChecksJson, `${JSON.stringify(drillChecks, null, 2)}\n`)
+    ensureFile(plan.artifacts.drillChecksJson, 'release drill metadata')
+  } catch (err) {
+    stderr.push(`release drill metadata failed: ${err instanceof Error ? err.message : String(err)}\n`)
+    return { exitCode: 3, stdout: stdout.join(''), stderr: stderr.join(''), plan, artifacts: plan.artifacts }
   }
 
   return {
