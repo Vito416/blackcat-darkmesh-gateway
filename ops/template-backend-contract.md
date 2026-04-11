@@ -57,6 +57,10 @@ The contract should be validated in three places:
 
 This keeps the contract visible both during development and during final closeout.
 
+For multi-tenant production, template **write** actions should target the write
+upstream while signatures are produced by per-site workers (`siteId -> worker /sign`)
+so secrets stay outside the gateway runtime.
+
 ## Runtime enforcement path
 
 - Default contract file: `config/template-backend-contract.json`

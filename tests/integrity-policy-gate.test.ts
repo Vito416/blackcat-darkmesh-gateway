@@ -18,6 +18,9 @@ describe('integrity policy gate', () => {
   beforeEach(() => {
     vi.resetModules()
     process.env = { ...originalEnv }
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.WORKER_API_URL = 'https://worker.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
     reset()
   })
 
@@ -39,6 +42,8 @@ describe('integrity policy gate', () => {
       headers,
       body: JSON.stringify({
         action: 'checkout.create-order',
+        requestId: 'req-int-policy-write',
+        role: 'shop_admin',
         payload: { siteId: 'site-1', items: [{ sku: 'sku-1', qty: 1 }] },
       }),
     })
@@ -52,6 +57,19 @@ describe('integrity policy gate', () => {
         action: 'public.resolve-route',
         payload: { host: 'example.com', path: '/' },
       }),
+    })
+  }
+
+  function mockSignAndWriteSuccess() {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url === 'https://worker.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('ok', { status: 200 })
     })
   }
 
@@ -166,13 +184,12 @@ describe('integrity policy gate', () => {
     process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '1'
     process.env.GATEWAY_INTEGRITY_POLICY_JSON = JSON.stringify({ paused: false })
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+    const fetchSpy = mockSignAndWriteSuccess()
     const { handleRequest } = await loadHandler()
 
     const res = await handleRequest(makeTemplateWriteRequest())
     expect(res.status).toBe(200)
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
 
     const state = snapshot()
     expect(state.gauges.gateway_integrity_policy_paused).toBe(0)
@@ -183,8 +200,7 @@ describe('integrity policy gate', () => {
     process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '0'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
     process.env.GATEWAY_TEMPLATE_TOKEN = 'template-secret'
-    process.env.WRITE_API_URL = 'https://write.example'
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+    const fetchSpy = mockSignAndWriteSuccess()
     const { handleRequest } = await loadHandler()
 
     const badRes = await handleRequest(makeTemplateWriteRequest('wrong-secret'))
@@ -194,7 +210,7 @@ describe('integrity policy gate', () => {
 
     const goodRes = await handleRequest(makeTemplateWriteRequest('template-secret'))
     expect(goodRes.status).toBe(200)
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 
   it('falls back to the env flag when policy JSON is malformed', async () => {
@@ -218,7 +234,6 @@ describe('integrity policy gate', () => {
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.GATEWAY_INTEGRITY_CACHE_TTL_MS = '1'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.url
       if (url === process.env.AO_INTEGRITY_URL) {
@@ -243,11 +258,16 @@ describe('integrity policy gate', () => {
     process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '0'
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.url
       if (url === process.env.AO_INTEGRITY_URL) {
         throw new Error('ao unavailable')
+      }
+      if (url === 'https://worker.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
       }
       return new Response('ok', { status: 200 })
     })
@@ -273,7 +293,6 @@ describe('integrity policy gate', () => {
     process.env.GATEWAY_INTEGRITY_CHECKPOINT_SECRET = 'checkpoint-secret'
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.url
       if (url === process.env.AO_INTEGRITY_URL) {
@@ -304,11 +323,16 @@ describe('integrity policy gate', () => {
     process.env.GATEWAY_INTEGRITY_CHECKPOINT_SECRET = 'checkpoint-secret'
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.url
       if (url === process.env.AO_INTEGRITY_URL) {
         throw new Error('ao unavailable')
+      }
+      if (url === 'https://worker.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
       }
       return new Response('ok', { status: 200 })
     })

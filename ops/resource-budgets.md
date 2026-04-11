@@ -100,6 +100,10 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_TEMPLATE_MAX_BODY_BYTES` caps serialized template-call payloads before they reach upstream.
 - `GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS` bounds hosted template backend latency; keep it close to the edge timeout budget of the deployment.
 - `GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST` should stay narrow on shared or hosted deployments so template traffic only reaches approved upstream hosts.
+- Keep write transport and signer transport separate:
+  - `WRITE_API_URL` routes mutating template actions to the write process transport.
+  - `GATEWAY_TEMPLATE_WORKER_URL_MAP` (or `WORKER_API_URL`) routes per-site signer calls to worker `/sign`.
+- Prefer explicit `siteId -> worker` mapping in production; single-worker mode is acceptable only for dev/single-tenant setups.
 - If you need to widen any of these, prefer doing it per deployment profile rather than globally.
 
 ## Cache budget

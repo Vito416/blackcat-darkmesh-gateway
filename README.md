@@ -99,7 +99,13 @@ Configuration (per site)
   - `GATEWAY_TEMPLATE_TOKEN` (optional shared token required on `/template/call`)
   - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1` (default is read-only; write actions blocked unless enabled)
   - `GATEWAY_TEMPLATE_CONTRACT_FILE` (optional path, default `config/template-backend-contract.json`; template actions must exist in this contract and match route+method)
-  - `AO_PUBLIC_API_URL` / `AO_READ_URL` and `WRITE_API_URL` (upstream targets)
+  - `AO_PUBLIC_API_URL` / `AO_READ_URL` (public read upstream target)
+  - `WRITE_API_URL` (write upstream target for checkout/write actions)
+  - `WORKER_API_URL` / `WORKER_SIGN_URL` (worker signer endpoint base for single-tenant/simple deployments; gateway calls `/sign`)
+  - `WORKER_AUTH_TOKEN` / `WORKER_SIGN_TOKEN` (worker signer auth token)
+  - `GATEWAY_TEMPLATE_WORKER_URL_MAP` (multi-tenant worker signer routing map, JSON: `{ \"site-a\": \"https://worker-a.example\", \"site-b\": \"https://worker-b.example\" }`)
+  - `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP` (optional per-site signer token map, JSON with same keys as the URL map)
+    - when signer map is configured, write actions fail closed for unknown `siteId`
   - `GATEWAY_TEMPLATE_HMAC_SECRET` (optional HMAC signature header for forwarded template calls)
 - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`

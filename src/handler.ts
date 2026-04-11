@@ -527,6 +527,7 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
     requestId: typeof (body as any).requestId === 'string' ? (body as any).requestId : undefined,
     siteId: typeof (body as any).siteId === 'string' ? (body as any).siteId : undefined,
     actor: typeof (body as any).actor === 'string' ? (body as any).actor : undefined,
+    role: typeof (body as any).role === 'string' ? (body as any).role : undefined,
   })
 
   if (res.status >= 200 && res.status < 300) {

@@ -34,6 +34,8 @@ function makeTemplateWriteRequest() {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       action: 'checkout.create-order',
+      requestId: 'req-int-incident-write',
+      role: 'shop_admin',
       payload: { siteId: 'site-1', items: [{ sku: 'sku-1', qty: 1 }] },
     }),
   })
@@ -77,6 +79,9 @@ describe('integrity incident and state endpoints', () => {
   beforeEach(() => {
     vi.resetModules()
     process.env = { ...originalEnv }
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.WORKER_API_URL = 'https://worker.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
     clearIntegrityAoEnv()
     reset()
   })
@@ -379,8 +384,16 @@ describe('integrity incident and state endpoints', () => {
   it('applies pause/resume actions to runtime integrity policy', async () => {
     process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url === 'https://worker.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('ok', { status: 200 })
+    })
 
     const { handleRequest } = await loadHandler()
 
@@ -413,7 +426,7 @@ describe('integrity incident and state endpoints', () => {
 
     const allowedWrite = await handleRequest(makeTemplateWriteRequest())
     expect(allowedWrite.status).toBe(200)
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
 
     const state = await handleRequest(new Request('http://gateway/integrity/state'))
     expect(state.status).toBe(200)
