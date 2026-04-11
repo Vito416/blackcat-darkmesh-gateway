@@ -570,9 +570,11 @@ jobs:
             --release "$RELEASE_LABEL" \
             --consistency-dir "$CONSISTENCY_ARTIFACT_DIR" \
             --evidence-dir "$EVIDENCE_ARTIFACT_DIR" \
+            --ao-gate-file "./kernel-migration/ao-dependency-gate.json" \
             --out "$RELEASE_PACK_MD" \
             --json-out "$RELEASE_PACK_JSON" \
-            --require-both
+            --require-both \
+            --require-ao-gate
       - name: Append release pack summary
         if: always()
         run: |

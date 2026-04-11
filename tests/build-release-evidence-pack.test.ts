@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   combineReadiness,
+  collectAoDependencyGate,
+  normalizeAoStatus,
   parseArgs,
   parseTimestampFromDir,
   resolveConsistencyStatus,
@@ -45,11 +47,14 @@ describe('build-release-evidence-pack.js', () => {
       './tmp/consistency',
       '--evidence-dir',
       './tmp/evidence',
+      '--ao-gate-file',
+      './kernel-migration/ao-dependency-gate.json',
       '--out',
       './tmp/report.md',
       '--json-out',
       './tmp/report.json',
       '--require-both',
+      '--require-ao-gate',
       '--json',
     ])
 
@@ -57,9 +62,11 @@ describe('build-release-evidence-pack.js', () => {
       release: '1.4.0',
       consistencyDir: './tmp/consistency',
       evidenceDir: './tmp/evidence',
+      aoGateFile: './kernel-migration/ao-dependency-gate.json',
       out: './tmp/report.md',
       jsonOut: './tmp/report.json',
       requireBoth: true,
+      requireAoGate: true,
       json: true,
     })
   })
@@ -80,6 +87,8 @@ describe('build-release-evidence-pack.js', () => {
     const ready = combineReadiness(
       { present: true, status: 'pass', reason: 'ok' },
       { present: true, status: 'pass', reason: 'ok' },
+      { present: true, status: 'pass', reason: 'ok' },
+      true,
       true,
     )
     expect(ready.status).toBe('ready')
@@ -87,10 +96,36 @@ describe('build-release-evidence-pack.js', () => {
     const notReady = combineReadiness(
       { present: true, status: 'fail', reason: 'fetch failures' },
       { present: false, status: 'missing', reason: 'no bundle' },
+      { present: true, status: 'fail', reason: '2 required AO check(s) not closed' },
+      true,
       true,
     )
     expect(notReady.status).toBe('not-ready')
     expect(notReady.blockers.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('normalizes AO statuses and validates AO gate file', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'release-pack-ao-'))
+    const aoGatePath = join(dir, 'ao-gate.json')
+    await writeFile(
+      aoGatePath,
+      JSON.stringify({
+        required: ['p0_1_registry_contract_surface', 'p1_1_authority_rotation_workflow', 'p1_2_audit_commitments_stream'],
+        checks: [
+          { id: 'p0_1_registry_contract_surface', status: 'closed' },
+          { id: 'p1_1_authority_rotation_workflow', status: 'done' },
+          { id: 'p1_2_audit_commitments_stream', status: 'ok' },
+        ],
+      }),
+      'utf8',
+    )
+
+    expect(normalizeAoStatus('in-progress')).toBe('in_progress')
+    expect(normalizeAoStatus('done')).toBe('closed')
+
+    const gate = await collectAoDependencyGate(aoGatePath)
+    expect(gate.status).toBe('pass')
+    expect(gate.requiredChecks).toHaveLength(3)
   })
 
   it('creates markdown and json outputs from consistency/evidence inputs', async () => {
@@ -117,6 +152,19 @@ describe('build-release-evidence-pack.js', () => {
       'utf8',
     )
     await seedEvidence(evidenceDir)
+    const aoGatePath = join(dir, 'ao-dependency-gate.json')
+    await writeFile(
+      aoGatePath,
+      JSON.stringify({
+        required: ['p0_1_registry_contract_surface', 'p1_1_authority_rotation_workflow', 'p1_2_audit_commitments_stream'],
+        checks: [
+          { id: 'p0_1_registry_contract_surface', status: 'closed', evidence: 'ao-pr-101' },
+          { id: 'p1_1_authority_rotation_workflow', status: 'closed', evidence: 'ao-pr-102' },
+          { id: 'p1_2_audit_commitments_stream', status: 'closed', evidence: 'ao-pr-103' },
+        ],
+      }),
+      'utf8',
+    )
 
     const markdownPath = join(dir, 'release-evidence-pack.md')
     const jsonPath = join(dir, 'release-evidence-pack.json')
@@ -129,6 +177,9 @@ describe('build-release-evidence-pack.js', () => {
       consistencyDir,
       '--evidence-dir',
       evidenceDir,
+      '--ao-gate-file',
+      aoGatePath,
+      '--require-ao-gate',
       '--out',
       markdownPath,
       '--json-out',
@@ -139,7 +190,9 @@ describe('build-release-evidence-pack.js', () => {
     const json = JSON.parse(await readFile(jsonPath, 'utf8'))
     expect(markdown).toContain('Release Evidence Pack')
     expect(markdown).toContain('Status: **READY**')
+    expect(markdown).toContain('AO dependency gate')
     expect(json.status).toBe('ready')
+    expect(json.aoGate.status).toBe('pass')
     expect(writeSpy).toHaveBeenCalled()
   })
 })

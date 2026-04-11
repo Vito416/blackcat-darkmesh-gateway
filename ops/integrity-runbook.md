@@ -426,15 +426,18 @@ node scripts/build-release-evidence-pack.js \
   --release 1.4.0 \
   --consistency-dir ./tmp/consistency-artifacts \
   --evidence-dir ./tmp/evidence-artifacts \
+  --ao-gate-file ./kernel-migration/ao-dependency-gate.json \
   --out ./tmp/release-evidence-pack.md \
   --json-out ./tmp/release-evidence-pack.json \
-  --require-both
+  --require-both \
+  --require-ao-gate
 ```
 
 Pass:
 - exit `0`
 - pack status is `READY`
 - no blockers listed in the generated markdown/json
+- AO dependency gate reports all required checks as `closed`
 
 Fail:
 - exit `3` when required artifact sets are missing/invalid or release is not ready

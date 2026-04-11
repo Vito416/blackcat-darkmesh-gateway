@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "release": "1.4.0",
+  "updatedAt": "2026-04-11T13:35:00Z",
+  "required": [
+    "p0_1_registry_contract_surface",
+    "p1_1_authority_rotation_workflow",
+    "p1_2_audit_commitments_stream"
+  ],
+  "checks": [
+    {
+      "id": "p0_1_registry_contract_surface",
+      "title": "P0.1 AO integrity registry contract surface",
+      "status": "in_progress",
+      "evidence": "",
+      "notes": "AO publish/revoke/query/pause API surface still tracked as open in backlog."
+    },
+    {
+      "id": "p1_1_authority_rotation_workflow",
+      "title": "P1.1 Authority separation and rotation workflow",
+      "status": "in_progress",
+      "evidence": "",
+      "notes": "Gateway role-aware enforcement is landed; AO-side final lifecycle completion still pending."
+    },
+    {
+      "id": "p1_2_audit_commitments_stream",
+      "title": "P1.2 Audit commitments stream",
+      "status": "in_progress",
+      "evidence": "",
+      "notes": "Gateway audit gauges are landed; AO-side immutable commitment sequencing/query API still pending."
+    }
+  ]
+}

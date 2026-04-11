@@ -6,20 +6,27 @@ import { pathToFileURL } from 'node:url'
 
 const REQUIRED_BUNDLE_FILES = ['compare.txt', 'attestation.json', 'manifest.json']
 const TIMESTAMPED_DIR_RE = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z(?:-.+)?$/
+const DEFAULT_REQUIRED_AO_CHECKS = [
+  'p0_1_registry_contract_surface',
+  'p1_1_authority_rotation_workflow',
+  'p1_2_audit_commitments_stream',
+]
 
 function usage(exitCode = 0) {
   console.log(
     [
       'Usage:',
-      '  node scripts/build-release-evidence-pack.js [--release <VERSION>] [--consistency-dir <DIR>] [--evidence-dir <DIR>] [--out <FILE>] [--json-out <FILE>] [--require-both]',
+      '  node scripts/build-release-evidence-pack.js [--release <VERSION>] [--consistency-dir <DIR>] [--evidence-dir <DIR>] [--ao-gate-file <FILE>] [--out <FILE>] [--json-out <FILE>] [--require-both] [--require-ao-gate]',
       '',
       'Options:',
       '  --release <VERSION>      Release label/version (default: 1.4.0)',
       '  --consistency-dir <DIR>  Directory with consistency-smoke artifacts',
       '  --evidence-dir <DIR>     Directory with evidence-dry-run artifacts',
+      '  --ao-gate-file <FILE>    Machine-readable AO dependency gate JSON',
       '  --out <FILE>             Optional markdown output path',
       '  --json-out <FILE>        Optional JSON output path',
       '  --require-both           Exit non-zero when consistency or evidence data is missing',
+      '  --require-ao-gate        Exit non-zero when AO dependency gate is missing or not closed',
       '  --json                   Print JSON summary to stdout (markdown is default)',
       '  --help                   Show this help',
       '',
@@ -46,9 +53,11 @@ function parseArgs(argv) {
     release: '1.4.0',
     consistencyDir: '',
     evidenceDir: '',
+    aoGateFile: '',
     out: '',
     jsonOut: '',
     requireBoth: false,
+    requireAoGate: false,
     json: false,
   }
 
@@ -73,6 +82,9 @@ function parseArgs(argv) {
       case '--evidence-dir':
         args.evidenceDir = readValue()
         break
+      case '--ao-gate-file':
+        args.aoGateFile = readValue()
+        break
       case '--out':
         args.out = readValue()
         break
@@ -81,6 +93,9 @@ function parseArgs(argv) {
         break
       case '--require-both':
         args.requireBoth = true
+        break
+      case '--require-ao-gate':
+        args.requireAoGate = true
         break
       case '--json':
         args.json = true
@@ -92,10 +107,11 @@ function parseArgs(argv) {
   }
 
   if (!isNonEmptyString(args.release)) die('--release must not be blank', 64)
+  if (args.aoGateFile && !isNonEmptyString(args.aoGateFile)) die('--ao-gate-file must not be blank', 64)
   if (args.out && !isNonEmptyString(args.out)) die('--out must not be blank', 64)
   if (args.jsonOut && !isNonEmptyString(args.jsonOut)) die('--json-out must not be blank', 64)
-  if (!args.consistencyDir && !args.evidenceDir) {
-    die('at least one of --consistency-dir or --evidence-dir is required', 64)
+  if (!args.consistencyDir && !args.evidenceDir && !args.aoGateFile) {
+    die('at least one of --consistency-dir, --evidence-dir, or --ao-gate-file is required', 64)
   }
 
   return args
@@ -126,6 +142,40 @@ function parseTimestampFromDir(name) {
   const ms = Date.parse(iso)
   if (!Number.isFinite(ms)) return null
   return { iso, ms }
+}
+
+function normalizeAoStatus(value) {
+  if (!isNonEmptyString(value)) return 'unknown'
+  const status = value.trim().toLowerCase()
+  switch (status) {
+    case 'closed':
+    case 'pass':
+    case 'ok':
+    case 'done':
+      return 'closed'
+    case 'open':
+    case 'todo':
+      return 'open'
+    case 'in_progress':
+    case 'in-progress':
+    case 'progress':
+      return 'in_progress'
+    case 'blocked':
+      return 'blocked'
+    default:
+      return status
+  }
+}
+
+function normalizeRequiredAoChecks(value) {
+  if (!Array.isArray(value)) return DEFAULT_REQUIRED_AO_CHECKS.slice()
+  const out = []
+  for (const item of value) {
+    if (!isNonEmptyString(item)) continue
+    const trimmed = item.trim()
+    if (!out.includes(trimmed)) out.push(trimmed)
+  }
+  return out.length > 0 ? out : DEFAULT_REQUIRED_AO_CHECKS.slice()
 }
 
 async function findFileByName(rootDir, fileName) {
@@ -311,7 +361,89 @@ async function collectEvidenceBundle(rootDir) {
   }
 }
 
-function combineReadiness(consistency, evidence, requireBoth) {
+async function collectAoDependencyGate(filePath) {
+  if (!filePath) {
+    return { present: false, status: 'missing', reason: 'not provided', filePath: '', required: [], checks: [] }
+  }
+
+  const resolved = resolve(filePath)
+  if (!(await pathExists(resolved))) {
+    return {
+      present: false,
+      status: 'missing',
+      reason: 'ao gate file not found',
+      filePath: resolved,
+      required: [],
+      checks: [],
+    }
+  }
+
+  let payload
+  try {
+    payload = await readJson(resolved)
+  } catch (err) {
+    return {
+      present: true,
+      status: 'invalid',
+      reason: err instanceof Error ? err.message : String(err),
+      filePath: resolved,
+      required: [],
+      checks: [],
+    }
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return {
+      present: true,
+      status: 'invalid',
+      reason: 'ao gate payload must be a JSON object',
+      filePath: resolved,
+      required: [],
+      checks: [],
+    }
+  }
+
+  const required = normalizeRequiredAoChecks(payload.required)
+  const checksRaw = Array.isArray(payload.checks) ? payload.checks : []
+  const checks = checksRaw
+    .filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
+    .map((entry) => ({
+      id: isNonEmptyString(entry.id) ? entry.id.trim() : '',
+      title: isNonEmptyString(entry.title) ? entry.title.trim() : '',
+      status: normalizeAoStatus(entry.status),
+      evidence: isNonEmptyString(entry.evidence) ? entry.evidence.trim() : '',
+      notes: isNonEmptyString(entry.notes) ? entry.notes.trim() : '',
+    }))
+    .filter((entry) => isNonEmptyString(entry.id))
+
+  const checksById = new Map(checks.map((entry) => [entry.id, entry]))
+  const requiredChecks = required.map((id) => {
+    const found = checksById.get(id)
+    if (!found) {
+      return { id, title: '', status: 'missing', evidence: '', notes: '' }
+    }
+    return found
+  })
+
+  const notClosed = requiredChecks.filter((entry) => entry.status !== 'closed')
+  const status = notClosed.length === 0 ? 'pass' : 'fail'
+  const reason =
+    status === 'pass'
+      ? 'all required AO dependency checks are closed'
+      : `${notClosed.length} required AO check(s) not closed`
+
+  return {
+    present: true,
+    status,
+    reason,
+    filePath: resolved,
+    required,
+    checks,
+    requiredChecks,
+  }
+}
+
+function combineReadiness(consistency, evidence, aoGate, requireBoth, requireAoGate) {
   const blockers = []
   const warnings = []
 
@@ -329,6 +461,13 @@ function combineReadiness(consistency, evidence, requireBoth) {
     else warnings.push(`evidence bundle missing: ${evidence.reason}`)
   } else if (evidence.status !== 'pass') {
     blockers.push(`evidence status=${evidence.status}: ${evidence.reason}`)
+  }
+
+  if (!aoGate.present) {
+    if (requireAoGate) blockers.push(`ao dependency gate missing: ${aoGate.reason}`)
+    else warnings.push(`ao dependency gate missing: ${aoGate.reason}`)
+  } else if (aoGate.status !== 'pass') {
+    blockers.push(`ao dependency gate status=${aoGate.status}: ${aoGate.reason}`)
   }
 
   const status = blockers.length > 0 ? 'not-ready' : warnings.length > 0 ? 'warning' : 'ready'
@@ -370,6 +509,23 @@ function renderMarkdown(pack) {
   }
   lines.push('')
 
+  lines.push('## AO dependency gate')
+  lines.push(`- Present: ${pack.aoGate.present ? 'yes' : 'no'}`)
+  lines.push(`- Status: ${pack.aoGate.status}`)
+  lines.push(`- Reason: ${pack.aoGate.reason}`)
+  if (pack.aoGate.filePath) {
+    lines.push(`- Gate file: ${pack.aoGate.filePath}`)
+  }
+  if (Array.isArray(pack.aoGate.requiredChecks) && pack.aoGate.requiredChecks.length > 0) {
+    lines.push('- Required checks:')
+    for (const check of pack.aoGate.requiredChecks) {
+      const title = check.title ? ` (${check.title})` : ''
+      const evidence = check.evidence ? ` [evidence: ${check.evidence}]` : ''
+      lines.push(`  - ${check.id}${title}: ${check.status}${evidence}`)
+    }
+  }
+  lines.push('')
+
   if (pack.blockers.length > 0) {
     lines.push('## Blockers')
     for (const blocker of pack.blockers) lines.push(`- ${blocker}`)
@@ -401,7 +557,8 @@ async function runCli(argv = process.argv.slice(2)) {
   const args = parseArgs(argv)
   const consistency = await collectConsistencyEvidence(args.consistencyDir)
   const evidence = await collectEvidenceBundle(args.evidenceDir)
-  const readiness = combineReadiness(consistency, evidence, args.requireBoth)
+  const aoGate = await collectAoDependencyGate(args.aoGateFile)
+  const readiness = combineReadiness(consistency, evidence, aoGate, args.requireBoth, args.requireAoGate)
 
   const pack = {
     createdAt: new Date().toISOString(),
@@ -411,6 +568,7 @@ async function runCli(argv = process.argv.slice(2)) {
     warnings: readiness.warnings,
     consistency,
     evidence,
+    aoGate,
   }
 
   const markdown = renderMarkdown(pack)
@@ -436,6 +594,8 @@ if (isMain) {
 
 export {
   combineReadiness,
+  collectAoDependencyGate,
+  normalizeAoStatus,
   parseArgs,
   parseTimestampFromDir,
   renderMarkdown,

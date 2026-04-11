@@ -216,12 +216,14 @@ Progress notes:
 - Dispatch helper now supports `--consistency-mode` and `--consistency-profile` so manual operator runs can match scheduled profile behavior.
 - Scheduled consistency now performs a fail-fast config preflight and reports missing/invalid vars/secrets in the job summary.
 - CI now builds and uploads a consolidated `release-evidence-pack` artifact (`.md` + `.json`) from consistency + evidence outputs on manual release drills.
+- AO dependency gate is now machine-readable in `kernel-migration/ao-dependency-gate.json`; release pack generation requires this gate when `--require-ao-gate` is used.
 
 ## v1.4.0 release-ready checklist
 
 Use this checklist before merge/release sign-off.
 
 - [ ] AO registry/authority lifecycle items are complete (`publish/revoke/query/pause`, `root/upgrade/emergency/reporter`, audit sequence surface).
+- [ ] `kernel-migration/ao-dependency-gate.json` required checks are updated to `closed` with evidence links.
 - [ ] Gateway `main` CI is green on full tests, integrity gate, and smoke jobs.
 - [ ] Scheduled consistency preflight is passing with repository configuration in place:
   - [ ] `CONSISTENCY_URLS` (at least two valid URLs)

@@ -9,6 +9,7 @@
 - Multi-gateway matrix compare: `npm run ops:compare-integrity-matrix` supports `pairwise` and `all` drift checks.
 - Drift summary helper: `npm run ops:build-drift-alert-summary` turns matrix JSON into a profile-aware alert report.
 - Release sign-off helper: `npm run ops:build-release-evidence-pack` consolidates consistency + evidence artifacts into one release pack.
+- AO dependency gate source: `kernel-migration/ao-dependency-gate.json` provides machine-readable P0.1/P1.1/P1.2 status for release gating.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
 - Bundle indexing/exchange pack: `npm run ops:index-evidence-bundles` and `npm run ops:build-attestation-exchange-pack` for portable review artifacts.
 - Schema validation: keep attestation payloads aligned with `ops/schemas/integrity-attestation.schema.json` before archiving the bundle.
