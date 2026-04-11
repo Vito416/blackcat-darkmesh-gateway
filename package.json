@@ -14,6 +14,7 @@
     "ops:build-attestation-exchange-pack": "node scripts/build-attestation-exchange-pack.js",
     "ops:index-evidence-bundles": "node scripts/index-evidence-bundles.js",
     "ops:build-drift-alert-summary": "node scripts/build-drift-alert-summary.js",
+    "ops:build-release-evidence-pack": "node scripts/build-release-evidence-pack.js",
     "ops:check-evidence-bundle": "node scripts/check-evidence-bundle.js",
     "ops:latest-evidence-bundle": "node scripts/latest-evidence-bundle.js",
     "ops:dispatch-consistency-smoke": "node scripts/dispatch-consistency-smoke.js",

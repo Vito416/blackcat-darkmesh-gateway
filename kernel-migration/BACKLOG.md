@@ -215,6 +215,7 @@ Progress notes:
 - Weekly scheduled consistency smoke is enabled in CI (requires `CONSISTENCY_URLS`; optional `CONSISTENCY_MODE` and `GATEWAY_RESOURCE_PROFILE`).
 - Dispatch helper now supports `--consistency-mode` and `--consistency-profile` so manual operator runs can match scheduled profile behavior.
 - Scheduled consistency now performs a fail-fast config preflight and reports missing/invalid vars/secrets in the job summary.
+- CI now builds and uploads a consolidated `release-evidence-pack` artifact (`.md` + `.json`) from consistency + evidence outputs on manual release drills.
 
 ## v1.4.0 release-ready checklist
 

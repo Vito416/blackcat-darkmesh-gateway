@@ -416,3 +416,26 @@ The scheduled run uploads:
 - matrix JSON output (`compare-integrity-matrix`)
 - markdown drift report (`build-drift-alert-summary`)
 - JSON drift summary (alert-oriented summary for automation)
+
+### 9.6 Build release evidence pack
+
+When both consistency and evidence artifacts are available, generate a single sign-off pack:
+
+```bash
+node scripts/build-release-evidence-pack.js \
+  --release 1.4.0 \
+  --consistency-dir ./tmp/consistency-artifacts \
+  --evidence-dir ./tmp/evidence-artifacts \
+  --out ./tmp/release-evidence-pack.md \
+  --json-out ./tmp/release-evidence-pack.json \
+  --require-both
+```
+
+Pass:
+- exit `0`
+- pack status is `READY`
+- no blockers listed in the generated markdown/json
+
+Fail:
+- exit `3` when required artifact sets are missing/invalid or release is not ready
+- check blockers in the generated pack before attempting release sign-off

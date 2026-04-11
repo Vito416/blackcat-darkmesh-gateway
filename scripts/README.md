@@ -200,6 +200,27 @@ npm run ops:build-drift-alert-summary -- \
   --json
 ```
 
+## Release evidence pack
+
+`scripts/build-release-evidence-pack.js` merges consistency and evidence artifacts into a single release-ready summary (`markdown` + optional JSON), suitable for v1.4.0 sign-off.
+
+Usage:
+```bash
+node scripts/build-release-evidence-pack.js \
+  --release 1.4.0 \
+  --consistency-dir ./tmp/consistency-artifacts \
+  --evidence-dir ./tmp/evidence-artifacts \
+  --out ./tmp/release-evidence-pack.md \
+  --json-out ./tmp/release-evidence-pack.json \
+  --require-both
+
+npm run ops:build-release-evidence-pack -- \
+  --release 1.4.0 \
+  --consistency-dir ./tmp/consistency-artifacts \
+  --evidence-dir ./tmp/evidence-artifacts \
+  --json
+```
+
 ## Integrity attestation artifact
 
 `scripts/generate-integrity-attestation.js` fetches `/integrity/state` from multiple gateways, compares the attestation bootstrap fields, and writes a compact JSON artifact that you can archive with a release or incident bundle.

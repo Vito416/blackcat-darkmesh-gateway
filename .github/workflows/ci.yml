@@ -53,6 +53,10 @@ on:
         description: Optional token for evidence dry-run export
         required: false
         type: string
+      release_label:
+        description: Release label for evidence pack (default 1.4.0)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -378,6 +382,8 @@ jobs:
         run: npm run ops:index-evidence-bundles -- --help
       - name: "Help: suggest rate limits"
         run: npm run ops:suggest-ratelimit-overrides -- --help
+      - name: "Help: release evidence pack"
+        run: npm run ops:build-release-evidence-pack -- --help
       - name: "Help: bundle check"
         run: npm run ops:check-evidence-bundle -- --help
       - name: "Help: latest bundle"
@@ -521,3 +527,66 @@ jobs:
           if-no-files-found: warn
           path: |
             ${{ env.EVIDENCE_OUT_DIR }}
+
+  release-evidence-pack:
+    name: Release evidence pack
+    runs-on: ubuntu-24.04
+    needs:
+      - consistency-smoke
+      - evidence-dry-run
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.consistency_urls != '' && inputs.evidence_urls != '' }}
+    env:
+      RELEASE_LABEL: ${{ inputs.release_label || '1.4.0' }}
+      CONSISTENCY_ARTIFACT_DIR: ${{ runner.temp }}/release-pack/consistency
+      EVIDENCE_ARTIFACT_DIR: ${{ runner.temp }}/release-pack/evidence
+      RELEASE_PACK_MD: ${{ runner.temp }}/release-pack/release-evidence-pack.md
+      RELEASE_PACK_JSON: ${{ runner.temp }}/release-pack/release-evidence-pack.json
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Download consistency artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: consistency-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CONSISTENCY_ARTIFACT_DIR }}
+      - name: Download evidence artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: evidence-dry-run-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_ARTIFACT_DIR }}
+      - name: Build release evidence pack
+        run: |
+          node scripts/build-release-evidence-pack.js \
+            --release "$RELEASE_LABEL" \
+            --consistency-dir "$CONSISTENCY_ARTIFACT_DIR" \
+            --evidence-dir "$EVIDENCE_ARTIFACT_DIR" \
+            --out "$RELEASE_PACK_MD" \
+            --json-out "$RELEASE_PACK_JSON" \
+            --require-both
+      - name: Append release pack summary
+        if: always()
+        run: |
+          if [ -f "$RELEASE_PACK_MD" ]; then
+            cat "$RELEASE_PACK_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Release evidence pack was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload release evidence pack
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-pack-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            ${{ env.RELEASE_PACK_MD }}
+            ${{ env.RELEASE_PACK_JSON }}
