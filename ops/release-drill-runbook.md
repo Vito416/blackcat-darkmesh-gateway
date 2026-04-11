@@ -301,6 +301,25 @@ Artifacts:
 - `$DRILL_DIR/release-evidence-ledger.md`
 - `$DRILL_DIR/release-evidence-ledger.json`
 
+## 13) Check decommission readiness
+
+Use the final machine summary before archive or deletion work. This reads the completed drill artifacts plus the AO gate file and reports blockers in a compact form.
+
+```bash
+npm run ops:check-decommission-readiness -- \
+  --dir "$DRILL_DIR" \
+  --ao-gate kernel-migration/ao-dependency-gate.json \
+  --strict \
+  --json
+```
+
+Expected output:
+- JSON summary with `status`, `blockers`, and per-artifact / AO gate checks
+- Exit code `0` only when the drill artifacts are ready and all required AO gate checks are closed
+
+Artifacts:
+- none
+
 ## Failure triage matrix
 
 | Failing script | Likely cause | First check |
@@ -320,6 +339,7 @@ Artifacts:
 | `ops:validate-release-drill-manifest` | Manifest schema/content mismatch in strict mode | Inspect path uniqueness, sha256 format/casing, and artifact metadata |
 | `ops:check-release-drill-artifacts` | Required drill artifacts are missing or release metadata is inconsistent across files | Inspect `release-drill-check.json`, then compare pack/readiness/manifest release fields and validation log |
 | `ops:build-release-evidence-ledger` | Final archive set is present but one or more strict ledger checks are not `ready` | Inspect `release-evidence-ledger.json` check flags and re-validate AO gate/manifest/readiness outputs |
+| `ops:check-decommission-readiness` | Final archive set or AO gate is not ready for decommission | Inspect the JSON blockers list; it names the missing artifacts, non-ready statuses, and open AO checks directly |
 
 ## Final sign-off mapping
 

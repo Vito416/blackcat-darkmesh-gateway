@@ -9,6 +9,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Gateway-side implementation is largely complete for the current migration slice; the remaining blockers are mostly AO-side registry/authority lifecycle work and the final decommission evidence.
 - Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.
 - Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, strict manifest validation log, and drill artifact check JSON as one drill bundle.
+- Closeout helpers now include `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness` for repeatable operator evidence and pre-decommission gating.
 - Treat that output as machine-checked evidence only; manual evidence still needs separate drill logs, rollback proof, and human sign-off before decommission.
 
 ## This week execution

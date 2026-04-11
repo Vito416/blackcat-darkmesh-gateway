@@ -131,3 +131,19 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_WEBHOOK_REPLAY_SWEEP_INTERVAL_MS` controls how often the detector scans the whole map; keep it near 1000ms on normal hosts, and raise it only when CPU pressure matters more than immediate cleanup.
 - `GATEWAY_WEBHOOK_REPLAY_KEY_MAX_BYTES` fails closed on oversized replay keys before they can burn memory or CPU; keep the default unless a real provider key format needs more room.
 - Do not extend replay retention on small or diskless hosts unless the provider retry window really requires it.
+
+## WEDOS readiness validator
+Use the validator before promoting a constrained deployment profile. It checks the same hosting knobs documented above and returns a clear pass/warn/fail result.
+
+```bash
+node scripts/validate-wedos-readiness.js \
+  --profile wedos_small \
+  --env-file .env.wedos \
+  --strict
+```
+
+- `--profile wedos_small|wedos_medium|diskless` selects the hosting envelope to validate.
+- `--env-file <FILE>` is optional; use it when you want to validate a deployment dotenv file instead of the live process environment.
+- `--strict` fails when critical constraints are violated; warnings stay visible but do not fail a healthy profile.
+- `--json` is useful for CI or release-drill archives.
+- The validator focuses on the knobs that matter most on shared hosting: AO fetch timeout/retry bounds, cache caps/admission mode, ratelimit caps, and diskless checkpoint guidance.

@@ -87,11 +87,11 @@ Manual evidence still required separately:
 
 ## E. Test parity
 
-- [ ] Kernel-derived parity scenarios are ported into AO/gateway tests.
+- [x] Kernel-derived parity scenarios are ported into AO/gateway tests.
 - [x] CI contains integrity-focused tests (not only basic unit coverage).
 - [x] CI integrity tests pass for `integrity-client`, `integrity-verifier`, `integrity-policy-gate`, `integrity-checkpoint`, and `integrity-parity`.
-- [ ] Negative tests cover revoked root, hash mismatch, missing authority, stale state.
-- [ ] Checkpoint tamper test passes and fails closed on signature mismatch.
+- [x] Negative tests cover revoked root, hash mismatch, missing authority, stale state.
+- [x] Checkpoint tamper test passes and fails closed on signature mismatch.
 
 ## F. Operational readiness
 
@@ -110,13 +110,17 @@ Manual evidence still required separately:
 - [ ] Stakeholder sign-off: security (`1` documented approval, no open critical findings, no unresolved auth/rotation gaps).
 - [ ] Stakeholder sign-off: operations (`1` documented approval, runbook and recovery drill verified, on-call knows rollback path).
 - [ ] Stakeholder sign-off: architecture (`1` documented approval, target state and decommission scope match the approved design).
-- [ ] P0 integrity rollout complete with `npm test` + focused integrity tests green on the current branch.
+- [x] P0 integrity rollout complete with `npm test` + focused integrity tests green on the current branch.
 - [ ] Final migration summary committed in gateway + AO notes with date, scope, and rollback reference.
 - [ ] Rollback plan documented and tested in staging for at least one failure scenario.
 - [ ] No open P0/P1 migration blockers remain in backlog.
 - [ ] The old repo has been dry-run archived or mirrored with a verified restore path before deletion.
 
 ## H. Evidence log template
+
+Latest machine verification snapshot (UTC: `2026-04-11`):
+- `npm run test:integrity-fast` → `SUCCESS 26/26 checks passed`
+- `npm test` → `51 files, 329 tests passed`
 
 Use one row per drill or proof item. Keep the artifact link stable and prefer the raw log, PR, or release note URL.
 
@@ -142,6 +146,14 @@ Use one row per drill or proof item. Keep the artifact link stable and prefer th
 - Remaining blockers:
 - Rollback reference:
 - Notes:
+
+## K. Operator reference templates
+
+Use these files as the final operator-facing closeout records once the evidence pack is complete:
+
+- `kernel-migration/FINAL_MIGRATION_SUMMARY.md` — canonical migration closeout summary with UTC fields, evidence links, rollback reference, approvals, and residual risk notes.
+- `kernel-migration/SIGNOFF_RECORD.md` — final approval record for the release/decommission decision trail.
+- Keep both documents aligned with the archived drill bundle and the stable evidence links recorded in `kernel-migration/DECOMMISSION_CHECKLIST.md`.
 
 ## Recommended deletion sequence
 

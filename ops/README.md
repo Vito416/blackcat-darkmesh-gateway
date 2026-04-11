@@ -14,6 +14,10 @@
 - Release-drill archive manifest: `npm run ops:build-release-drill-manifest -- --dir <drill-dir> --out <release-drill-manifest.json>` plus `npm run ops:validate-release-drill-manifest -- --file <release-drill-manifest.json> --strict` writes and validates the machine-checked drill archive manifest used in sign-off.
 - Release-drill artifact completeness check: `npm run ops:check-release-drill-artifacts -- --dir <drill-dir> --strict --json` verifies the final mandatory artifact set and strict cross-file consistency.
 - Release evidence ledger generator: `npm run ops:build-release-evidence-ledger -- --dir <drill-dir> --decision pending [--strict]` emits `release-evidence-ledger.md/.json` with artifact hashes and overall ready/blocked status.
+- Decommission evidence log generator: `npm run ops:build-decommission-evidence-log -- --dir <drill-dir> --decision pending [--strict]` emits `decommission-evidence-log.md/.json` including manual-proof link fields.
+- Decommission readiness summary: `npm run ops:check-decommission-readiness -- --dir <drill-dir> --ao-gate kernel-migration/ao-dependency-gate.json [--strict] [--json]`.
+- AO gate evidence quality check: `npm run ops:check-ao-gate-evidence -- --file kernel-migration/ao-dependency-gate.json [--strict] [--json]`.
+- WEDOS profile readiness validator: `npm run ops:validate-wedos-readiness -- --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--strict]`.
 - AO dependency gate source: `kernel-migration/ao-dependency-gate.json` provides machine-readable P0.1/P1.1/P1.2 status for release gating.
 - AO dependency gate validation: `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json` checks gate structure and closed-check evidence references.
 - AO dependency gate validation artifact: archive `ao-dependency-gate.validation.txt` from drills as the machine output proof for gate checks.

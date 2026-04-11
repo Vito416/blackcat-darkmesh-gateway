@@ -341,6 +341,73 @@ npm run ops:build-release-evidence-ledger -- \
   --strict
 ```
 
+## Decommission evidence log
+
+`scripts/build-decommission-evidence-log.js` creates the final decommission log (`.md` + `.json`) from a completed drill directory plus manual evidence links. It records timestamps, artifact presence, and the human proof links that are still required for decommission sign-off.
+
+The log tracks these manual proof fields:
+
+- recovery drill proof
+- AO fallback proof
+- rollback proof
+- approvals / sign-off
+
+Usage:
+```bash
+node scripts/build-decommission-evidence-log.js \
+  --dir ./tmp/release-drill \
+  --operator ops-user \
+  --ticket GW-1234 \
+  --decision pending \
+  --recovery-drill-link https://example.com/recovery \
+  --ao-fallback-link https://example.com/fallback \
+  --rollback-proof-link https://example.com/rollback \
+  --approvals-link https://example.com/approvals \
+  --strict
+```
+
+Strict mode exits non-zero if any mandatory machine artifact is missing from the drill directory.
+
+## AO gate evidence quality check
+
+`scripts/check-ao-gate-evidence.js` validates the AO dependency gate for closeout quality (required IDs, status shape, evidence refs on closed checks, release/timestamp sanity).
+
+Usage:
+```bash
+npm run ops:check-ao-gate-evidence -- \
+  --file ./kernel-migration/ao-dependency-gate.json \
+  --json
+
+npm run ops:check-ao-gate-evidence -- \
+  --file ./kernel-migration/ao-dependency-gate.json \
+  --strict
+```
+
+## Decommission readiness check
+
+`scripts/check-decommission-readiness.js` reads a completed drill directory + AO gate file and emits a blocker-oriented readiness summary.
+
+Usage:
+```bash
+npm run ops:check-decommission-readiness -- \
+  --dir ./tmp/release-drill \
+  --ao-gate ./kernel-migration/ao-dependency-gate.json \
+  --strict \
+  --json
+```
+
+## WEDOS readiness validator
+
+`scripts/validate-wedos-readiness.js` validates constrained-hosting env settings against `wedos_small`, `wedos_medium`, or `diskless` budget envelopes.
+
+Usage:
+```bash
+npm run ops:validate-wedos-readiness -- \
+  --profile wedos_small \
+  --env-file ./.env.wedos \
+  --strict
+```
+
 ## Integrity attestation artifact
 
 `scripts/generate-integrity-attestation.js` fetches `/integrity/state` from multiple gateways, compares the attestation bootstrap fields, and writes a compact JSON artifact that you can archive with a release or incident bundle.

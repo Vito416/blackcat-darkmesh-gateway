@@ -353,6 +353,38 @@ jobs:
           else
             echo "ops:build-release-evidence-ledger is not defined in package.json; skipping help check."
           fi
+      - name: "Help: build decommission evidence log"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:build-decommission-evidence-log'] ? 0 : 1)"; then
+            npm run ops:build-decommission-evidence-log -- --help
+          else
+            echo "ops:build-decommission-evidence-log is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: check decommission readiness"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-decommission-readiness'] ? 0 : 1)"; then
+            npm run ops:check-decommission-readiness -- --help
+          else
+            echo "ops:check-decommission-readiness is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: check AO gate evidence"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-ao-gate-evidence'] ? 0 : 1)"; then
+            npm run ops:check-ao-gate-evidence -- --help
+          else
+            echo "ops:check-ao-gate-evidence is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate WEDOS readiness"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-wedos-readiness'] ? 0 : 1)"; then
+            npm run ops:validate-wedos-readiness -- --help
+          else
+            echo "ops:validate-wedos-readiness is not defined in package.json; skipping help check."
+          fi
       - name: "Help: validate AO dependency gate"
         run: npm run ops:validate-ao-dependency-gate -- --help
       - name: "Help: export consistency report"
@@ -529,6 +561,10 @@ jobs:
       RELEASE_DRILL_CHECK_JSON: ${{ runner.temp }}/release-pack/release-drill-check.json
       RELEASE_LEDGER_MD: ${{ runner.temp }}/release-pack/release-evidence-ledger.md
       RELEASE_LEDGER_JSON: ${{ runner.temp }}/release-pack/release-evidence-ledger.json
+      RELEASE_AO_GATE_EVIDENCE_JSON: ${{ runner.temp }}/release-pack/ao-gate-evidence-check.json
+      RELEASE_DECOMMISSION_READY_JSON: ${{ runner.temp }}/release-pack/decommission-readiness.json
+      RELEASE_DECOMMISSION_LOG_MD: ${{ runner.temp }}/release-pack/decommission-evidence-log.md
+      RELEASE_DECOMMISSION_LOG_JSON: ${{ runner.temp }}/release-pack/decommission-evidence-log.json
       RELEASE_SIGNOFF_MD: ${{ runner.temp }}/release-pack/release-signoff-checklist.md
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -702,16 +738,59 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f "$GITHUB_WORKSPACE/scripts/build-release-evidence-ledger.js" ]; then
+            work_ledger_md="$RELEASE_PACK_WORKDIR/release-evidence-ledger.md"
+            work_ledger_json="$RELEASE_PACK_WORKDIR/release-evidence-ledger.json"
             node "$GITHUB_WORKSPACE/scripts/build-release-evidence-ledger.js" \
               --dir "$RELEASE_PACK_WORKDIR" \
               --decision pending \
-              --out "$RELEASE_LEDGER_MD" \
-              --json-out "$RELEASE_LEDGER_JSON"
+              --out "$work_ledger_md" \
+              --json-out "$work_ledger_json"
+            cp "$work_ledger_md" "$RELEASE_LEDGER_MD"
+            cp "$work_ledger_json" "$RELEASE_LEDGER_JSON"
             node -e "const fs=require('node:fs');const p=process.env.RELEASE_LEDGER_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Release evidence ledger');console.log('');console.log('- Overall status: '+String(d.overallStatus||'unknown'));console.log('- Decision: '+String(d.decision||'pending'));console.log('- Artifacts hashed: '+(Array.isArray(d.artifacts)?d.artifacts.length:0));" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "### Release evidence ledger" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "- Result: skipped because ops:build-release-evidence-ledger is not defined." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Check AO gate evidence quality
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/check-ao-gate-evidence.js" ]; then
+            node "$GITHUB_WORKSPACE/scripts/check-ao-gate-evidence.js" \
+              --file "$GITHUB_WORKSPACE/kernel-migration/ao-dependency-gate.json" \
+              --json > "$RELEASE_AO_GATE_EVIDENCE_JSON"
+            node -e "const fs=require('node:fs');const p=process.env.RELEASE_AO_GATE_EVIDENCE_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### AO gate evidence quality');console.log('');console.log('- Result: '+String(d.result||'unknown'));console.log('- Issues: '+(Array.isArray(d.issues)?d.issues.length:0));console.log('- Warnings: '+(Array.isArray(d.warnings)?d.warnings.length:0));" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### AO gate evidence quality" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: skipped because ops:check-ao-gate-evidence is not defined." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Check decommission readiness
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" ]; then
+            node "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" \
+              --dir "$RELEASE_PACK_WORKDIR" \
+              --ao-gate "$GITHUB_WORKSPACE/kernel-migration/ao-dependency-gate.json" \
+              --json > "$RELEASE_DECOMMISSION_READY_JSON"
+            node -e "const fs=require('node:fs');const p=process.env.RELEASE_DECOMMISSION_READY_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission readiness');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Blockers: '+Number(d.blockerCount||0));" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Decommission readiness" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: skipped because ops:check-decommission-readiness is not defined." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Build decommission evidence log
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/build-decommission-evidence-log.js" ]; then
+            node "$GITHUB_WORKSPACE/scripts/build-decommission-evidence-log.js" \
+              --dir "$RELEASE_PACK_WORKDIR" \
+              --decision pending \
+              --out "$RELEASE_DECOMMISSION_LOG_MD" \
+              --json-out "$RELEASE_DECOMMISSION_LOG_JSON"
+          else
+            echo "Decommission evidence log step skipped (script missing)." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Append release pack summary
         if: always()
@@ -737,6 +816,14 @@ jobs:
           else
             echo "Release evidence ledger was not generated." >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Append decommission evidence log
+        if: always()
+        run: |
+          if [ -f "$RELEASE_DECOMMISSION_LOG_MD" ]; then
+            cat "$RELEASE_DECOMMISSION_LOG_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Decommission evidence log was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Upload release evidence pack
         if: always()
         uses: actions/upload-artifact@v4
@@ -754,3 +841,7 @@ jobs:
             ${{ env.RELEASE_DRILL_CHECK_JSON }}
             ${{ env.RELEASE_LEDGER_MD }}
             ${{ env.RELEASE_LEDGER_JSON }}
+            ${{ env.RELEASE_AO_GATE_EVIDENCE_JSON }}
+            ${{ env.RELEASE_DECOMMISSION_READY_JSON }}
+            ${{ env.RELEASE_DECOMMISSION_LOG_MD }}
+            ${{ env.RELEASE_DECOMMISSION_LOG_JSON }}

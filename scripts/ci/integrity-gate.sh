@@ -61,6 +61,18 @@ fi
 if [[ -f tests/build-release-evidence-ledger.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
+if [[ -f tests/build-decommission-evidence-log.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
+if [[ -f tests/check-decommission-readiness.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
+if [[ -f tests/check-ao-gate-evidence.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
+if [[ -f tests/validate-wedos-readiness.test.ts ]]; then
+  STEPS_TOTAL=$((STEPS_TOTAL + 1))
+fi
 
 echo "[integrity-gate] starting ${STEPS_TOTAL} checks"
 
@@ -126,6 +138,26 @@ fi
 if [[ -f tests/build-release-evidence-ledger.test.ts ]]; then
   CURRENT_STEP="build-release-evidence-ledger"
   run_step "$CURRENT_STEP" npx vitest run tests/build-release-evidence-ledger.test.ts
+fi
+
+if [[ -f tests/build-decommission-evidence-log.test.ts ]]; then
+  CURRENT_STEP="build-decommission-evidence-log"
+  run_step "$CURRENT_STEP" npx vitest run tests/build-decommission-evidence-log.test.ts
+fi
+
+if [[ -f tests/check-decommission-readiness.test.ts ]]; then
+  CURRENT_STEP="check-decommission-readiness"
+  run_step "$CURRENT_STEP" npx vitest run tests/check-decommission-readiness.test.ts
+fi
+
+if [[ -f tests/check-ao-gate-evidence.test.ts ]]; then
+  CURRENT_STEP="check-ao-gate-evidence"
+  run_step "$CURRENT_STEP" npx vitest run tests/check-ao-gate-evidence.test.ts
+fi
+
+if [[ -f tests/validate-wedos-readiness.test.ts ]]; then
+  CURRENT_STEP="validate-wedos-readiness"
+  run_step "$CURRENT_STEP" npx vitest run tests/validate-wedos-readiness.test.ts
 fi
 
 CURRENT_STEP="fetch-control"

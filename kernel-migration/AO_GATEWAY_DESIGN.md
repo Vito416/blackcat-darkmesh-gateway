@@ -140,3 +140,9 @@ The gateway-facing AO integrity snapshot contract is versioned separately in:
 
 This keeps the data contract explicit while the parser and migration notes evolve
 independently.
+
+## 11) Release closeout evidence
+
+- `scripts/check-ao-gate-evidence.js --file kernel-migration/ao-dependency-gate.json` is the closeout guardrail for the AO dependency gate itself.
+- It checks that required gate items exist, IDs stay unique, closed items point to real evidence, and timestamps/releases are sane before we call a release evidence bundle complete.
+- In `--strict` mode it fails closed until every required AO dependency check is `closed`, which makes the release archive easier to audit later.
