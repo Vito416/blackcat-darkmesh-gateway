@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { digestForIntegrityAttestationArtifact } from './helpers/integrity-attestation.js'
 
 const scriptPath = fileURLToPath(new URL('../scripts/build-attestation-exchange-pack.js', import.meta.url))
 const tempDirs: string[] = []
@@ -15,27 +15,6 @@ afterEach(() => {
     if (dir) rmSync(dir, { recursive: true, force: true })
   }
 })
-
-function canonicalize(value: unknown): unknown {
-  if (value === null || typeof value !== 'object') return value
-  if (Array.isArray(value)) return value.map((entry) => canonicalize(entry))
-  const out: Record<string, unknown> = {}
-  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-    const entry = (value as Record<string, unknown>)[key]
-    if (typeof entry !== 'undefined') out[key] = canonicalize(entry)
-  }
-  return out
-}
-
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(canonicalize(value))
-}
-
-function digestForAttestation(attestation: Record<string, unknown>): string {
-  const copy = { ...attestation }
-  delete copy.digest
-  return `sha256:${createHash('sha256').update(canonicalJson(copy)).digest('hex')}`
-}
 
 function buildAttestation(overrides: Record<string, unknown> = {}) {
   const attestation: Record<string, unknown> = {
@@ -72,7 +51,7 @@ function buildAttestation(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 
-  return { ...attestation, digest: digestForAttestation(attestation) }
+  return { ...attestation, digest: digestForIntegrityAttestationArtifact(attestation) }
 }
 
 function writeBundle(root: string, name: string, options: { attestation?: Record<string, unknown>; manifest?: Record<string, unknown>; compare?: string } = {}) {

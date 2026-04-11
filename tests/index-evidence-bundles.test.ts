@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { digestForIntegrityAttestationArtifact } from './helpers/integrity-attestation.js'
 
 const scriptPath = fileURLToPath(new URL('../scripts/index-evidence-bundles.js', import.meta.url))
 const tempDirs: string[] = []
@@ -15,33 +15,6 @@ afterEach(() => {
     if (dir) rmSync(dir, { recursive: true, force: true })
   }
 })
-
-function canonicalize(value: unknown): unknown {
-  if (value === null || typeof value !== 'object') return value
-  if (Array.isArray(value)) return value.map((entry) => canonicalize(entry))
-  const out: Record<string, unknown> = {}
-  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-    const entry = (value as Record<string, unknown>)[key]
-    if (typeof entry !== 'undefined') out[key] = canonicalize(entry)
-  }
-  return out
-}
-
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(canonicalize(value))
-}
-
-function digestForArtifact(artifact: Record<string, unknown>): string {
-  const segment = {
-    artifactType: artifact.artifactType,
-    scriptVersionTag: artifact.scriptVersionTag,
-    generatedAt: artifact.generatedAt,
-    gateways: artifact.gateways,
-    comparedFields: artifact.comparedFields,
-    summary: artifact.summary,
-  }
-  return `sha256:${createHash('sha256').update(canonicalJson(segment)).digest('hex')}`
-}
 
 function buildAttestationArtifact(overrides: Record<string, unknown> = {}) {
   const artifact: Record<string, unknown> = {
@@ -92,7 +65,7 @@ function buildAttestationArtifact(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 
-  return { ...artifact, digest: digestForArtifact(artifact) }
+  return { ...artifact, digest: digestForIntegrityAttestationArtifact(artifact) }
 }
 
 function writeBundle(root: string, name: string, options: { status?: string; compareExit?: number; attestationExit?: number; digest?: string } = {}) {

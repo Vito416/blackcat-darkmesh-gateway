@@ -1,4 +1,5 @@
-import { createHash, createHmac } from 'node:crypto'
+import { createHmac } from 'node:crypto'
+import { canonicalJson, canonicalize, sha256Hex } from './attestation-json.js'
 
 const VALID_PROTOCOLS = new Set(['http:', 'https:'])
 const SCRIPT_VERSION_TAG = 'integrity-attestation-v1'
@@ -11,27 +12,6 @@ const COMPARED_FIELDS = [
   ['release.root', ['release', 'root']],
   ['audit.seqTo', ['audit', 'seqTo']],
 ]
-
-function canonicalize(value) {
-  if (value === null || typeof value !== 'object') return value
-  if (Array.isArray(value)) return value.map((entry) => canonicalize(entry))
-  const out = {}
-  for (const key of Object.keys(value).sort()) {
-    const entry = value[key]
-    if (typeof entry !== 'undefined') {
-      out[key] = canonicalize(entry)
-    }
-  }
-  return out
-}
-
-function canonicalJson(value) {
-  return JSON.stringify(canonicalize(value))
-}
-
-function sha256Hex(text) {
-  return createHash('sha256').update(text).digest('hex')
-}
 
 function signHmac(secret, text) {
   return createHmac('sha256', secret).update(text).digest('hex')

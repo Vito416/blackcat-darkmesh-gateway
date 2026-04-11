@@ -6,7 +6,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 - Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 
-- Gateway-side implementation is complete for the current migration slice; the remaining blockers are AO-side registry/authority lifecycle work plus the final decommission evidence.
+- Gateway-side implementation is complete for the current migration slice; the remaining blockers are AO-side registry/authority lifecycle work plus the final decommission evidence, and those AO blockers remain open.
 - Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.
 - Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, strict manifest validation log, and drill artifact check JSON as one drill bundle.
 - Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness`, but the final state is still **automation complete, awaiting AO/manual proofs**.
@@ -19,7 +19,8 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 
 - [x] Keep `libs/legacy/MIGRATION_PLAN.md` current for every imported snapshot module (includes target path, status, and explicit decommission condition per module).
 - [x] Map runtime usage away from direct legacy imports (`rg -n "libs/legacy" src` -> no matches).
-- [x] Runtime boundary enforcement exists (`npm run ops:check-legacy-runtime-boundary -- --strict`, covered by `tests/check-legacy-runtime-boundary.test.ts`).
+- [x] Runtime config boundary enforcement exists and is CI-gated (`npm run ops:check-config-loader-runtime-boundary -- --strict`, covered by `tests/check-config-loader-runtime-boundary.test.ts`).
+- [x] Legacy no-import evidence checker exists and is CI-gated (`npm run ops:check-legacy-no-import-evidence -- --strict --json`, covered by `tests/check-legacy-no-import-evidence.test.ts`).
 - [x] Initial request-path extraction landed for runtime helpers:
   - `src/runtime/auth/httpAuth.ts`
   - `src/runtime/crypto/safeCompare.ts`
@@ -37,8 +38,10 @@ This workstream is gateway-owned and can progress against the snapshot inventory
   - Progress note: loader wiring is active in request-path modules (`src/templateApi.ts`, `src/handler.ts`, `src/webhooks.ts`, `src/ratelimit.ts`, `src/replay.ts`).
 - [~] `blackcat-core`: groundwork exists (`src/runtime/core/bytes.ts`, `tests/runtime-core-bytes.test.ts`); next is expanding `src/runtime/core/` primitive coverage and keeping the template helper contract aligned with `tests/template-api.test.ts`.
   - Progress note: JSON-safe core parsing helpers landed in `src/runtime/core/json.ts` with focused tests in `tests/runtime-core-json.test.ts`.
+  - Progress note: the canonical JSON primitive now has a gateway-owned implementation in `src/runtime/core/canonicalJson.ts`; keep primitive-by-primitive mapping notes aligned as coverage expands.
 - [~] `blackcat-crypto`: expand from safe-compare and signature-ref helpers to the full runtime crypto boundary (verification/signing key handling), then add module decommission proof.
   - Progress note: signature-ref normalization/validation helpers now live in `src/runtime/crypto/signatureRefs.ts` with focused coverage in `tests/runtime-crypto-signatureRefs.test.ts`; the verification boundary stays independent from wallet/private-key logic.
+  - Progress note: HMAC verification now has a gateway-owned helper in `src/runtime/crypto/hmac.ts` with focused coverage in `tests/runtime-crypto-hmac.test.ts`.
 - [~] `blackcat-auth`: keep the HTTP auth and role/signature policy helpers aligned with request-path modules, then capture the removal proof once the snapshot stays unused.
   - Progress note: shared role/signature-ref policy helpers now live in `src/runtime/auth/policy.ts` and are reused by template + integrity paths.
 - [~] `blackcat-sessions`: keep the replay store and session lifecycle boundary aligned with request-path usage, then capture removal proof once the snapshot is unused.
@@ -60,6 +63,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] `src/runtime/core/` extraction:
   - Commit the core helper boundary shape (`src/runtime/core/bytes.ts` + `src/runtime/core/index.ts`) and keep call sites on runtime-core imports only.
   - Progress note: JSON-safe parsing helpers now landed under `src/runtime/core/json.ts` and are exported via `src/runtime/core/index.ts`.
+  - Progress note: the canonical JSON primitive is now represented by `src/runtime/core/canonicalJson.ts`; update the primitive mapping notes before marking any core snapshot decommissionable.
   - Add/retain focused tests for core byte helpers (`tests/runtime-core-bytes.test.ts`) and ensure template body-limit behavior stays covered in `tests/template-api.test.ts`.
   - Extend `libs/legacy/MIGRATION_PLAN.md` primitive mapping notes for every newly extracted core helper before decommission state changes.
 - [~] auth-js/crypto-js client boundaries:

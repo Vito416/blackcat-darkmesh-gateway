@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { readdir, readFile, stat, writeFile, mkdir } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
 import { dirname, join, resolve } from 'node:path'
+import { expectedAttestationDigest } from './lib/attestation-json.js'
 
 const REQUIRED_FILES = ['compare.txt', 'attestation.json', 'manifest.json']
 const TIMESTAMPED_DIR_RE = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})Z(?:-.+)?$/
@@ -58,39 +58,6 @@ function compareCandidates(a, b) {
   if (a.timestampMs !== b.timestampMs) return a.timestampMs - b.timestampMs
   if (a.mtimeMs !== b.mtimeMs) return a.mtimeMs - b.mtimeMs
   return a.name.localeCompare(b.name)
-}
-
-function canonicalize(value) {
-  if (value === null || typeof value !== 'object') return value
-  if (Array.isArray(value)) return value.map((entry) => canonicalize(entry))
-  const out = {}
-  for (const key of Object.keys(value).sort()) {
-    const entry = value[key]
-    if (typeof entry !== 'undefined') {
-      out[key] = canonicalize(entry)
-    }
-  }
-  return out
-}
-
-function canonicalJson(value) {
-  return JSON.stringify(canonicalize(value))
-}
-
-function sha256Hex(text) {
-  return createHash('sha256').update(text).digest('hex')
-}
-
-function expectedDigest(artifact) {
-  const segment = {
-    artifactType: artifact.artifactType,
-    scriptVersionTag: artifact.scriptVersionTag,
-    generatedAt: artifact.generatedAt,
-    gateways: artifact.gateways,
-    comparedFields: artifact.comparedFields,
-    summary: artifact.summary,
-  }
-  return `sha256:${sha256Hex(canonicalJson(segment))}`
 }
 
 function csvCell(value) {
@@ -208,7 +175,7 @@ function validateAttestation(attestation) {
   if (typeof attestation.digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(attestation.digest)) {
     throw new Error('digest must be a sha256 hex digest')
   }
-  if (attestation.digest !== expectedDigest(attestation)) {
+  if (attestation.digest !== expectedAttestationDigest(attestation)) {
     throw new Error('digest mismatch')
   }
 }

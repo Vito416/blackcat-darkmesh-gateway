@@ -21,10 +21,10 @@
 - Decommission closeout one-shot: `node scripts/run-decommission-closeout.js --dir <drill-dir> --ao-gate kernel-migration/ao-dependency-gate.json [--operator ...] [--decision pending|go|no-go] [--strict]` assembles the final machine closeout log, but AO/manual proofs may still be open and must be recorded separately.
 - WEDOS profile readiness validator: `npm run ops:validate-wedos-readiness -- --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--strict]`.
 - Legacy import manifest validator: `npm run ops:validate-legacy-manifest -- [--manifest libs/legacy/MANIFEST.md] [--legacy-dir libs/legacy] [--strict] [--json]`.
-- Legacy no-import evidence checker: `npm run ops:check-legacy-no-import-evidence -- [--root src] [--manifest libs/legacy/MANIFEST.md] [--modules <csv>] [--strict] [--json]` scans `src/**` for references to `libs/legacy/<module>` and emits machine-readable evidence for the legacy boundary check.
+- Legacy no-import evidence checker: `npm run ops:check-legacy-no-import-evidence -- [--root src] [--manifest libs/legacy/MANIFEST.md] [--modules <csv>] [--strict] [--json]` scans `src/**` for references to `libs/legacy/<module>` and emits machine-readable evidence for the legacy boundary check; CI runs it in strict/json mode.
 - Legacy risk audit helper: `npm run ops:audit-legacy-risk -- [--dir libs/legacy] [--strict] [--json]`.
 - Legacy migration matrix generator: `npm run ops:build-legacy-migration-matrix -- [--manifest libs/legacy/MANIFEST.md] [--risk <audit-json>] [--out kernel-migration/legacy-libs-matrix.md] [--json]`.
-- Runtime config boundary check: `npm run ops:check-config-loader-runtime-boundary -- [--root src] [--strict] [--json]` flags any raw `process.env` usage under `src/runtime/**` outside `src/runtime/config/loader.ts`.
+- Runtime config boundary check: `npm run ops:check-config-loader-runtime-boundary -- [--root src] [--strict] [--json]` flags any raw `process.env` usage under `src/runtime/**` outside `src/runtime/config/loader.ts`; CI runs the strict form as a hard gate.
 - AO dependency gate source: `kernel-migration/ao-dependency-gate.json` provides machine-readable P0.1/P1.1/P1.2 status for release gating.
 - AO dependency gate validation: `npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json` checks gate structure and closed-check evidence references.
 - AO dependency gate validation artifact: archive `ao-dependency-gate.validation.txt` from drills as the machine output proof for gate checks.

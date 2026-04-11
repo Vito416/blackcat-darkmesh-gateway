@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto'
 import { readFile, stat, writeFile, mkdir } from 'node:fs/promises'
 import { dirname, resolve, join } from 'node:path'
 
@@ -85,29 +84,6 @@ function parseArgs(argv) {
   }
 
   return args
-}
-
-function canonicalize(value) {
-  if (value === null || typeof value !== 'object') return value
-  if (Array.isArray(value)) return value.map((entry) => canonicalize(entry))
-  const out = {}
-  for (const key of Object.keys(value).sort()) {
-    const entry = value[key]
-    if (typeof entry !== 'undefined') out[key] = canonicalize(entry)
-  }
-  return out
-}
-
-function canonicalJson(value) {
-  return JSON.stringify(canonicalize(value))
-}
-
-function sha256Hex(text) {
-  return createHash('sha256').update(text).digest('hex')
-}
-
-function digestOfArtifact(value) {
-  return `sha256:${sha256Hex(canonicalJson(value))}`
 }
 
 function makeCompareSnippet(text) {

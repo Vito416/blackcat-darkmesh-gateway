@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 import { loadIntegerConfig, loadStringConfig } from '../runtime/config/loader.js'
+import { canonicalizeJson } from '../runtime/core/canonicalJson.js'
 import type { IntegritySnapshot } from './types.js'
 
 export type IntegrityCheckpointMetadata = {
@@ -65,21 +66,6 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map((entry) => sortValue(entry))
-  if (!isObject(value)) return value
-
-  const sorted: Record<string, unknown> = {}
-  for (const key of Object.keys(value).sort()) {
-    sorted[key] = sortValue(value[key])
-  }
-  return sorted
-}
-
-function canonicalize(value: unknown): string {
-  return JSON.stringify(sortValue(value))
-}
-
 function resolveMaxAgeSeconds(): number | null | undefined {
   const loaded = loadIntegerConfig('GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS')
   if (!loaded.ok) return null
@@ -109,11 +95,11 @@ function isValidCheckpointMetadata(value: unknown): value is IntegrityCheckpoint
 }
 
 function signEnvelopeBody(body: CheckpointEnvelopeBody, secret: string): string {
-  return createHmac('sha256', secret).update(canonicalize(body)).digest('hex')
+  return createHmac('sha256', secret).update(canonicalizeJson(body)).digest('hex')
 }
 
 function signLegacyPayload(payload: IntegritySnapshot, secret: string): string {
-  return createHmac('sha256', secret).update(canonicalize(payload)).digest('hex')
+  return createHmac('sha256', secret).update(canonicalizeJson(payload)).digest('hex')
 }
 
 function safeHexCompare(left: string, right: string): boolean {
@@ -195,7 +181,7 @@ export async function writeIntegrityCheckpoint(
   }
 
   await mkdir(dirname(resolvedPath), { recursive: true })
-  await writeFile(resolvedPath, `${canonicalize(envelope)}\n`, 'utf8')
+  await writeFile(resolvedPath, `${canonicalizeJson(envelope)}\n`, 'utf8')
   return true
 }
 
@@ -253,6 +239,7 @@ export async function readIntegrityCheckpoint(
     if (ageMs > maxAgeSeconds * 1000) return null
     if (envelope.metadata.expiresAt !== undefined && now >= envelope.metadata.expiresAt) return null
   } else if (maxAgeSeconds !== undefined) {
+    // Fail closed when max-age policy is enabled but legacy envelope metadata is absent.
     return null
   }
 

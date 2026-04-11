@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join, resolve } from 'node:path'
+import { expectedAttestationDigest } from './lib/attestation-json.js'
 
 const REQUIRED_FILES = ['compare.txt', 'attestation.json', 'manifest.json']
 const VALIDATOR_PATH = fileURLToPath(new URL('./validate-integrity-attestation.js', import.meta.url))
@@ -40,39 +40,6 @@ function isObject(value) {
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0
-}
-
-function canonicalize(value) {
-  if (value === null || typeof value !== 'object') return value
-  if (Array.isArray(value)) return value.map((entry) => canonicalize(entry))
-  const out = {}
-  for (const key of Object.keys(value).sort()) {
-    const entry = value[key]
-    if (typeof entry !== 'undefined') {
-      out[key] = canonicalize(entry)
-    }
-  }
-  return out
-}
-
-function canonicalJson(value) {
-  return JSON.stringify(canonicalize(value))
-}
-
-function sha256Hex(text) {
-  return createHash('sha256').update(text).digest('hex')
-}
-
-function expectedDigest(artifact) {
-  const segment = {
-    artifactType: artifact.artifactType,
-    scriptVersionTag: artifact.scriptVersionTag,
-    generatedAt: artifact.generatedAt,
-    gateways: artifact.gateways,
-    comparedFields: artifact.comparedFields,
-    summary: artifact.summary,
-  }
-  return `sha256:${sha256Hex(canonicalJson(segment))}`
 }
 
 function parseArgs(argv) {
@@ -172,7 +139,7 @@ function validateAttestationArtifact(artifact, path) {
     if (!isNonEmptyString(artifact.digest) || !/^sha256:[0-9a-f]{64}$/.test(artifact.digest)) {
       return 'digest must be a sha256 hex digest'
     }
-    if (artifact.digest !== expectedDigest(artifact)) return 'digest mismatch'
+    if (artifact.digest !== expectedAttestationDigest(artifact)) return 'digest mismatch'
     return null
   })()
 
