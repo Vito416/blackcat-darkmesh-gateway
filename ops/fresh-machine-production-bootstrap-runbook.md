@@ -117,6 +117,7 @@ npm run ops:check-template-signature-ref-map -- \
 
 node scripts/validate-template-variant-map-config.js \
   --strict \
+  --allow-placeholders \
   --require-sites "$REQUIRED_TEMPLATE_SITES"
 
 npm run ops:check-forget-forward-config -- --strict --json
@@ -130,6 +131,8 @@ npm run ops:validate-consistency-preflight -- \
 ```
 
 If `/integrity/state` is intentionally public, replace the token flag with `--allow-anon`.
+
+For real production maps (no placeholders), run the same validator without `--allow-placeholders`.
 
 ## 5) Strict release-drill sequence (canonical)
 

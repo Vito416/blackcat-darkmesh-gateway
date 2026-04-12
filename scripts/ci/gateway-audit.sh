@@ -76,6 +76,7 @@ run_implementation_checks() {
     --json
   run_cmd node scripts/validate-template-variant-map-config.js \
     --strict \
+    --allow-placeholders \
     --require-sites site-alpha,site-beta
 
   (

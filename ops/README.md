@@ -111,7 +111,10 @@ node scripts/check-template-variant-map.js \
 
 node scripts/validate-template-variant-map-config.js \
   --strict \
+  --allow-placeholders \
   --require-sites site-alpha,site-beta
+
+# For live secret-backed maps, rerun without --allow-placeholders.
 
 set -a
 source config/forget-forward.example.env

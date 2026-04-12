@@ -215,10 +215,11 @@ jobs:
           if [ -z "${GATEWAY_TEMPLATE_VARIANT_MAP:-}" ]; then
             export GATEWAY_TEMPLATE_VARIANT_MAP="$(cat config/template-variant-map.example.json)"
             echo "GATEWAY_TEMPLATE_VARIANT_MAP source: config/template-variant-map.example.json (CI fallback)"
+            node scripts/validate-template-variant-map-config.js --strict --require-sites site-alpha,site-beta --allow-placeholders
           else
             echo "GATEWAY_TEMPLATE_VARIANT_MAP source: vars/secrets"
+            node scripts/validate-template-variant-map-config.js --strict --require-sites site-alpha,site-beta
           fi
-          node scripts/validate-template-variant-map-config.js --strict --require-sites site-alpha,site-beta
       - name: Check forget-forward config
         run: npm run ops:check-forget-forward-config -- --json
 

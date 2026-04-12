@@ -110,8 +110,11 @@ Validate the variant map config before the drill (same command path used in CI/a
 ```bash
 node scripts/validate-template-variant-map-config.js \
   --strict \
+  --allow-placeholders \
   --require-sites "$REQUIRED_TEMPLATE_SITES"
 ```
+
+For live secret-backed maps, rerun without `--allow-placeholders`.
 
 ## 1) Validate the preflight
 
