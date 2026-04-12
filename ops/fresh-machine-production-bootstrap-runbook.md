@@ -67,6 +67,8 @@ export GATEWAY_TEMPLATE_VARIANT_MAP="$(cat config/template-variant-map.example.j
 export REQUIRED_TEMPLATE_SITES="site-alpha,site-beta"
 ```
 
+`config/template-variant-map.example.json` is also the CI/audit deterministic fallback when `GATEWAY_TEMPLATE_VARIANT_MAP` is unset.
+
 If forget-forward relay is enabled for production, load the baseline and replace placeholders:
 
 ```bash
@@ -113,9 +115,9 @@ npm run ops:check-template-signature-ref-map -- \
   --require-sites "$REQUIRED_TEMPLATE_SITES" \
   --strict --json
 
-npm run ops:check-template-variant-map -- \
-  --require-sites "$REQUIRED_TEMPLATE_SITES" \
-  --strict --json
+node scripts/validate-template-variant-map-config.js \
+  --strict \
+  --require-sites "$REQUIRED_TEMPLATE_SITES"
 
 npm run ops:check-forget-forward-config -- --strict --json
 
@@ -248,7 +250,7 @@ Note: strict closeout remains blocked until AO required checks and manual proof 
 | `ops:check-template-worker-routing-config --strict` | URL/token map JSON malformed or missing coverage | Rebuild from `config/template-worker-routing.example.json` and `config/template-worker-token-map.example.json`; rerun strict check. |
 | `ops:check-template-worker-map-coherence --strict` | URL/token/signatureRef maps are out of sync | Ensure all three maps contain the same site keys before rerun. |
 | `ops:check-template-signature-ref-map --strict` | Missing signature refs for required sites | Fill `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` for every `REQUIRED_TEMPLATE_SITES` key. |
-| `ops:check-template-variant-map --strict` | Missing or unsupported template variants for required sites | Fill `GATEWAY_TEMPLATE_VARIANT_MAP` for every `REQUIRED_TEMPLATE_SITES` key and only use supported variants. |
+| `node scripts/validate-template-variant-map-config.js --strict` | Missing or unsupported template variants for one or more sites | Rebuild `GATEWAY_TEMPLATE_VARIANT_MAP` from the intended source map (example file for bootstrap, secrets for production) and rerun strict validation. |
 | `ops:check-forget-forward-config --strict` | Relay URL missing/invalid, token blank, or timeout out of range | Fix `GATEWAY_FORGET_FORWARD_URL`, `GATEWAY_FORGET_FORWARD_TOKEN`, and timeout (`100..30000`). |
 | `ops:validate-consistency-preflight` | Bad URL list, unsupported mode/profile, or missing token | Recheck `CONSISTENCY_URLS`, `GATEWAY_RESOURCE_PROFILE`, and auth mode (`--token` vs `--allow-anon`). |
 | `ops:run-release-drill` (step 2/4/6) | Endpoint/network/auth/evidence-bundle failure | Test `/integrity/state` URLs manually with the same token; inspect bundle `compare.txt` when evidence export fails. |

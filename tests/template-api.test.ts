@@ -144,6 +144,97 @@ describe('template api policy gateway', () => {
     expect(String(url)).toBe('https://ao.example/api/public/resolve-route')
   })
 
+  it('injects template variant metadata when the site mapping exists', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_TEMPLATE_VARIANT_MAP = JSON.stringify({
+      'site-1': {
+        variant: ' signal ',
+        templateTxId: ' tx-alpha ',
+        manifestTxId: ' manifest-alpha ',
+      },
+    })
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      siteId: 'site-1',
+      payload: { host: 'example.com', path: '/shop' },
+    })
+
+    expect(res.status).toBe(200)
+    expect(spy).toHaveBeenCalledTimes(1)
+    const init = spy.mock.calls[0][1] as RequestInit
+    const body = JSON.parse(String(init.body))
+    expect(body.payload.templateVariant).toEqual({
+      variant: 'signal',
+      templateTxId: 'tx-alpha',
+      manifestTxId: 'manifest-alpha',
+    })
+  })
+
+  it('does not inject template variant metadata when the site has no map entry', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_TEMPLATE_VARIANT_MAP = JSON.stringify({
+      'site-2': {
+        variant: 'signal',
+        templateTxId: 'tx-alpha',
+        manifestTxId: 'manifest-alpha',
+      },
+    })
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      siteId: 'site-1',
+      payload: { host: 'example.com', path: '/shop' },
+    })
+
+    expect(res.status).toBe(200)
+    expect(spy).toHaveBeenCalledTimes(1)
+    const init = spy.mock.calls[0][1] as RequestInit
+    const body = JSON.parse(String(init.body))
+    expect(body.payload).not.toHaveProperty('templateVariant')
+  })
+
+  it('fails closed when template variant map config is malformed', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_TEMPLATE_VARIANT_MAP = JSON.stringify({
+      'site-1': {
+        variant: 'signal',
+        templateTxId: 'tx-alpha',
+      },
+    })
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      siteId: 'site-1',
+      payload: { host: 'example.com', path: '/shop' },
+    })
+
+    expect(res.status).toBe(500)
+    await expect(res.text()).resolves.toContain('template_variant_map_invalid')
+    expect(spy).not.toHaveBeenCalled()
+  })
+
   it('rate limits template calls per IP before proxying', async () => {
     process.env.AO_PUBLIC_API_URL = 'https://ao.example'
     process.env.GATEWAY_RL_MAX = '1'

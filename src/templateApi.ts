@@ -47,6 +47,16 @@ type SignedWriteEnvelopeResult =
   | { ok: true; signature: string; signatureRef: string }
   | { ok: false; status: number; error: string; detail?: Record<string, unknown> }
 
+type TemplateVariantMetadata = {
+  variant: string
+  templateTxId: string
+  manifestTxId: string
+}
+
+type TemplateVariantResolveResult =
+  | { ok: true; value: TemplateVariantMetadata | null }
+  | { ok: false; status: number; error: string; detail?: Record<string, unknown> }
+
 const DEFAULT_TEMPLATE_MAX_BODY_BYTES = 32_768
 const DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS = 7_000
 const DEFAULT_TEMPLATE_SIGN_TIMEOUT_MS = 5_000
@@ -95,6 +105,54 @@ function parseStringMap(raw: string, envName: string): { ok: true; map: Record<s
       }
     }
     map[key] = value
+  }
+
+  return { ok: true, map }
+}
+
+function parseTemplateVariantMap(
+  raw: string,
+  envName: string,
+): { ok: true; map: Record<string, TemplateVariantMetadata> } | { ok: false; message: string } {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return { ok: false, message: `${envName} must be valid JSON` }
+  }
+
+  if (!isObj(parsed)) {
+    return { ok: false, message: `${envName} must be an object` }
+  }
+
+  const map: Record<string, TemplateVariantMetadata> = {}
+  for (const [siteIdRaw, entryRaw] of Object.entries(parsed)) {
+    const siteId = siteIdRaw.trim()
+    if (!siteId) {
+      return { ok: false, message: `${envName} keys must be non-empty strings` }
+    }
+    if (!isObj(entryRaw)) {
+      return {
+        ok: false,
+        message: `${envName} entries must be objects with variant, templateTxId, and manifestTxId`,
+      }
+    }
+
+    const variant = asNonEmptyString(entryRaw.variant)
+    const templateTxId = asNonEmptyString(entryRaw.templateTxId)
+    const manifestTxId = asNonEmptyString(entryRaw.manifestTxId)
+    if (!variant || !templateTxId || !manifestTxId) {
+      return {
+        ok: false,
+        message: `${envName} entries must include non-empty variant, templateTxId, and manifestTxId`,
+      }
+    }
+
+    map[siteId] = {
+      variant,
+      templateTxId,
+      manifestTxId,
+    }
   }
 
   return { ok: true, map }
@@ -234,6 +292,27 @@ function resolveExpectedSignatureRef(siteId: string): ResolveResult {
   return { ok: true, value: expected }
 }
 
+function resolveTemplateVariantMetadata(siteId: string | undefined): TemplateVariantResolveResult {
+  if (!siteId) return { ok: true, value: null }
+
+  const mapRaw = readStringEnv('GATEWAY_TEMPLATE_VARIANT_MAP')
+  if (!mapRaw) return { ok: true, value: null }
+
+  const parsed = parseTemplateVariantMap(mapRaw, 'GATEWAY_TEMPLATE_VARIANT_MAP')
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      status: 500,
+      error: 'template_variant_map_invalid',
+      detail: { message: 'message' in parsed ? parsed.message : 'invalid_map' },
+    }
+  }
+
+  const variantMetadata = parsed.map[siteId]
+  if (!variantMetadata) return { ok: true, value: null }
+  return { ok: true, value: variantMetadata }
+}
+
 function hmacBody(body: string): string | undefined {
   const secret = readStringEnv('GATEWAY_TEMPLATE_HMAC_SECRET')
   if (!secret) return undefined
@@ -302,7 +381,7 @@ function validateAllowlist(baseUrl: string, allowlist: string[] | null): Respons
   })
 }
 
-function buildWriteSignEnvelope(input: TemplateCallInput, siteId: string, requestId: string): SignedWriteEnvelope {
+function buildWriteSignEnvelope(input: TemplateCallInput, siteId: string, requestId: string, payload: unknown): SignedWriteEnvelope {
   const action = TEMPLATE_TO_WRITE_ACTION[input.action] || input.action
   const timestamp = Math.floor(Date.now() / 1000)
   const nonce = `gw-${crypto.randomBytes(12).toString('hex')}`
@@ -315,7 +394,15 @@ function buildWriteSignEnvelope(input: TemplateCallInput, siteId: string, reques
     tenant,
     timestamp,
     nonce,
-    payload: input.payload,
+    payload,
+  }
+}
+
+function injectTemplateVariant(payload: unknown, templateVariant: TemplateVariantMetadata | null): unknown {
+  if (!templateVariant || !isObj(payload)) return payload
+  return {
+    ...payload,
+    templateVariant,
   }
 }
 
@@ -421,6 +508,14 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     })
   }
 
+  const siteIdForVariantMap = resolveSiteId(input)
+  const resolvedTemplateVariant = resolveTemplateVariantMetadata(siteIdForVariantMap)
+  if (resolvedTemplateVariant.ok === false) {
+    const templateVariantError = resolvedTemplateVariant as Extract<TemplateVariantResolveResult, { ok: false }>
+    return jsonError(templateVariantError.status, templateVariantError.error, templateVariantError.detail)
+  }
+  const payloadWithTemplateVariant = injectTemplateVariant(input.payload, resolvedTemplateVariant.value)
+
   const resolvedTarget = resolveBackendBaseUrl(policy.local.target)
   if (resolvedTarget.ok === false) {
     const resolvedTargetError = resolvedTarget as Extract<ResolveResult, { ok: false }>
@@ -466,7 +561,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     }
 
     effectiveRequestId = effectiveRequestId || `req-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
-    const signEnvelope = buildWriteSignEnvelope(input, resolvedSiteId, effectiveRequestId)
+    const signEnvelope = buildWriteSignEnvelope(input, resolvedSiteId, effectiveRequestId, payloadWithTemplateVariant)
     const signerBaseUrl = (signerBase as Extract<ResolveResult, { ok: true }>).value
     const signed = await signWriteEnvelope(signerBaseUrl, signerToken.value, signEnvelope, getTemplateSignTimeoutMs())
     if (signed.ok === false) {
@@ -497,7 +592,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   const body = JSON.stringify(
     writeEnvelope || {
       action: input.action,
-      payload: input.payload,
+      payload: payloadWithTemplateVariant,
       requestId: effectiveRequestId,
       siteId: resolvedSiteId,
       actor: input.actor,

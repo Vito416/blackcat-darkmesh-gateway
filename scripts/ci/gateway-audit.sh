@@ -53,9 +53,11 @@ run_implementation_checks() {
   export GATEWAY_TEMPLATE_WORKER_URL_MAP
   export GATEWAY_TEMPLATE_WORKER_TOKEN_MAP
   export GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP
+  export GATEWAY_TEMPLATE_VARIANT_MAP
   GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)"
   GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)"
   GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)"
+  GATEWAY_TEMPLATE_VARIANT_MAP="$(cat config/template-variant-map.example.json)"
 
   run_cmd node scripts/check-template-worker-routing-config.js \
     --url-map "${GATEWAY_TEMPLATE_WORKER_URL_MAP}" \
@@ -72,6 +74,9 @@ run_implementation_checks() {
     --require-sites site-alpha,site-beta \
     --strict \
     --json
+  run_cmd node scripts/validate-template-variant-map-config.js \
+    --strict \
+    --require-sites site-alpha,site-beta
 
   (
     set -a

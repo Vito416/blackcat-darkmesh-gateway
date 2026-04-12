@@ -13,7 +13,8 @@ Latest audit snapshot:
 
 - [ ] Live strict release drill with real gateway endpoints (`ops:run-release-drill --strict`).
 - [ ] Real `GATEWAY_TEMPLATE_WORKER_*` maps committed to ops secret store (not repo files).
-- [ ] Real `GATEWAY_TEMPLATE_VARIANT_MAP` published and validated (`ops:check-template-variant-map --strict`).
+- [ ] Real `GATEWAY_TEMPLATE_VARIANT_MAP` published and validated (`node scripts/validate-template-variant-map-config.js --strict`).
+- [ ] CI/audit fallback source (`config/template-variant-map.example.json`) replaced by the real secret-backed variant map before live rollout.
 - [ ] Worker signer-ref map verified against real worker outputs (no placeholder refs).
 - [ ] Incident auth tokens (`GATEWAY_INTEGRITY_*_TOKEN`) rotated from defaults and documented in on-call vault.
 
@@ -21,7 +22,7 @@ Latest audit snapshot:
 
 - [x] Add `ops:check-template-variant-map` to release-drill orchestration so every strict drill archives `template-variant-map.json`.
 - [x] Add template variant map artifact into `release-drill-checks.json` embedded consistency checks.
-- [ ] Add schema validation for `GATEWAY_TEMPLATE_VARIANT_MAP` in CI (shape + variant allowlist + txid fields).
+- [x] Add strict CI/audit variant-map validation via `node scripts/validate-template-variant-map-config.js` with deterministic example-map fallback.
 - [ ] Add one e2e smoke that verifies site variant selection path (`site -> variant -> template txid -> /template/call`).
 - [ ] Add live release-drill evidence bundle from real gateways and archive it under release review links.
 

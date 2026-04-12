@@ -27,6 +27,8 @@
 - Worker-map coherence checker: `npm run ops:check-template-worker-map-coherence -- --require-sites <csv> --require-token-map --require-signature-map --strict --json` validates URL/token/signature-ref map alignment for the same site set.
 - Template signature-ref map checker: `npm run ops:check-template-signature-ref-map -- --strict --json` reads `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` from repo vars/secrets in CI; when it is unset, the checker reports a deterministic `blocked` status instead of guessing.
 - Template variant map checker: `npm run ops:check-template-variant-map -- --require-sites <csv> --strict --json` validates gateway template variant routing (`variant`, `templateTxId`, `manifestTxId`) from `GATEWAY_TEMPLATE_VARIANT_MAP`.
+- Template variant map config validator: `npm run ops:validate-template-variant-map-config -- --strict --require-sites <csv>` enforces txid shape + required-site coverage (used in CI/audit gates).
+- Template variant rollback helper: `node scripts/build-template-variant-fallback-map.js --file ./tmp/template-variant-map.json --fallback-variant signal --sites site-alpha,site-beta --template-txid <txid> --manifest-txid <txid> > ./tmp/template-variant-map.rollback.json` rewrites selected sites to a known-safe fallback variant map.
 - Worker-secrets trust-model validator: `npm run ops:validate-worker-secrets-trust-model -- --help` is the companion machine check for `ops/worker-secrets-trust-model.md` and should stay a strict CI gate once wired.
 - Template secret-smuggling guard: `/template/call` recursively scans payloads for secret-like fields and fail-closes before any upstream fetch; keep the matching tests in `tests/runtime-template-secretGuard.test.ts` and `tests/template-api.test.ts` green.
 - Forget-forward semantics: `/cache/forget` stays local-200 even if the optional worker forward skips, times out, or fails; the relay is best-effort only and uses the `GATEWAY_FORGET_FORWARD_*` settings when enabled.
@@ -49,7 +51,7 @@
 - Release sign-off checklist generator: `npm run ops:build-release-signoff-checklist -- --pack <release-evidence-pack.json> [--strict]`.
 - Release readiness evaluator: `npm run ops:check-release-readiness -- --pack <release-evidence-pack.json> [--strict] [--json]`.
 - One-shot release drill orchestrator: `npm run ops:run-release-drill -- --urls <CSV> --out-dir <DIR> [--profile ...] [--mode ...] [--token ...] [--allow-anon] [--release ...] [--strict]`.
-- Pre-live decommission bootstrap (no live gateways yet): `npm run ops:bootstrap-prelive-decommission-artifacts -- --dir ops/decommission --release 1.4.0` seeds a deterministic baseline artifact set so readiness can report `automation-complete` while AO checks remain open.
+- Pre-live decommission bootstrap (no live gateways yet): `npm run ops:bootstrap-prelive-decommission-artifacts:tmp -- --release 1.4.0` seeds a deterministic baseline artifact set under `tmp/decommission-prelive` so readiness can report `automation-complete` while AO checks remain open.
 - Release drill runbook: `ops/release-drill-runbook.md`.
 - Fresh-machine production bootstrap runbook: `ops/fresh-machine-production-bootstrap-runbook.md` (prereqs, env bootstrap, strict preflight, strict drill path).
 - WEDOS live handoff folder: `ops/live-wedos/` (layout bootstrap + preflight checklist for FTP-based rollout).
@@ -106,6 +108,10 @@ node scripts/check-template-signature-ref-map.js \
 node scripts/check-template-variant-map.js \
   --require-sites site-alpha,site-beta \
   --strict --json
+
+node scripts/validate-template-variant-map-config.js \
+  --strict \
+  --require-sites site-alpha,site-beta
 
 set -a
 source config/forget-forward.example.env

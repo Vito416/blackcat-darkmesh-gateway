@@ -85,7 +85,7 @@ Expected result:
   - `GATEWAY_TEMPLATE_WORKER_URL_MAP`
   - `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP`
   - `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP`
-  - `GATEWAY_TEMPLATE_VARIANT_MAP`
+  - `GATEWAY_TEMPLATE_VARIANT_MAP` (source from ops secrets; CI/audit fallback uses `config/template-variant-map.example.json` when unset)
 - AO dependency gate file: `ops/decommission/ao-dependency-gate.json`
 - Optional public-state mode: use `--allow-anon` only when the `/integrity/state` endpoint is intentionally public
 
@@ -98,9 +98,19 @@ export CONSISTENCY_URLS="$GW_A_URL,$GW_B_URL"
 export GATEWAY_RESOURCE_PROFILE="wedos_medium"
 export GATEWAY_INTEGRITY_STATE_TOKEN="replace-me"
 export GATEWAY_ATTESTATION_HMAC_KEY="replace-me"
+export GATEWAY_TEMPLATE_VARIANT_MAP="$(cat config/template-variant-map.example.json)"
+export REQUIRED_TEMPLATE_SITES="site-alpha,site-beta"
 export RELEASE_VERSION="1.4.0"
 export DRILL_DIR="./tmp/release-drill"
 mkdir -p "$DRILL_DIR"
+```
+
+Validate the variant map config before the drill (same command path used in CI/audit):
+
+```bash
+node scripts/validate-template-variant-map-config.js \
+  --strict \
+  --require-sites "$REQUIRED_TEMPLATE_SITES"
 ```
 
 ## 1) Validate the preflight

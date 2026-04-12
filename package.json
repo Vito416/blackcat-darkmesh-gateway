@@ -36,6 +36,8 @@
     "ops:check-template-worker-map-coherence": "node scripts/check-template-worker-map-coherence.js",
     "ops:check-template-signature-ref-map": "node scripts/check-template-signature-ref-map.js",
     "ops:check-template-variant-map": "node scripts/check-template-variant-map.js",
+    "ops:validate-template-variant-map-config": "node scripts/validate-template-variant-map-config.js",
+    "ops:build-template-variant-fallback-map": "node scripts/build-template-variant-fallback-map.js",
     "ops:check-forget-forward-config": "node scripts/check-forget-forward-config.js",
     "ops:check-retired-path-references": "node scripts/check-retired-path-references.js",
     "ops:init-template-worker-routing": "node scripts/init-template-worker-routing.js",
