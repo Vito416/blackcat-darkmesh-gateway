@@ -11,7 +11,7 @@ Purpose
 
 Consolidation status
 - Gateway is the active integration target for legacy backend modules.
-- Imported migration snapshots live in `libs/legacy/` (see `libs/legacy/README.md` and `libs/legacy/MANIFEST.md`).
+- Imported migration snapshots live in `kernel-migration/legacy-archive/snapshots/` (see `kernel-migration/legacy-archive/README.md` and `kernel-migration/legacy-archive/MANIFEST.md`).
 - Crypto manifest policy snapshot lives in `security/crypto-manifests/` (see `security/crypto-manifests/SNAPSHOT.md`).
 - Template code remains intentionally separate in `blackcat-templates`; gateway enforces controlled backend access for deployed templates.
 
@@ -252,7 +252,7 @@ When cache admission limits are exceeded, cache PUT returns:
 - Temporary upstream references are stored in `kernel-migration/upstream/` to avoid losing design/security context during the port.
 
 ## Template security model
-- Guardrails for the custom backend model are documented in `libs/legacy/TEMPLATE_BACKEND_GUARDRAILS.md`.
+- Guardrails for the custom backend model are documented in `kernel-migration/legacy-archive/TEMPLATE_BACKEND_GUARDRAILS.md`.
 - High-level rule: templates can call only declared gateway APIs; they do not get direct data-store or secret access.
 
 ## Releases

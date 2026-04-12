@@ -2,7 +2,8 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Import selected legacy Blackcat repositories into gateway/libs/legacy
+# Import selected legacy Blackcat repositories into
+# gateway/kernel-migration/legacy-archive/snapshots
 # as source snapshots for consolidation work.
 #
 # Intentionally excluded:
@@ -12,8 +13,9 @@ IFS=$'\n\t'
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKSPACE_DIR="$(cd "$ROOT_DIR/.." && pwd)"
-DEST_BASE="$ROOT_DIR/libs/legacy"
-MANIFEST_PATH="$DEST_BASE/MANIFEST.md"
+ARCHIVE_BASE="$ROOT_DIR/kernel-migration/legacy-archive"
+DEST_BASE="$ARCHIVE_BASE/snapshots"
+MANIFEST_PATH="$ARCHIVE_BASE/MANIFEST.md"
 
 ALL_MODULES=(
   blackcat-analytics

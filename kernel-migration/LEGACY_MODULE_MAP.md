@@ -2,7 +2,7 @@
 
 Updated (UTC): `2026-04-11`
 
-Use this table in weekly release review to track consolidation progress for every module listed in `libs/legacy/MANIFEST.md`.
+Use this table in weekly release review to track consolidation progress for every module listed in `kernel-migration/legacy-archive/MANIFEST.md`.
 
 Status legend:
 - `extracted`: gateway-owned replacement boundary is complete and ready for removal evidence.
@@ -14,7 +14,7 @@ Status legend:
 Out-of-manifest context:
 - Template runtime policy is already gateway-owned in `src/runtime/template/` + `src/templateApi.ts`.
 - Runtime core groundwork exists under `src/runtime/core/bytes.ts` and is already consumed by `src/templateApi.ts`.
-- Source guardrails come from `libs/legacy/TEMPLATE_BACKEND_GUARDRAILS.md` and `blackcat-templates` (not from a `MANIFEST.md` module row).
+- Source guardrails come from `kernel-migration/legacy-archive/TEMPLATE_BACKEND_GUARDRAILS.md` and `blackcat-templates` (not from a `MANIFEST.md` module row).
 
 | module | source commit | gateway target path | current status | owner/workstream | notes |
 | --- | --- | --- | --- | --- | --- |

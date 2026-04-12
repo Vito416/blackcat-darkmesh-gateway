@@ -79,7 +79,7 @@ This document formalizes the boundary for the gateway/template/worker split.
 
 - `ops/README.md`
 - `kernel-migration/BACKLOG.md`
-- `libs/legacy/TEMPLATE_BACKEND_GUARDRAILS.md`
+- `kernel-migration/legacy-archive/TEMPLATE_BACKEND_GUARDRAILS.md`
 
 ## Optional notes
 

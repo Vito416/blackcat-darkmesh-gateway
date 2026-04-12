@@ -15,8 +15,8 @@ class CliError extends Error {
 export const DEFAULT_MODULE_DOCS = [
   {
     key: 'migrationPlan',
-    label: 'libs/legacy/MIGRATION_PLAN.md',
-    path: 'libs/legacy/MIGRATION_PLAN.md',
+    label: 'kernel-migration/legacy-archive/MIGRATION_PLAN.md',
+    path: 'kernel-migration/legacy-archive/MIGRATION_PLAN.md',
   },
   {
     key: 'legacyModuleMap',
@@ -36,7 +36,7 @@ function usageText() {
     '  node scripts/check-legacy-module-map-sync.js [--json] [--strict] [--help]',
     '',
     'Checks that legacy module names stay synchronized across migration docs:',
-    '  - libs/legacy/MIGRATION_PLAN.md',
+    '  - kernel-migration/legacy-archive/MIGRATION_PLAN.md',
     '  - kernel-migration/LEGACY_MODULE_MAP.md',
     '  - kernel-migration/LEGACY_DECOMMISSION_CONDITIONS.md',
     '',

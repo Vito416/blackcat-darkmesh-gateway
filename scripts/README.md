@@ -314,14 +314,14 @@ node scripts/validate-final-migration-summary.js --file kernel-migration/FINAL_M
 
 ## Legacy import manifest validation
 
-`scripts/validate-legacy-manifest.js` checks the imported legacy module inventory against `libs/legacy/MANIFEST.md`.
-It parses the manifest table, verifies every listed module directory exists under `libs/legacy/<module>`, and confirms each module has `README.md`, `LICENSE`, and a `.import-source` file with a commit-ish marker.
+`scripts/validate-legacy-manifest.js` checks the imported legacy module inventory against `kernel-migration/legacy-archive/MANIFEST.md`.
+It parses the manifest table, verifies every listed module directory exists under `kernel-migration/legacy-archive/snapshots/<module>`, and confirms each module has `README.md`, `LICENSE`, and a `.import-source` file with a commit-ish marker.
 
 Usage:
 ```bash
 npm run ops:validate-legacy-manifest
 npm run ops:validate-legacy-manifest -- --json
-npm run ops:validate-legacy-manifest -- --manifest libs/legacy/MANIFEST.md --legacy-dir libs/legacy --strict
+npm run ops:validate-legacy-manifest -- --manifest kernel-migration/legacy-archive/MANIFEST.md --legacy-dir kernel-migration/legacy-archive/snapshots --strict
 ```
 
 Exit codes:
@@ -331,7 +331,7 @@ Exit codes:
 
 ## Legacy runtime boundary check
 
-`scripts/check-legacy-runtime-boundary.js` scans runtime source files (default `src`) and reports import/require specifiers that reference `libs/legacy` directly or via path traversal.
+`scripts/check-legacy-runtime-boundary.js` scans runtime source files (default `src`) and reports import/require specifiers that reference legacy snapshot paths (`libs/legacy/**` or `kernel-migration/legacy-archive/snapshots/**`).
 
 Usage:
 ```bash
@@ -347,7 +347,7 @@ Exit codes:
 
 ## Legacy core extraction evidence
 
-`scripts/check-legacy-core-extraction-evidence.js` machine-checks the blackcat-core extraction boundary by verifying required runtime files, required tests, and the absence of `libs/legacy/blackcat-core` references under `src/`.
+`scripts/check-legacy-core-extraction-evidence.js` machine-checks the blackcat-core extraction boundary by verifying required runtime files, required tests, and the absence of legacy snapshot import references for `blackcat-core` under `src/`.
 
 Usage:
 ```bash
@@ -363,7 +363,7 @@ Exit codes:
 
 ## Legacy crypto boundary evidence
 
-`scripts/check-legacy-crypto-boundary-evidence.js` machine-checks the blackcat-crypto boundary by verifying required runtime files/tests, the absence of `libs/legacy/blackcat-crypto` imports under `src/`, and verification-only runtime constraints (no wallet/private-key/signing capabilities in request-path crypto files).
+`scripts/check-legacy-crypto-boundary-evidence.js` machine-checks the blackcat-crypto boundary by verifying required runtime files/tests, the absence of legacy snapshot import references for `blackcat-crypto` under `src/`, and verification-only runtime constraints (no wallet/private-key/signing capabilities in request-path crypto files).
 
 Usage:
 ```bash
@@ -395,7 +395,7 @@ Exit codes:
 
 ## Legacy risk audit
 
-`scripts/audit-legacy-risk.js` scans `libs/legacy` for high-risk patterns before runtime extraction.
+`scripts/audit-legacy-risk.js` scans `kernel-migration/legacy-archive/snapshots` for high-risk patterns before runtime extraction.
 
 It reports:
 - JS/TS risk patterns (`eval`, `new Function`, `child_process` execution and shell mode)
@@ -416,7 +416,7 @@ Exit codes:
 
 ## Legacy migration matrix build
 
-`scripts/build-legacy-migration-matrix.js` generates a markdown matrix from `libs/legacy/MANIFEST.md`, optional risk JSON, and an optional machine-readable `blackcat-core` primitive map.
+`scripts/build-legacy-migration-matrix.js` generates a markdown matrix from `kernel-migration/legacy-archive/MANIFEST.md`, optional risk JSON, and an optional machine-readable `blackcat-core` primitive map.
 
 Usage:
 ```bash
@@ -430,7 +430,7 @@ npm run ops:build-legacy-migration-matrix -- --out ./kernel-migration/legacy-lib
 
 `scripts/check-legacy-module-map-sync.js` ensures legacy module names stay synchronized across:
 
-- `libs/legacy/MIGRATION_PLAN.md`
+- `kernel-migration/legacy-archive/MIGRATION_PLAN.md`
 - `kernel-migration/LEGACY_MODULE_MAP.md`
 - `kernel-migration/LEGACY_DECOMMISSION_CONDITIONS.md`
 

@@ -36,8 +36,8 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 This workstream is gateway-owned and can progress against the snapshot inventory now; it does not depend on AO closeout being finished first.
 
-- [x] Keep `libs/legacy/MIGRATION_PLAN.md` current for every imported snapshot module (includes target path, status, and explicit decommission condition per module).
-- [x] Map runtime usage away from direct legacy imports (`rg -n "libs/legacy" src` -> no matches).
+- [x] Keep `kernel-migration/legacy-archive/MIGRATION_PLAN.md` current for every imported snapshot module (includes target path, status, and explicit decommission condition per module).
+- [x] Map runtime usage away from direct legacy imports (`rg -n "(?:libs/legacy|kernel-migration/legacy-archive/snapshots)" src` -> no matches).
 - [x] Runtime config boundary enforcement exists and is CI-gated (`npm run ops:check-config-loader-runtime-boundary -- --strict`, covered by `tests/check-config-loader-runtime-boundary.test.ts`).
 - [x] Legacy no-import evidence checker exists and is CI-gated (`npm run ops:check-legacy-no-import-evidence -- --strict --json`, covered by `tests/check-legacy-no-import-evidence.test.ts`).
 - [x] Initial request-path extraction landed for runtime helpers:
@@ -50,8 +50,8 @@ This workstream is gateway-owned and can progress against the snapshot inventory
   - `src/runtime/mailing/payloadPolicy.ts` + `src/runtime/mailing/sanitizer.ts`
   - `src/runtime/payments/providers.ts` + `src/runtime/payments/validators.ts`
   - `src/runtime/telemetry/analyticsEvent.ts` + `src/runtime/telemetry/analyticsPolicy.ts`
-- [x] Do-not-port rules are documented for runtime in `libs/legacy/MIGRATION_PLAN.md`.
-- [x] Decommission conditions are now tracked per module in `libs/legacy/MIGRATION_PLAN.md`.
+- [x] Do-not-port rules are documented for runtime in `kernel-migration/legacy-archive/MIGRATION_PLAN.md`.
+- [x] Decommission conditions are now tracked per module in `kernel-migration/legacy-archive/MIGRATION_PLAN.md`.
 - [~] `blackcat-config`: keep the gateway-owned config loader/profile contract aligned with request-path usage, then capture decommission proof once the removal evidence is archived.
   - Progress note: typed config loader with source metadata now lives in `src/runtime/config/loader.ts` and is covered by `tests/runtime-config-loader.test.ts`.
   - Progress note: loader wiring is active in request-path modules (`src/templateApi.ts`, `src/handler.ts`, `src/webhooks.ts`, `src/ratelimit.ts`, `src/replay.ts`).
@@ -86,7 +86,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
   - Progress note: JSON-safe parsing helpers now landed under `src/runtime/core/json.ts` and are exported via `src/runtime/core/index.ts`.
   - Progress note: the canonical JSON primitive is now represented by `src/runtime/core/canonicalJson.ts`; update the primitive mapping notes before marking any core snapshot decommissionable.
   - Add/retain focused tests for core byte helpers (`tests/runtime-core-bytes.test.ts`) and ensure template body-limit behavior stays covered in `tests/template-api.test.ts`.
-  - Extend `libs/legacy/MIGRATION_PLAN.md` primitive mapping notes for every newly extracted core helper before decommission state changes.
+  - Extend `kernel-migration/legacy-archive/MIGRATION_PLAN.md` primitive mapping notes for every newly extracted core helper before decommission state changes.
 - [~] auth-js/crypto-js client boundaries:
   - Harden and merge the current client boundaries (`src/clients/auth-sdk/client.ts`, `src/clients/crypto-sdk/client.ts`) with explicit ownership notes and zero request-path runtime coupling.
   - Keep and expand boundary contract coverage (`tests/clients-auth-sdk.test.ts`, `tests/clients-crypto-sdk.test.ts`) before any legacy JS snapshot removal decision.

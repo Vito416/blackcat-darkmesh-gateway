@@ -4,8 +4,8 @@ import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const DEFAULT_MANIFEST = 'libs/legacy/MANIFEST.md'
-const DEFAULT_LEGACY_DIR = 'libs/legacy'
+const DEFAULT_MANIFEST = 'kernel-migration/legacy-archive/MANIFEST.md'
+const DEFAULT_LEGACY_DIR = 'kernel-migration/legacy-archive/snapshots'
 
 class CliError extends Error {
   constructor(message, exitCode = 64) {
@@ -21,8 +21,8 @@ function usageText() {
     '  node scripts/validate-legacy-manifest.js [--manifest <path>] [--legacy-dir <path>] [--json] [--strict] [--help]',
     '',
     'Options:',
-    '  --manifest <PATH>    Legacy manifest markdown file (default: libs/legacy/MANIFEST.md)',
-    '  --legacy-dir <PATH>  Base directory that contains imported legacy modules (default: libs/legacy)',
+    `  --manifest <PATH>    Legacy manifest markdown file (default: ${DEFAULT_MANIFEST})`,
+    `  --legacy-dir <PATH>  Base directory that contains imported legacy modules (default: ${DEFAULT_LEGACY_DIR})`,
     '  --json               Print structured JSON only',
     '  --strict             Exit 3 when integrity issues are found',
     '  --help               Show this help',

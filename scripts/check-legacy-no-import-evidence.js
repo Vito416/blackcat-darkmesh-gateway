@@ -7,7 +7,8 @@ import { pathToFileURL } from 'node:url'
 import { parseManifestModules } from './validate-legacy-manifest.js'
 
 const DEFAULT_ROOT = 'src'
-const DEFAULT_MANIFEST = 'libs/legacy/MANIFEST.md'
+const DEFAULT_MANIFEST = 'kernel-migration/legacy-archive/MANIFEST.md'
+const LEGACY_IMPORT_ROOTS = ['libs/legacy', 'kernel-migration/legacy-archive/snapshots']
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx'])
 const URL_SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//
 const IMPORT_PATTERNS = [
@@ -173,16 +174,26 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function moduleLegacyPath(moduleName) {
-  return `libs/legacy/${moduleName}`
+function moduleLegacyPaths(moduleName) {
+  return LEGACY_IMPORT_ROOTS.map((root) => `${root}/${moduleName}`)
+}
+
+function matchedLegacyPathForSpecifier(specifier, moduleName) {
+  const normalized = specifier.trim().replace(/\\/g, '/')
+  if (!normalized || URL_SCHEME_RE.test(normalized)) return ''
+
+  for (const legacyPath of moduleLegacyPaths(moduleName)) {
+    const escapedPath = escapeRegExp(legacyPath)
+    if (new RegExp(`(?:^|/)${escapedPath}(?:/|$|\\.)`).test(normalized)) {
+      return legacyPath
+    }
+  }
+
+  return ''
 }
 
 function specifierReferencesModule(specifier, moduleName) {
-  const normalized = specifier.trim().replace(/\\/g, '/')
-  if (!normalized || URL_SCHEME_RE.test(normalized)) return false
-
-  const legacyPath = escapeRegExp(moduleLegacyPath(moduleName))
-  return new RegExp(`(?:^|/)${legacyPath}(?:/|$|\\.)`).test(normalized)
+  return matchedLegacyPathForSpecifier(specifier, moduleName) !== ''
 }
 
 function findLegacyModuleReferences(text, filePath, moduleNames) {
@@ -198,6 +209,7 @@ function findLegacyModuleReferences(text, filePath, moduleNames) {
 
       const moduleName = moduleNames.find((candidate) => specifierReferencesModule(specifier, candidate))
       if (!moduleName) continue
+      const legacyPathMatch = matchedLegacyPathForSpecifier(specifier, moduleName)
 
       const specifierOffset = match[0].lastIndexOf(specifier)
       const specifierIndex = match.index + (specifierOffset >= 0 ? specifierOffset : 0)
@@ -207,7 +219,7 @@ function findLegacyModuleReferences(text, filePath, moduleNames) {
 
       findings.push({
         module: moduleName,
-        legacyPath: moduleLegacyPath(moduleName),
+        legacyPath: legacyPathMatch || moduleLegacyPaths(moduleName)[0],
         file: filePath,
         line: lineNumberForIndex(text, specifierIndex),
         kind: pattern.kind,
@@ -289,7 +301,7 @@ async function checkLegacyNoImportEvidence(scanRoot, args = {}) {
     const references = findingsByModule.get(moduleName) ?? []
     return {
       module: moduleName,
-      legacyPath: moduleLegacyPath(moduleName),
+      legacyPath: moduleLegacyPaths(moduleName)[0],
       referenced: references.length > 0,
       findingCount: references.length,
       references,

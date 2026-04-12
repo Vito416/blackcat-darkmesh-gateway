@@ -70,7 +70,7 @@ export const FORBIDDEN_SIGNING_PATTERNS = [
 ]
 
 const DEFAULT_ROOT = '.'
-const LEGACY_CRYPTO_IMPORT_PATH = 'libs/legacy/blackcat-crypto'
+const LEGACY_CRYPTO_IMPORT_PATHS = ['libs/legacy/blackcat-crypto', 'kernel-migration/legacy-archive/snapshots/blackcat-crypto']
 const IMPORT_LIKE_LINE_RE = /\b(?:import|export|require)\b|\bimport\s*\(/i
 
 class CliError extends Error {
@@ -89,7 +89,7 @@ function usageText() {
     'Checks blackcat-crypto extraction evidence by verifying:',
     '  - required runtime files exist',
     '  - required tests exist',
-    '  - no `libs/legacy/blackcat-crypto` imports remain under `src/`',
+    '  - no archived legacy crypto imports remain under `src/`',
     '  - runtime crypto boundary stays verification-only (no signing/wallet/private-key capabilities)',
     '',
     'Options:',
@@ -240,7 +240,13 @@ async function scanLegacyCryptoImports(root) {
     }
   }
 
-  const result = spawnSync('rg', ['-n', LEGACY_CRYPTO_IMPORT_PATH, 'src'], {
+  const args = ['-n']
+  for (const pathPattern of LEGACY_CRYPTO_IMPORT_PATHS) {
+    args.push('-e', pathPattern)
+  }
+  args.push('src')
+
+  const result = spawnSync('rg', args, {
     cwd: root,
     encoding: 'utf8',
   })

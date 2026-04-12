@@ -4,7 +4,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { resolve, relative, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const DEFAULT_DIR = 'libs/legacy'
+const DEFAULT_DIR = 'kernel-migration/legacy-archive/snapshots'
 const IGNORED_DIRS = new Set([
   '.git',
   '.github',

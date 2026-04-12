@@ -27,7 +27,7 @@ export const REQUIRED_TEST_FILES = [
 ]
 
 const DEFAULT_ROOT = '.'
-const LEGACY_CORE_IMPORT_PATH = 'libs/legacy/blackcat-core'
+const LEGACY_CORE_IMPORT_PATHS = ['libs/legacy/blackcat-core', 'kernel-migration/legacy-archive/snapshots/blackcat-core']
 const IMPORT_LIKE_LINE_RE = /\b(?:import|export|require)\b|\bimport\s*\(/i
 
 class CliError extends Error {
@@ -46,7 +46,7 @@ function usageText() {
     'Checks blackcat-core extraction evidence by verifying:',
     '  - required runtime files exist',
     '  - required tests exist',
-    '  - no `libs/legacy/blackcat-core` imports remain under `src/`',
+    '  - no archived legacy core imports remain under `src/`',
     '',
     'Options:',
     `  --root <dir>  Repository root to scan (default: ${DEFAULT_ROOT})`,
@@ -196,7 +196,13 @@ async function scanLegacyCoreImports(root) {
     }
   }
 
-  const result = spawnSync('rg', ['-n', LEGACY_CORE_IMPORT_PATH, 'src'], {
+  const args = ['-n']
+  for (const pathPattern of LEGACY_CORE_IMPORT_PATHS) {
+    args.push('-e', pathPattern)
+  }
+  args.push('src')
+
+  const result = spawnSync('rg', args, {
     cwd: root,
     encoding: 'utf8',
   })

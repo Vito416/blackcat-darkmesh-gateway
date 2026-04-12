@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 
 const DEFAULT_ROOT = 'src'
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx'])
-const LEGACY_SEGMENT_RE = /(?:^|\/)libs\/legacy(?:\/|$)/
+const LEGACY_SEGMENT_RE = /(?:^|\/)(?:libs\/legacy|kernel-migration\/legacy-archive\/snapshots)(?:\/|$)/
 const URL_SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//
 const IMPORT_PATTERNS = [
   {

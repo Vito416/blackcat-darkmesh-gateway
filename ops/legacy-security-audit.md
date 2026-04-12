@@ -1,6 +1,6 @@
 # Legacy Security Audit
 
-Use `scripts/audit-legacy-risk.js` to quickly triage `libs/legacy` before moving modules into the runtime path.
+Use `scripts/audit-legacy-risk.js` to quickly triage `kernel-migration/legacy-archive/snapshots` before moving modules into the runtime path.
 
 ## What it catches
 
@@ -29,13 +29,13 @@ From `blackcat-darkmesh-gateway/`:
 
 ```bash
 node scripts/audit-legacy-risk.js
-node scripts/audit-legacy-risk.js --dir libs/legacy --strict
-node scripts/audit-legacy-risk.js --dir libs/legacy --json > /tmp/legacy-risk.json
+node scripts/audit-legacy-risk.js --dir kernel-migration/legacy-archive/snapshots --strict
+node scripts/audit-legacy-risk.js --dir kernel-migration/legacy-archive/snapshots --json > /tmp/legacy-risk.json
 ```
 
 Options:
 
-- `--dir <path>`: directory to scan, default `libs/legacy`
+- `--dir <path>`: directory to scan, default `kernel-migration/legacy-archive/snapshots`
 - `--json`: emit structured JSON only
 - `--strict`: exit `3` when critical findings exist
 - `--help`: show usage

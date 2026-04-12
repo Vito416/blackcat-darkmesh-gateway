@@ -38,10 +38,10 @@ function makeLegacyFixture({
   }>
 }) {
   const dir = makeTempDir()
-  const legacyDir = join(dir, 'libs', 'legacy')
+  const legacyDir = join(dir, 'kernel-migration', 'legacy-archive', 'snapshots')
   mkdirSync(legacyDir, { recursive: true })
 
-  const manifestPath = join(legacyDir, 'MANIFEST.md')
+  const manifestPath = join(dir, 'kernel-migration', 'legacy-archive', 'MANIFEST.md')
   writeText(manifestPath, manifestText)
 
   for (const module of modules) {
@@ -231,8 +231,8 @@ describe('validate-legacy-manifest.js', () => {
 
   it('returns a usage error when the manifest file is missing', () => {
     const fixture = makeTempDir()
-    const missingManifest = join(fixture, 'libs', 'legacy', 'MANIFEST.md')
-    const legacyDir = join(fixture, 'libs', 'legacy')
+    const missingManifest = join(fixture, 'kernel-migration', 'legacy-archive', 'MANIFEST.md')
+    const legacyDir = join(fixture, 'kernel-migration', 'legacy-archive', 'snapshots')
     mkdirSync(legacyDir, { recursive: true })
 
     const result = runCli(['--manifest', missingManifest, '--legacy-dir', legacyDir])

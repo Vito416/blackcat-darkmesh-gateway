@@ -2,7 +2,7 @@
   "module": "blackcat-core",
   "sourceCommit": "f1c3dc7",
   "status": "in progress",
-  "requestPathProof": "rg -n \"libs/legacy/blackcat-core\" src",
+  "requestPathProof": "rg -n \"(?:libs/legacy|kernel-migration/legacy-archive/snapshots)/blackcat-core\" src",
   "primitiveGroups": [
     {
       "name": "byte helpers",

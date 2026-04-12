@@ -49,7 +49,7 @@ function makeFixture({
   const root = makeTempRoot()
 
   if (manifestRows) {
-    writeText(join(root, 'libs', 'legacy', 'MANIFEST.md'), makeManifest(manifestRows))
+    writeText(join(root, 'kernel-migration', 'legacy-archive', 'MANIFEST.md'), makeManifest(manifestRows))
   }
 
   for (const [relativePath, contents] of Object.entries(srcFiles)) {

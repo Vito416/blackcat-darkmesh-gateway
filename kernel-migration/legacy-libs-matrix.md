@@ -1,7 +1,7 @@
 # Legacy Migration Matrix
 
-- Generated at (UTC): `2026-04-12T09:57:05.030Z`
-- Manifest: `libs/legacy/MANIFEST.md`
+- Generated at (UTC): `2026-04-12T10:12:58.117Z`
+- Manifest: `kernel-migration/legacy-archive/MANIFEST.md`
 - Module map: `kernel-migration/LEGACY_MODULE_MAP.md`
 - Risk JSON: not provided
 - Core primitive map: `kernel-migration/core-primitive-map.json`
@@ -31,7 +31,7 @@
 
 - Module: `blackcat-core`
 - Source commit: `f1c3dc7`
-- Request-path proof: `rg -n "libs/legacy/blackcat-core" src`
+- Request-path proof: `rg -n "(?:libs/legacy|kernel-migration/legacy-archive/snapshots)/blackcat-core" src`
 - Primitive groups: 5
 - Test count: 6
 

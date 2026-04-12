@@ -29,7 +29,7 @@ function writeText(filePath: string, text: string) {
 }
 
 function seedDocs(root: string, docs: { plan: string; map: string; conditions: string }) {
-  writeText(join(root, 'libs', 'legacy', 'MIGRATION_PLAN.md'), docs.plan)
+  writeText(join(root, 'kernel-migration', 'legacy-archive', 'MIGRATION_PLAN.md'), docs.plan)
   writeText(join(root, 'kernel-migration', 'LEGACY_MODULE_MAP.md'), docs.map)
   writeText(join(root, 'kernel-migration', 'LEGACY_DECOMMISSION_CONDITIONS.md'), docs.conditions)
 }

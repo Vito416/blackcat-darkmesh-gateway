@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const DEFAULT_MANIFEST = 'libs/legacy/MANIFEST.md'
+const DEFAULT_MANIFEST = 'kernel-migration/legacy-archive/MANIFEST.md'
 const DEFAULT_CORE_MAP = 'kernel-migration/core-primitive-map.json'
 const DEFAULT_MODULE_MAP = 'kernel-migration/LEGACY_MODULE_MAP.md'
 const DEFAULT_OUT = 'kernel-migration/legacy-libs-matrix.md'
@@ -19,7 +19,7 @@ function usage(exitCode = 0) {
       '  node scripts/build-legacy-migration-matrix.js [--manifest <FILE>] [--risk <FILE>] [--core-map <FILE>] [--out <FILE>] [--json] [--help]',
       '',
       'Options:',
-      '  --manifest <FILE>  Legacy manifest path (default: libs/legacy/MANIFEST.md)',
+      `  --manifest <FILE>  Legacy manifest path (default: ${DEFAULT_MANIFEST})`,
       '  --risk <FILE>      Optional risk JSON from audit-legacy-risk output',
       '  --core-map <FILE>  Optional machine-readable blackcat-core primitive map',
       '  --module-map <FILE> Optional module-status map from LEGACY_MODULE_MAP.md',

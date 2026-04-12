@@ -32,7 +32,7 @@ function runMatrix(args: string[], cwd?: string) {
 function seedWorkspace() {
   const root = mkdtempSync(join(tmpdir(), 'legacy-matrix-'))
   tempDirs.push(root)
-  mkdirSync(join(root, 'libs', 'legacy'), { recursive: true })
+  mkdirSync(join(root, 'kernel-migration', 'legacy-archive', 'snapshots'), { recursive: true })
   mkdirSync(join(root, 'kernel-migration'), { recursive: true })
 
   const manifest = [
@@ -55,7 +55,7 @@ function seedWorkspace() {
     '- `README.md`, `LICENSE`, `NOTICE`',
   ].join('\n')
 
-  writeFileSync(join(root, 'libs', 'legacy', 'MANIFEST.md'), `${manifest}\n`, 'utf8')
+  writeFileSync(join(root, 'kernel-migration', 'legacy-archive', 'MANIFEST.md'), `${manifest}\n`, 'utf8')
   const moduleMap = [
     '# Legacy Module Map',
     '',
@@ -227,7 +227,7 @@ describe('build-legacy-migration-matrix.js', () => {
     expect(res.stderr).toBe('')
 
     const summary = JSON.parse(res.stdout)
-    expect(summary.manifestPath).toBe(resolve(root, 'libs', 'legacy', 'MANIFEST.md'))
+    expect(summary.manifestPath).toBe(resolve(root, 'kernel-migration', 'legacy-archive', 'MANIFEST.md'))
     expect(summary.outPath).toBe(resolve(root, 'kernel-migration', 'legacy-libs-matrix.md'))
     expect(summary.moduleCount).toBe(4)
     expect(summary.modules.map((entry: { module: string }) => entry.module)).toEqual([
@@ -259,7 +259,7 @@ describe('build-legacy-migration-matrix.js', () => {
   it('supports custom paths and help output', () => {
     const root = seedWorkspace()
     seedCorePrimitiveMap(root)
-    const manifestPath = join(root, 'libs', 'legacy', 'MANIFEST.md')
+    const manifestPath = join(root, 'kernel-migration', 'legacy-archive', 'MANIFEST.md')
     const outPath = join(root, 'kernel-migration', 'custom-matrix.md')
 
     const res = runMatrix(['--manifest', manifestPath, '--core-map', join(root, 'kernel-migration', 'core-primitive-map.json'), '--out', outPath], root)
@@ -278,7 +278,7 @@ describe('build-legacy-migration-matrix.js', () => {
 
   it('fails when an explicit core primitive map path is missing', () => {
     const root = seedWorkspace()
-    const manifestPath = join(root, 'libs', 'legacy', 'MANIFEST.md')
+    const manifestPath = join(root, 'kernel-migration', 'legacy-archive', 'MANIFEST.md')
     const missingCoreMap = join(root, 'kernel-migration', 'missing-core-map.json')
 
     const res = runMatrix(['--manifest', manifestPath, '--core-map', missingCoreMap], root)
