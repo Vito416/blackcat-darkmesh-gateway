@@ -142,6 +142,11 @@ describe('check-release-readiness.js', () => {
           status: 'pass',
           reason: 'core extraction fully covered',
         },
+        legacyCryptoBoundary: {
+          present: true,
+          status: 'pass',
+          reason: 'crypto boundary is verification-only',
+        },
         templateSignatureRefMap: {
           present: true,
           status: 'closed',
@@ -183,6 +188,11 @@ describe('check-release-readiness.js', () => {
           status: 'complete',
           reason: 'core extraction evidence is complete',
         },
+        legacyCryptoBoundary: {
+          present: true,
+          status: 'complete',
+          reason: 'legacy crypto boundary evidence is complete',
+        },
         templateSignatureRefMap: {
           present: true,
           status: 'complete',
@@ -221,6 +231,11 @@ describe('check-release-readiness.js', () => {
           status: 'pass',
           reason: 'core extraction fully covered',
         },
+        legacyCryptoBoundary: {
+          present: true,
+          status: 'pass',
+          reason: 'legacy crypto boundary is covered',
+        },
         templateSignatureRefMap: {
           present: true,
           status: 'ok',
@@ -247,6 +262,28 @@ describe('check-release-readiness.js', () => {
     expect(res.stdout).toContain('Warnings: 0')
     expect(res.stdout).toContain('forget-forward config evidence blocker: status=missing-required')
     expect(res.stdout).toContain('status must be a non-empty string')
+  })
+
+  it('adds warning when legacy crypto boundary evidence is pending', () => {
+    const packPath = writePack({
+      release: '1.4.0',
+      status: 'ready',
+      blockers: [],
+      warnings: [],
+      optionalEvidence: {
+        legacyCryptoBoundary: {
+          present: true,
+          status: 'pending',
+          reason: 'boundary scan is still running',
+        },
+      },
+    })
+
+    const res = runCheck(['--pack', packPath])
+
+    expect(res.status).toBe(0)
+    expect(res.stdout).toContain('Status: `warning`')
+    expect(res.stdout).toContain('legacy crypto boundary evidence warning: boundary scan is still running')
   })
 
   it('exits 3 in strict mode when the pack is not ready', () => {

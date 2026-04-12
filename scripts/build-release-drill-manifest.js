@@ -15,6 +15,7 @@ const REQUIRED_ARTIFACTS = [
   'release-evidence-pack.json',
   'release-signoff-checklist.md',
   'release-readiness.json',
+  'release-drill-checks.json',
 ]
 
 const DEFAULT_OUTPUT_NAME = 'release-drill-manifest.json'

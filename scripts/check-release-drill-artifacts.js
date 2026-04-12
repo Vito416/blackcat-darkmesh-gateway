@@ -14,6 +14,7 @@ const REQUIRED_FILES = [
   'release-evidence-pack.json',
   'release-signoff-checklist.md',
   'release-readiness.json',
+  'release-drill-checks.json',
   'release-drill-manifest.json',
   'release-drill-manifest.validation.txt',
 ]

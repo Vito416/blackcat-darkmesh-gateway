@@ -51,6 +51,12 @@ function seedDrill(options: { omit?: string[] } = {}) {
       blockerCount: 0,
       warningCount: 0,
     }),
+    'release-drill-checks.json': JSON.stringify({
+      release: '1.4.0',
+      profile: 'wedos_medium',
+      mode: 'pairwise',
+      strict: false,
+    }),
   }
 
   for (const [name, content] of Object.entries(files)) {

@@ -24,6 +24,7 @@ const STEP_SCRIPTS = {
   checkEvidence: resolve(SCRIPT_DIR, 'check-evidence-bundle.js'),
   validateAoGate: resolve(SCRIPT_DIR, 'validate-ao-dependency-gate.js'),
   checkLegacyCoreEvidence: resolve(SCRIPT_DIR, 'check-legacy-core-extraction-evidence.js'),
+  checkLegacyCryptoEvidence: resolve(SCRIPT_DIR, 'check-legacy-crypto-boundary-evidence.js'),
   checkTemplateWorkerMapCoherence: resolve(SCRIPT_DIR, 'check-template-worker-map-coherence.js'),
   checkForgetForwardConfig: resolve(SCRIPT_DIR, 'check-forget-forward-config.js'),
   checkTemplateSignatureRefMap: resolve(SCRIPT_DIR, 'check-template-signature-ref-map.js'),
@@ -74,16 +75,17 @@ function usageText() {
     '  6) validate latest evidence bundle',
     '  7) validate AO dependency gate',
     '  8) check legacy core extraction evidence',
-    '  9) check template worker map coherence',
-    '  10) check forget-forward config',
-    '  11) check template signature-ref map',
-    '  12) build release evidence pack',
-    '  13) build release sign-off checklist',
-    '  14) check release readiness',
-    '  15) build release drill manifest',
-    '  16) validate release drill manifest',
-    '  17) check release drill artifacts',
-    '  18) build release evidence ledger',
+    '  9) check legacy crypto boundary evidence',
+    '  10) check template worker map coherence',
+    '  11) check forget-forward config',
+    '  12) check template signature-ref map',
+    '  13) build release evidence pack',
+    '  14) build release sign-off checklist',
+    '  15) check release readiness',
+    '  16) build release drill manifest',
+    '  17) validate release drill manifest',
+    '  18) check release drill artifacts',
+    '  19) build release evidence ledger',
     '',
     'Exit codes:',
     '  0   success',
@@ -330,6 +332,7 @@ function buildDrillPlan({
   const latestBundleJson = join(resolvedOutDir, 'latest-evidence-bundle.json')
   const aoGateValidationTxt = join(resolvedOutDir, 'ao-dependency-gate.validation.txt')
   const legacyCoreEvidenceJson = join(resolvedOutDir, 'legacy-core-extraction-evidence.json')
+  const legacyCryptoEvidenceJson = join(resolvedOutDir, 'legacy-crypto-boundary-evidence.json')
   const templateWorkerMapCoherenceJson = join(resolvedOutDir, 'template-worker-map-coherence.json')
   const forgetForwardConfigJson = join(resolvedOutDir, 'forget-forward-config.json')
   const templateSignatureRefMapJson = join(resolvedOutDir, 'template-signature-ref-map.json')
@@ -448,8 +451,19 @@ function buildDrillPlan({
       outputFile: legacyCoreEvidenceJson,
     },
     {
-      id: 'check-template-worker-map-coherence',
+      id: 'check-legacy-crypto-evidence',
       index: 9,
+      label: 'check legacy crypto boundary evidence',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.checkLegacyCryptoEvidence,
+      displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkLegacyCryptoEvidence),
+      args: ['--strict', '--json'],
+      displayArgs: ['--strict', '--json'],
+      outputFile: legacyCryptoEvidenceJson,
+    },
+    {
+      id: 'check-template-worker-map-coherence',
+      index: 10,
       label: 'check template worker map coherence',
       command: 'node',
       scriptPath: STEP_SCRIPTS.checkTemplateWorkerMapCoherence,
@@ -461,7 +475,7 @@ function buildDrillPlan({
     },
     {
       id: 'check-forget-forward-config',
-      index: 10,
+      index: 11,
       label: 'check forget-forward config',
       command: 'node',
       scriptPath: STEP_SCRIPTS.checkForgetForwardConfig,
@@ -472,7 +486,7 @@ function buildDrillPlan({
     },
     {
       id: 'check-template-signature-ref-map',
-      index: 11,
+      index: 12,
       label: 'check template signature-ref map',
       command: 'node',
       scriptPath: STEP_SCRIPTS.checkTemplateSignatureRefMap,
@@ -484,7 +498,7 @@ function buildDrillPlan({
     },
     {
       id: 'build-pack',
-      index: 12,
+      index: 13,
       label: 'build release evidence pack',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildPack,
@@ -525,7 +539,7 @@ function buildDrillPlan({
     },
     {
       id: 'build-checklist',
-      index: 13,
+      index: 14,
       label: 'build release sign-off checklist',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildChecklist,
@@ -536,7 +550,7 @@ function buildDrillPlan({
     },
     {
       id: 'readiness',
-      index: 14,
+      index: 15,
       label: 'check release readiness',
       command: 'node',
       scriptPath: STEP_SCRIPTS.checkReadiness,
@@ -547,7 +561,7 @@ function buildDrillPlan({
     },
     {
       id: 'build-drill-manifest',
-      index: 15,
+      index: 16,
       label: 'build release drill manifest',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildDrillManifest,
@@ -558,7 +572,7 @@ function buildDrillPlan({
     },
     {
       id: 'validate-drill-manifest',
-      index: 16,
+      index: 17,
       label: 'validate release drill manifest',
       command: 'node',
       scriptPath: STEP_SCRIPTS.validateDrillManifest,
@@ -569,7 +583,7 @@ function buildDrillPlan({
     },
     {
       id: 'check-drill-artifacts',
-      index: 17,
+      index: 18,
       label: 'check release drill artifacts',
       command: 'node',
       scriptPath: STEP_SCRIPTS.checkDrillArtifacts,
@@ -580,7 +594,7 @@ function buildDrillPlan({
     },
     {
       id: 'build-ledger',
-      index: 18,
+      index: 19,
       label: 'build release evidence ledger',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildLedger,
@@ -611,10 +625,11 @@ function buildDrillPlan({
       evidenceRoot,
       latestBundleJson,
       aoGateValidationTxt,
-    legacyCoreEvidenceJson,
-    templateWorkerMapCoherenceJson,
-    forgetForwardConfigJson,
-    templateSignatureRefMapJson,
+      legacyCoreEvidenceJson,
+      legacyCryptoEvidenceJson,
+      templateWorkerMapCoherenceJson,
+      forgetForwardConfigJson,
+      templateSignatureRefMapJson,
       drillChecksJson,
       packMd,
       packJson,
@@ -697,6 +712,7 @@ function runReleaseDrill(options = {}, deps = {}) {
   const context = {
     latestBundleDir: '',
     legacyCoreEvidence: null,
+    legacyCryptoEvidence: null,
     templateWorkerMapCoherence: null,
     forgetForwardConfig: null,
     templateSignatureRefMap: null,
@@ -765,6 +781,11 @@ function runReleaseDrill(options = {}, deps = {}) {
         context.legacyCoreEvidence = legacyCoreEvidence
         writeTextFile(plan.artifacts.legacyCoreEvidenceJson, `${JSON.stringify(legacyCoreEvidence, null, 2)}\n`)
       }
+      if (step.id === 'check-legacy-crypto-evidence') {
+        const legacyCryptoEvidence = JSON.parse(childStdout || '{}')
+        context.legacyCryptoEvidence = legacyCryptoEvidence
+        writeTextFile(plan.artifacts.legacyCryptoEvidenceJson, `${JSON.stringify(legacyCryptoEvidence, null, 2)}\n`)
+      }
       if (step.id === 'check-template-worker-map-coherence') {
         const templateWorkerMapCoherence = JSON.parse(childStdout || '{}')
         context.templateWorkerMapCoherence = {
@@ -789,6 +810,19 @@ function runReleaseDrill(options = {}, deps = {}) {
           ...templateSignatureRefMap,
         }
         writeTextFile(plan.artifacts.templateSignatureRefMapJson, `${JSON.stringify(context.templateSignatureRefMap, null, 2)}\n`)
+        const drillChecks = {
+          release: plan.release,
+          profile: plan.profile,
+          mode: plan.mode,
+          strict: plan.strict,
+          createdAt: new Date().toISOString(),
+          legacyCoreExtractionEvidence: context.legacyCoreEvidence,
+          legacyCryptoBoundaryEvidence: context.legacyCryptoEvidence,
+          templateWorkerMapCoherence: context.templateWorkerMapCoherence,
+          forgetForwardConfig: context.forgetForwardConfig,
+          templateSignatureRefMap: context.templateSignatureRefMap,
+        }
+        writeTextFile(plan.artifacts.drillChecksJson, `${JSON.stringify(drillChecks, null, 2)}\n`)
       }
       if (step.id === 'validate-drill-manifest') {
         writeTextFile(plan.artifacts.drillManifestValidation, childStdout || 'valid release drill manifest\n')
@@ -814,9 +848,13 @@ function runReleaseDrill(options = {}, deps = {}) {
       }
       if (step.id === 'validate-ao-gate') ensureFile(plan.artifacts.aoGateValidationTxt, step.label)
       if (step.id === 'check-legacy-core-evidence') ensureFile(plan.artifacts.legacyCoreEvidenceJson, step.label)
+      if (step.id === 'check-legacy-crypto-evidence') ensureFile(plan.artifacts.legacyCryptoEvidenceJson, step.label)
       if (step.id === 'check-template-worker-map-coherence') ensureFile(plan.artifacts.templateWorkerMapCoherenceJson, step.label)
       if (step.id === 'check-forget-forward-config') ensureFile(plan.artifacts.forgetForwardConfigJson, step.label)
-      if (step.id === 'check-template-signature-ref-map') ensureFile(plan.artifacts.templateSignatureRefMapJson, step.label)
+      if (step.id === 'check-template-signature-ref-map') {
+        ensureFile(plan.artifacts.templateSignatureRefMapJson, step.label)
+        ensureFile(plan.artifacts.drillChecksJson, 'release drill metadata')
+      }
       if (step.id === 'build-checklist') ensureFile(plan.artifacts.checklistMd, step.label)
       if (step.id === 'readiness') ensureFile(plan.artifacts.readinessJson, step.label)
       if (step.id === 'build-drill-manifest') ensureFile(plan.artifacts.drillManifestJson, step.label)
@@ -832,25 +870,6 @@ function runReleaseDrill(options = {}, deps = {}) {
     }
 
     stdout.push(`${stepLine} done\n`)
-  }
-
-  try {
-    const drillChecks = {
-      release: plan.release,
-      profile: plan.profile,
-      mode: plan.mode,
-      strict: plan.strict,
-      createdAt: new Date().toISOString(),
-      legacyCoreExtractionEvidence: context.legacyCoreEvidence,
-      templateWorkerMapCoherence: context.templateWorkerMapCoherence,
-      forgetForwardConfig: context.forgetForwardConfig,
-      templateSignatureRefMap: context.templateSignatureRefMap,
-    }
-    writeTextFile(plan.artifacts.drillChecksJson, `${JSON.stringify(drillChecks, null, 2)}\n`)
-    ensureFile(plan.artifacts.drillChecksJson, 'release drill metadata')
-  } catch (err) {
-    stderr.push(`release drill metadata failed: ${err instanceof Error ? err.message : String(err)}\n`)
-    return { exitCode: 3, stdout: stdout.join(''), stderr: stderr.join(''), plan, artifacts: plan.artifacts }
   }
 
   return {

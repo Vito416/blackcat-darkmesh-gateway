@@ -60,13 +60,13 @@ This file defines the minimum removal gate for each `libs/legacy/<module>/` snap
   - `rg` no-import proof log
   - PR/commit link for core mapping completion
 
-### `blackcat-crypto` (current: `partially extracted`)
+### `blackcat-crypto` (current: `extracted`)
 - Tests required: `tests/runtime-crypto-safeCompare.test.ts`, `tests/runtime-crypto-hmac.test.ts`, `tests/runtime-crypto-signatureRefs.test.ts`, `tests/runtime-crypto-boundary.test.ts`, and webhook verification coverage (`tests/webhooks.test.ts`) pass in the removal PR.
 - Docs required: map + migration plan row marked `removed` with replacement paths `src/runtime/crypto/safeCompare.ts`, `src/runtime/crypto/hmac.ts`, `src/runtime/crypto/signatureRefs.ts`, and `src/runtime/crypto/boundary.ts`.
 - Proof required: no runtime imports from `libs/legacy/blackcat-crypto`, and the gateway request path remains verification-only with no wallet/private-key signing.
 - Evidence to archive:
   - focused test run log
-  - crypto-boundary proof log (`rg` no wallet/private-key signing references in `src/runtime/crypto` and `src/webhooks.ts`)
+  - crypto-boundary proof log (`npm run ops:check-legacy-crypto-boundary-evidence -- --strict --json`)
   - `rg` no-import proof log
   - PR/commit link for crypto snapshot removal
 

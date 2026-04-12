@@ -35,6 +35,12 @@ async function seedDrillArtifacts(dir: string, overrides: Record<string, string>
     'release-evidence-pack.json': JSON.stringify({ release: '1.4.0', status: 'ready' }),
     'release-signoff-checklist.md': '# Release Sign-off Checklist\n',
     'release-readiness.json': JSON.stringify({ release: '1.4.0', status: 'ready', blockerCount: 0, warningCount: 0 }),
+    'release-drill-checks.json': JSON.stringify({
+      release: '1.4.0',
+      profile: 'wedos_medium',
+      mode: 'pairwise',
+      strict: false,
+    }),
     'release-drill-manifest.json': JSON.stringify({
       release: '1.4.0',
       status: 'ready',

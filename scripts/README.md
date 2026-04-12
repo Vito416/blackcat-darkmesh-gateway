@@ -361,6 +361,22 @@ Exit codes:
 - `3` evidence gaps found in `--strict` mode, or a runtime error occurred
 - `64` usage error
 
+## Legacy crypto boundary evidence
+
+`scripts/check-legacy-crypto-boundary-evidence.js` machine-checks the blackcat-crypto boundary by verifying required runtime files/tests, the absence of `libs/legacy/blackcat-crypto` imports under `src/`, and verification-only runtime constraints (no wallet/private-key/signing capabilities in request-path crypto files).
+
+Usage:
+```bash
+npm run ops:check-legacy-crypto-boundary-evidence
+npm run ops:check-legacy-crypto-boundary-evidence -- --strict
+npm run ops:check-legacy-crypto-boundary-evidence -- --root . --json
+```
+
+Exit codes:
+- `0` evidence is complete, or issues were reported without `--strict`
+- `3` evidence gaps found in `--strict` mode, or a runtime error occurred
+- `64` usage error
+
 ## Mailing secret boundary check
 
 `scripts/check-mailing-secret-boundary.js` scans `src/runtime/mailing/**` and fails when request-path mailing code reads local secrets (`process.env`, `import.meta.env`, or equivalent bindings).
@@ -428,8 +444,11 @@ npm run ops:check-legacy-module-map-sync -- --strict
 
 `scripts/build-release-evidence-pack.js` merges consistency and evidence artifacts into a single release-ready summary (`markdown` + optional JSON) for sign-off.
 
-It also picks up two optional drill artifacts when they are present in the drill root (`--consistency-dir` in `scripts/run-release-drill.js`):
+It also picks up optional drill artifacts when they are present in the drill root (`--consistency-dir` in `scripts/run-release-drill.js`):
 - `check-legacy-core-extraction-evidence.json`
+- `check-legacy-crypto-boundary-evidence.json`
+- `check-template-worker-map-coherence.json`
+- `check-forget-forward-config.json`
 - `check-template-signature-ref-map.json`
 
 Missing optional artifacts are additive and do not block the pack. If either file exists but is not valid JSON, the pack is marked not-ready so the drill stops on a deterministic parse failure instead of silently ignoring it.
@@ -479,7 +498,7 @@ npm run ops:check-release-readiness -- \
 
 ## One-shot release drill
 
-`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation output, legacy core extraction evidence, template worker map coherence validation, forget-forward config validation, template signature-ref map validation, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, strict manifest validation output, strict artifact-set validation, and final release-evidence ledger generation.
+`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation output, legacy core extraction evidence, legacy crypto boundary evidence, template worker map coherence validation, forget-forward config validation, template signature-ref map validation, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, strict manifest validation output, strict artifact-set validation, and final release-evidence ledger generation.
 
 The drill also writes a bundled metadata file, `release-drill-checks.json`, that captures the JSON outputs from the optional map/relay checks alongside the drill context. The template worker map coherence check runs strict only when at least one site key is configured in URL/token/signature maps; with no site mapping it stays informational. When `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` carries site keys, the signature-ref check runs strict and requires those keys; with an empty map it stays informational.
 
@@ -495,7 +514,7 @@ npm run ops:run-release-drill -- \
   --strict
 ```
 
-The drill directory also contains `legacy-core-extraction-evidence.json`, `template-worker-map-coherence.json`, `forget-forward-config.json`, `template-signature-ref-map.json`, and `release-drill-checks.json` for downstream review and archiving.
+The drill directory also contains `legacy-core-extraction-evidence.json`, `legacy-crypto-boundary-evidence.json`, `template-worker-map-coherence.json`, `forget-forward-config.json`, `template-signature-ref-map.json`, and `release-drill-checks.json` for downstream review and archiving.
 
 ## Release drill manifest build
 
@@ -522,6 +541,8 @@ npm run ops:validate-release-drill-manifest -- \
 ## Release drill artifact-set check
 
 `scripts/check-release-drill-artifacts.js` validates that the drill directory contains the full mandatory artifact set and, in strict mode, verifies cross-file release consistency plus manifest-validation output.
+
+The strict artifact set now includes `release-drill-checks.json` (drill context metadata), so `ops:run-release-drill` should be treated as the canonical producer before running the strict artifact checker.
 
 Usage:
 ```bash

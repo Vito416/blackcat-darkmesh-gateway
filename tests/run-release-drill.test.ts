@@ -116,9 +116,11 @@ describe('run-release-drill.js', () => {
     expect(result?.stdout).toContain('scripts/latest-evidence-bundle.js')
     expect(result?.stdout).toContain('scripts/check-evidence-bundle.js')
     expect(result?.stdout).toContain('scripts/check-legacy-core-extraction-evidence.js')
+    expect(result?.stdout).toContain('scripts/check-legacy-crypto-boundary-evidence.js')
     expect(result?.stdout).toContain('scripts/check-template-worker-map-coherence.js --json')
     expect(result?.stdout).toContain('scripts/check-forget-forward-config.js --json')
     expect(result?.stdout).toContain('scripts/check-template-signature-ref-map.js --json')
+    expect(result?.stdout).toContain('legacy-crypto-boundary-evidence.json')
     expect(result?.stdout).toContain('template-worker-map-coherence.json')
     expect(result?.stdout).toContain('forget-forward-config.json')
     expect(result?.stdout).toContain('release-drill-checks.json')
@@ -236,6 +238,26 @@ describe('run-release-drill.js', () => {
               issues: [],
               warnings: [],
               findings: [],
+            },
+            null,
+            2,
+          ),
+        )
+      }
+
+      if (scriptName === 'check-legacy-crypto-boundary-evidence.js') {
+        return makeSpawnResult(
+          JSON.stringify(
+            {
+              ok: true,
+              status: 'pass',
+              strict: true,
+              importFindingCount: 0,
+              forbiddenSigningFindingCount: 0,
+              runtimeMissing: [],
+              testMissing: [],
+              importFindings: [],
+              forbiddenSigningFindings: [],
             },
             null,
             2,
@@ -501,7 +523,7 @@ describe('run-release-drill.js', () => {
     )
 
     expect(result?.exitCode).toBe(0)
-    expect(spawnSyncFn).toHaveBeenCalledTimes(18)
+    expect(spawnSyncFn).toHaveBeenCalledTimes(19)
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'validate-consistency-preflight.js',
       'compare-integrity-matrix.js',
@@ -511,6 +533,7 @@ describe('run-release-drill.js', () => {
       'check-evidence-bundle.js',
       'validate-ao-dependency-gate.js',
       'check-legacy-core-extraction-evidence.js',
+      'check-legacy-crypto-boundary-evidence.js',
       'check-template-worker-map-coherence.js',
       'check-forget-forward-config.js',
       'check-template-signature-ref-map.js',
@@ -522,7 +545,7 @@ describe('run-release-drill.js', () => {
       'check-release-drill-artifacts.js',
       'build-release-evidence-ledger.js',
     ])
-    expect(result?.stdout).toContain('[1/18] validate consistency preflight')
+    expect(result?.stdout).toContain('[1/19] validate consistency preflight')
     expect(result?.stdout).toContain('# Release Evidence Pack')
     expect(result?.stdout).toContain('# Release Sign-off Checklist')
     expect(result?.stdout).toContain('# Release Evidence Ledger')
@@ -531,6 +554,7 @@ describe('run-release-drill.js', () => {
 
     const matrix = JSON.parse(readFileSync(join(outDir, 'consistency-matrix.json'), 'utf8'))
     const legacyCoreEvidence = JSON.parse(readFileSync(join(outDir, 'legacy-core-extraction-evidence.json'), 'utf8'))
+    const legacyCryptoEvidence = JSON.parse(readFileSync(join(outDir, 'legacy-crypto-boundary-evidence.json'), 'utf8'))
     const templateWorkerMapCoherence = JSON.parse(readFileSync(join(outDir, 'template-worker-map-coherence.json'), 'utf8'))
     const forgetForwardConfig = JSON.parse(readFileSync(join(outDir, 'forget-forward-config.json'), 'utf8'))
     const signatureRefMap = JSON.parse(readFileSync(join(outDir, 'template-signature-ref-map.json'), 'utf8'))
@@ -545,6 +569,7 @@ describe('run-release-drill.js', () => {
     const ledgerMd = readFileSync(join(outDir, 'release-evidence-ledger.md'), 'utf8')
     const aoGateValidation = readFileSync(join(outDir, 'ao-dependency-gate.validation.txt'), 'utf8')
     expect(legacyCoreEvidence.ok).toBe(true)
+    expect(legacyCryptoEvidence.ok).toBe(true)
     expect(templateWorkerMapCoherence.status).toBe('complete')
     expect(templateWorkerMapCoherence.configured).toBe(true)
     expect(forgetForwardConfig.status).toBe('complete')
@@ -552,6 +577,7 @@ describe('run-release-drill.js', () => {
     expect(signatureRefMap.ok).toBe(true)
     expect(signatureRefMap.requiredSites).toEqual(['alpha', 'beta'])
     expect(drillChecks.legacyCoreExtractionEvidence.status).toBe('complete')
+    expect(drillChecks.legacyCryptoBoundaryEvidence.status).toBe('pass')
     expect(drillChecks.templateWorkerMapCoherence.status).toBe('complete')
     expect(drillChecks.forgetForwardConfig.status).toBe('complete')
     expect(drillChecks.templateSignatureRefMap.configured).toBe(true)

@@ -116,6 +116,7 @@ function normalizeOptionalSection(value, fieldName) {
 
 const OPTIONAL_EVIDENCE_SECTION_LABELS = {
   coreExtraction: 'core extraction evidence',
+  legacyCryptoBoundary: 'legacy crypto boundary evidence',
   templateSignatureRefMap: 'template signature-ref map evidence',
   templateWorkerMapCoherence: 'template worker map coherence evidence',
   forgetForwardConfig: 'forget-forward config evidence',
@@ -186,6 +187,10 @@ function normalizeOptionalEvidenceGroup(raw) {
 
   return {
     coreExtraction: normalizeOptionalEvidenceSection(source.coreExtraction, 'release pack.optionalEvidence.coreExtraction'),
+    legacyCryptoBoundary: normalizeOptionalEvidenceSection(
+      source.legacyCryptoBoundary,
+      'release pack.optionalEvidence.legacyCryptoBoundary',
+    ),
     templateSignatureRefMap: normalizeOptionalEvidenceSection(
       source.templateSignatureRefMap,
       'release pack.optionalEvidence.templateSignatureRefMap',

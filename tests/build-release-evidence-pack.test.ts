@@ -40,6 +40,7 @@ async function seedOptionalEvidence(
   rootDir: string,
   options: {
     coreExtraction?: unknown
+    legacyCryptoBoundary?: unknown
     signatureRefMap?: unknown
     templateWorkerMapCoherence?: unknown
     forgetForwardConfig?: unknown
@@ -61,6 +62,16 @@ async function seedOptionalEvidence(
       typeof options.signatureRefMap === 'string'
         ? options.signatureRefMap
         : `${JSON.stringify(options.signatureRefMap, null, 2)}\n`,
+      'utf8',
+    )
+  }
+
+  if (typeof options.legacyCryptoBoundary !== 'undefined') {
+    await writeFile(
+      join(rootDir, 'legacy-crypto-boundary-evidence.json'),
+      typeof options.legacyCryptoBoundary === 'string'
+        ? options.legacyCryptoBoundary
+        : `${JSON.stringify(options.legacyCryptoBoundary, null, 2)}\n`,
       'utf8',
     )
   }
@@ -326,6 +337,15 @@ describe('build-release-evidence-pack.js', () => {
         warnings: [],
         map: { alpha: 'sig-alpha', beta: 'sig-beta' },
       },
+      legacyCryptoBoundary: {
+        ok: true,
+        status: 'pass',
+        strict: true,
+        importFindingCount: 0,
+        forbiddenSigningFindingCount: 0,
+        runtimeMissing: [],
+        testMissing: [],
+      },
       templateWorkerMapCoherence: {
         ok: true,
         status: 'complete',
@@ -388,12 +408,14 @@ describe('build-release-evidence-pack.js', () => {
 
     expect(pack.status).toBe('ready')
     expect(pack.optionalEvidence.coreExtraction.status).toBe('pass')
+    expect(pack.optionalEvidence.legacyCryptoBoundary.status).toBe('pass')
     expect(pack.optionalEvidence.templateSignatureRefMap.status).toBe('pass')
     expect(pack.optionalEvidence.templateWorkerMapCoherence.status).toBe('pass')
     expect(pack.optionalEvidence.forgetForwardConfig.status).toBe('pass')
     expect(pack.blockers).toEqual([])
     expect(markdown).toContain('## Optional evidence')
     expect(markdown).toContain('Core extraction evidence')
+    expect(markdown).toContain('Legacy crypto boundary evidence')
     expect(markdown).toContain('Template signature-ref map evidence')
     expect(markdown).toContain('Template worker map coherence evidence')
     expect(markdown).toContain('Forget-forward config evidence')
@@ -453,6 +475,7 @@ describe('build-release-evidence-pack.js', () => {
 
     expect(pack.status).toBe('ready')
     expect(pack.optionalEvidence.coreExtraction.status).toBe('missing')
+    expect(pack.optionalEvidence.legacyCryptoBoundary.status).toBe('missing')
     expect(pack.optionalEvidence.templateSignatureRefMap.status).toBe('missing')
     expect(pack.optionalEvidence.templateWorkerMapCoherence.status).toBe('missing')
     expect(pack.optionalEvidence.forgetForwardConfig.status).toBe('missing')

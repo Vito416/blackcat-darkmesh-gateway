@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url'
 const REQUIRED_ARTIFACTS = [
   { key: 'release-evidence-pack', file: 'release-evidence-pack.json', json: true },
   { key: 'release-readiness', file: 'release-readiness.json', json: true },
+  { key: 'release-drill-checks', file: 'release-drill-checks.json', json: true },
   { key: 'release-drill-manifest', file: 'release-drill-manifest.json', json: true },
   { key: 'release-drill-check', file: 'release-drill-check.json', json: true },
   { key: 'release-evidence-ledger', file: 'release-evidence-ledger.json', json: true },
@@ -242,12 +243,14 @@ function assessDecommissionReadiness({ dir, aoGateFile }) {
 
   const pack = artifacts['release-evidence-pack'].value
   const readiness = artifacts['release-readiness'].value
+  const drillChecks = artifacts['release-drill-checks'].value
   const manifest = artifacts['release-drill-manifest'].value
   const drillCheck = artifacts['release-drill-check'].value
   const ledger = artifacts['release-evidence-ledger'].value
 
   const packStatus = normalizeStatus(pack?.status)
   const readinessStatus = normalizeStatus(readiness?.status)
+  const drillChecksRelease = isNonEmptyString(drillChecks?.release) ? drillChecks.release.trim() : ''
   const manifestStatus = normalizeStatus(manifest?.status)
   const ledgerStatus = normalizeStatus(ledger?.overallStatus || ledger?.status)
   const drillCheckOk = drillCheck?.ok === true
@@ -271,6 +274,7 @@ function assessDecommissionReadiness({ dir, aoGateFile }) {
   const releaseValues = uniqueStrings([
     pack?.release,
     readiness?.release,
+    drillChecksRelease,
     manifest?.release,
     ledger?.release,
     gate?.release,
@@ -339,6 +343,13 @@ function assessDecommissionReadiness({ dir, aoGateFile }) {
         warningCount: Number.isInteger(readiness?.warningCount) ? readiness.warningCount : null,
         release: isNonEmptyString(readiness?.release) ? readiness.release.trim() : '',
       },
+      releaseDrillChecks: {
+        present: artifacts['release-drill-checks'].present,
+        valid: artifacts['release-drill-checks'].valid,
+        release: drillChecksRelease,
+        profile: isNonEmptyString(drillChecks?.profile) ? drillChecks.profile.trim() : '',
+        mode: isNonEmptyString(drillChecks?.mode) ? drillChecks.mode.trim() : '',
+      },
       releaseDrillManifest: {
         present: artifacts['release-drill-manifest'].present,
         valid: artifacts['release-drill-manifest'].valid,
@@ -395,6 +406,7 @@ function renderHuman(summary) {
   lines.push(
     `- release-readiness.json: ${summary.checks.releaseReadiness.present ? 'present' : 'missing'} / ${summary.checks.releaseReadiness.status || 'n/a'}`,
   )
+  lines.push(`- release-drill-checks.json: ${summary.checks.releaseDrillChecks.present ? 'present' : 'missing'}`)
   lines.push(
     `- release-drill-manifest.json: ${summary.checks.releaseDrillManifest.present ? 'present' : 'missing'} / ${summary.checks.releaseDrillManifest.status || 'n/a'}`,
   )

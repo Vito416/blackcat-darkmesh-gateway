@@ -17,6 +17,11 @@ const OPTIONAL_EVIDENCE_FILES = {
     'legacy-core-extraction-evidence.json',
     'core-extraction-evidence.json',
   ],
+  legacyCryptoBoundary: [
+    'check-legacy-crypto-boundary-evidence.json',
+    'legacy-crypto-boundary-evidence.json',
+    'crypto-boundary-evidence.json',
+  ],
   templateSignatureRefMap: [
     'check-template-signature-ref-map.json',
     'template-signature-ref-map.json',
@@ -36,6 +41,7 @@ const OPTIONAL_EVIDENCE_FILES = {
 
 const OPTIONAL_EVIDENCE_LABELS = {
   coreExtraction: 'core extraction evidence',
+  legacyCryptoBoundary: 'legacy crypto boundary evidence',
   templateSignatureRefMap: 'template signature-ref map evidence',
   templateWorkerMapCoherence: 'template worker map coherence evidence',
   forgetForwardConfig: 'forget-forward config evidence',
@@ -290,6 +296,68 @@ function summarizeCoreExtractionEvidence(payload, filePath) {
   }
 }
 
+function summarizeLegacyCryptoBoundaryEvidence(payload, filePath) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return {
+      present: true,
+      status: 'invalid',
+      reason: 'legacy crypto boundary evidence payload must be a JSON object',
+      filePath,
+    }
+  }
+
+  const ok = payload.ok === true || payload.status === 'pass'
+  if (ok) {
+    return {
+      present: true,
+      status: 'pass',
+      reason: 'runtime crypto boundary is verification-only and legacy imports are absent',
+      filePath,
+    }
+  }
+
+  const runtimeMissingCount = Array.isArray(payload.runtimeMissing) ? payload.runtimeMissing.length : null
+  const testMissingCount = Array.isArray(payload.testMissing) ? payload.testMissing.length : null
+  const importFindingCount = Number.isInteger(payload.importFindingCount) ? payload.importFindingCount : null
+  const forbiddenSigningFindingCount = Number.isInteger(payload.forbiddenSigningFindingCount)
+    ? payload.forbiddenSigningFindingCount
+    : null
+  const scanIssue = isNonEmptyString(payload.importScan?.issue) ? payload.importScan.issue.trim() : ''
+  const parts = []
+
+  if (runtimeMissingCount !== null && runtimeMissingCount > 0) {
+    parts.push(`${runtimeMissingCount} runtime file(s) missing`)
+  }
+  if (testMissingCount !== null && testMissingCount > 0) {
+    parts.push(`${testMissingCount} test file(s) missing`)
+  }
+  if (importFindingCount !== null && importFindingCount > 0) {
+    parts.push(`${importFindingCount} legacy import finding(s)`)
+  }
+  if (forbiddenSigningFindingCount !== null && forbiddenSigningFindingCount > 0) {
+    parts.push(`${forbiddenSigningFindingCount} forbidden signing finding(s)`)
+  }
+  if (scanIssue) {
+    parts.push(`scan issue: ${scanIssue}`)
+  }
+  if (parts.length === 0) {
+    parts.push(`status=${isNonEmptyString(payload.status) ? payload.status.trim() : 'unknown'}`)
+  }
+
+  const strict = payload.strict === true
+  return {
+    present: true,
+    status: strict ? 'fail' : 'warn',
+    reason: parts.join(', '),
+    filePath,
+    runtimeMissingCount,
+    testMissingCount,
+    importFindingCount,
+    forbiddenSigningFindingCount,
+    strict,
+  }
+}
+
 function summarizeTemplateSignatureRefMapEvidence(payload, filePath) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return {
@@ -473,6 +541,7 @@ async function collectOptionalEvidenceArtifacts(rootDir) {
   if (!rootDir) {
     return {
       coreExtraction: { present: false, status: 'missing', reason: 'not provided', files: {} },
+      legacyCryptoBoundary: { present: false, status: 'missing', reason: 'not provided', files: {} },
       templateSignatureRefMap: { present: false, status: 'missing', reason: 'not provided', files: {} },
       templateWorkerMapCoherence: { present: false, status: 'missing', reason: 'not provided', files: {} },
       forgetForwardConfig: { present: false, status: 'missing', reason: 'not provided', files: {} },
@@ -481,6 +550,7 @@ async function collectOptionalEvidenceArtifacts(rootDir) {
 
   const root = resolve(rootDir)
   const coreExtractionFile = await findFirstExistingFileByNames(root, OPTIONAL_EVIDENCE_FILES.coreExtraction)
+  const legacyCryptoBoundaryFile = await findFirstExistingFileByNames(root, OPTIONAL_EVIDENCE_FILES.legacyCryptoBoundary)
   const signatureRefMapFile = await findFirstExistingFileByNames(root, OPTIONAL_EVIDENCE_FILES.templateSignatureRefMap)
   const templateWorkerMapCoherenceFile = await findFirstExistingFileByNames(
     root,
@@ -536,6 +606,30 @@ async function collectOptionalEvidenceArtifacts(rootDir) {
     }
   })()
 
+  const legacyCryptoBoundary = await (async () => {
+    if (!legacyCryptoBoundaryFile) {
+      return {
+        present: false,
+        status: 'missing',
+        reason: 'artifact file not found',
+        filePath: '',
+        files: {},
+      }
+    }
+
+    try {
+      const payload = await readJson(legacyCryptoBoundaryFile)
+      return summarizeLegacyCryptoBoundaryEvidence(payload, legacyCryptoBoundaryFile)
+    } catch (err) {
+      return {
+        present: true,
+        status: 'invalid',
+        reason: err instanceof Error ? err.message : String(err),
+        filePath: legacyCryptoBoundaryFile,
+      }
+    }
+  })()
+
   const templateWorkerMapCoherence = await (async () => {
     if (!templateWorkerMapCoherenceFile) {
       return {
@@ -584,7 +678,13 @@ async function collectOptionalEvidenceArtifacts(rootDir) {
     }
   })()
 
-  return { coreExtraction, templateSignatureRefMap, templateWorkerMapCoherence, forgetForwardConfig }
+  return {
+    coreExtraction,
+    legacyCryptoBoundary,
+    templateSignatureRefMap,
+    templateWorkerMapCoherence,
+    forgetForwardConfig,
+  }
 }
 
 function resolveConsistencyStatus(matrix) {
@@ -944,6 +1044,7 @@ function renderMarkdown(pack) {
   lines.push('## Optional evidence')
   const optionalEvidenceEntries = [
     ['Core extraction evidence', pack.optionalEvidence?.coreExtraction],
+    ['Legacy crypto boundary evidence', pack.optionalEvidence?.legacyCryptoBoundary],
     ['Template signature-ref map evidence', pack.optionalEvidence?.templateSignatureRefMap],
     ['Template worker map coherence evidence', pack.optionalEvidence?.templateWorkerMapCoherence],
     ['Forget-forward config evidence', pack.optionalEvidence?.forgetForwardConfig],
