@@ -4,6 +4,11 @@ Status date: 2026-04-12
 
 This is the practical gaplist for moving from "machine checks green" to "live rollout ready" on a fresh host.
 
+Latest audit snapshot:
+- `npm run ops:audit-all` -> pass
+- `npm run ops:check-production-readiness -- --json` -> GO
+- `npm audit --omit=dev --json` -> 0 vulnerabilities
+
 ## P0 (must close before first live traffic)
 
 - [ ] Live strict release drill with real gateway endpoints (`ops:run-release-drill --strict`).
@@ -14,10 +19,11 @@ This is the practical gaplist for moving from "machine checks green" to "live ro
 
 ## P1 (high-value hardening right after go-live)
 
-- [ ] Add `ops:check-template-variant-map` to release-drill orchestration so every strict drill archives `template-variant-map.json`.
-- [ ] Add template variant map artifact into `release-drill-checks.json` embedded consistency checks.
+- [x] Add `ops:check-template-variant-map` to release-drill orchestration so every strict drill archives `template-variant-map.json`.
+- [x] Add template variant map artifact into `release-drill-checks.json` embedded consistency checks.
 - [ ] Add schema validation for `GATEWAY_TEMPLATE_VARIANT_MAP` in CI (shape + variant allowlist + txid fields).
 - [ ] Add one e2e smoke that verifies site variant selection path (`site -> variant -> template txid -> /template/call`).
+- [ ] Add live release-drill evidence bundle from real gateways and archive it under release review links.
 
 ## P2 / nice-to-have (future-proof and operator speed)
 
@@ -30,4 +36,4 @@ This is the practical gaplist for moving from "machine checks green" to "live ro
 
 - Build/tests are green.
 - Production readiness command currently reports GO on machine checks.
-- Remaining risk is mostly operational/live-proof closure, not missing core runtime functionality.
+- Remaining risk is mostly operational/live-proof closure (real endpoints + real worker maps), not missing core runtime functionality.

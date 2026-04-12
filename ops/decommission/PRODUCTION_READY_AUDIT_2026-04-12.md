@@ -10,6 +10,7 @@
 - `npm run build` -> pass
 - `npm test` -> pass (baseline suite)
 - `npm run test:hardening` -> pass
+- `npm run ops:audit-all` -> pass
 - `npm audit --omit=dev --json` -> pass (0 vulnerabilities)
 - `npm run ops:check-release-drill-artifacts -- --dir ops/decommission --strict --json` -> pass
 - `npm run ops:check-decommission-readiness -- --dir ops/decommission --ao-gate ops/decommission/ao-dependency-gate.json --json` -> pass (`closeoutState=ready`)
@@ -24,8 +25,8 @@ None at this time (machine checks report GO).
 
 ## P1 improvements (high value for fresh-machine rollout)
 
-1. Wire `ops:check-template-variant-map` into release-drill orchestration so variant coverage is archived automatically in every strict drill.
-2. Add one smoke artifact proving end-to-end template variant selection on a fresh machine (`site -> variant -> template txid -> resolve-route`).
+1. Add one smoke artifact proving end-to-end template variant selection on a fresh machine (`site -> variant -> template txid -> resolve-route`).
+2. Add explicit live drill evidence links (real endpoints, real worker maps) to release signoff references.
 
 ## P2 / nice-to-have
 
@@ -54,4 +55,5 @@ None at this time (machine checks report GO).
   - Full `ops/decommission` artifact set generated and validated in strict artifact mode.
   - Profile-specific cadence/threshold tuning sync across docs + script + tests.
   - Added template variant map guardrails (`config/template-variant-map.example.json`, `ops:check-template-variant-map`) and WEDOS handoff folder (`ops/live-wedos/README.md`).
+  - Wired template variant map checks into strict release-drill flow and drill-artifact completeness checks (`template-variant-map.json` is now a first-class strict artifact).
 - Best next move: run one live strict drill with real gateway endpoints + real variant map and archive that drill as release-grade evidence.
