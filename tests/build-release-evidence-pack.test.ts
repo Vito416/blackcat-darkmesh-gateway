@@ -38,7 +38,12 @@ async function seedEvidence(rootDir: string) {
 
 async function seedOptionalEvidence(
   rootDir: string,
-  options: { coreExtraction?: unknown; signatureRefMap?: unknown },
+  options: {
+    coreExtraction?: unknown
+    signatureRefMap?: unknown
+    templateWorkerMapCoherence?: unknown
+    forgetForwardConfig?: unknown
+  },
 ) {
   if (typeof options.coreExtraction !== 'undefined') {
     await writeFile(
@@ -56,6 +61,26 @@ async function seedOptionalEvidence(
       typeof options.signatureRefMap === 'string'
         ? options.signatureRefMap
         : `${JSON.stringify(options.signatureRefMap, null, 2)}\n`,
+      'utf8',
+    )
+  }
+
+  if (typeof options.templateWorkerMapCoherence !== 'undefined') {
+    await writeFile(
+      join(rootDir, 'template-worker-map-coherence.json'),
+      typeof options.templateWorkerMapCoherence === 'string'
+        ? options.templateWorkerMapCoherence
+        : `${JSON.stringify(options.templateWorkerMapCoherence, null, 2)}\n`,
+      'utf8',
+    )
+  }
+
+  if (typeof options.forgetForwardConfig !== 'undefined') {
+    await writeFile(
+      join(rootDir, 'forget-forward-config.json'),
+      typeof options.forgetForwardConfig === 'string'
+        ? options.forgetForwardConfig
+        : `${JSON.stringify(options.forgetForwardConfig, null, 2)}\n`,
       'utf8',
     )
   }
@@ -301,6 +326,37 @@ describe('build-release-evidence-pack.js', () => {
         warnings: [],
         map: { alpha: 'sig-alpha', beta: 'sig-beta' },
       },
+      templateWorkerMapCoherence: {
+        ok: true,
+        status: 'complete',
+        strict: true,
+        counts: {
+          urlMapCount: 2,
+          tokenMapCount: 2,
+          signatureRefMapCount: 2,
+          requiredSiteCount: 0,
+          missingRequiredSiteCount: 0,
+          missingTokenCount: 0,
+          missingSignatureRefCount: 0,
+          extraTokenCount: 0,
+          extraSignatureRefCount: 0,
+        },
+        issues: [],
+        warnings: [],
+      },
+      forgetForwardConfig: {
+        ok: false,
+        strict: false,
+        status: 'pending',
+        values: {
+          url: '',
+          token: '',
+          timeoutMs: 3000,
+          timeoutSource: 'default',
+        },
+        issues: [],
+        warnings: ['forget-forward relay is disabled because the URL is not set'],
+      },
     })
     const aoGatePath = join(dir, 'ao-dependency-gate.json')
     await writeFile(
@@ -333,10 +389,14 @@ describe('build-release-evidence-pack.js', () => {
     expect(pack.status).toBe('ready')
     expect(pack.optionalEvidence.coreExtraction.status).toBe('pass')
     expect(pack.optionalEvidence.templateSignatureRefMap.status).toBe('pass')
+    expect(pack.optionalEvidence.templateWorkerMapCoherence.status).toBe('pass')
+    expect(pack.optionalEvidence.forgetForwardConfig.status).toBe('pass')
     expect(pack.blockers).toEqual([])
     expect(markdown).toContain('## Optional evidence')
     expect(markdown).toContain('Core extraction evidence')
     expect(markdown).toContain('Template signature-ref map evidence')
+    expect(markdown).toContain('Template worker map coherence evidence')
+    expect(markdown).toContain('Forget-forward config evidence')
   })
 
   it('keeps missing optional drill evidence additive even when require-both is set', async () => {
@@ -394,6 +454,8 @@ describe('build-release-evidence-pack.js', () => {
     expect(pack.status).toBe('ready')
     expect(pack.optionalEvidence.coreExtraction.status).toBe('missing')
     expect(pack.optionalEvidence.templateSignatureRefMap.status).toBe('missing')
+    expect(pack.optionalEvidence.templateWorkerMapCoherence.status).toBe('missing')
+    expect(pack.optionalEvidence.forgetForwardConfig.status).toBe('missing')
     expect(pack.blockers).toEqual([])
     expect(markdown).toContain('Present: no')
     expect(markdown).toContain('Reason: artifact file not found')

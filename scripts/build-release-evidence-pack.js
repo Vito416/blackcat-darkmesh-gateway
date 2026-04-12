@@ -22,6 +22,23 @@ const OPTIONAL_EVIDENCE_FILES = {
     'template-signature-ref-map.json',
     'signature-ref-map-check.json',
   ],
+  templateWorkerMapCoherence: [
+    'check-template-worker-map-coherence.json',
+    'template-worker-map-coherence.json',
+    'template-worker-routing-check.json',
+  ],
+  forgetForwardConfig: [
+    'check-forget-forward-config.json',
+    'forget-forward-config.json',
+    'forget-forward-check.json',
+  ],
+}
+
+const OPTIONAL_EVIDENCE_LABELS = {
+  coreExtraction: 'core extraction evidence',
+  templateSignatureRefMap: 'template signature-ref map evidence',
+  templateWorkerMapCoherence: 'template worker map coherence evidence',
+  forgetForwardConfig: 'forget-forward config evidence',
 }
 
 function usage(exitCode = 0) {
@@ -316,6 +333,118 @@ function summarizeTemplateSignatureRefMapEvidence(payload, filePath) {
   }
 }
 
+function summarizeTemplateWorkerMapCoherenceEvidence(payload, filePath) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return {
+      present: true,
+      status: 'invalid',
+      reason: 'template worker map coherence evidence payload must be a JSON object',
+      filePath,
+    }
+  }
+
+  const parsedStatus = normalizeOptionalEvidenceStatus(payload.status)
+  const issues = Array.isArray(payload.issues) ? payload.issues.filter(isNonEmptyString).map((item) => item.trim()) : []
+  const warnings = Array.isArray(payload.warnings) ? payload.warnings.filter(isNonEmptyString).map((item) => item.trim()) : []
+  const urlMapCount =
+    payload?.counts && Number.isInteger(payload.counts.urlMapCount) && payload.counts.urlMapCount >= 0
+      ? payload.counts.urlMapCount
+      : 0
+  const configured = payload.configured === true || urlMapCount > 0
+
+  if (parsedStatus === 'pass' || payload.ok === true) {
+    return {
+      present: true,
+      status: 'pass',
+      reason: 'template worker URL/token/signatureRef maps are coherent',
+      filePath,
+      configured,
+      urlMapCount,
+    }
+  }
+
+  if (parsedStatus === 'warn' && !configured && issues.length === 0) {
+    return {
+      present: true,
+      status: 'pass',
+      reason: 'template worker routing map is not configured yet (pre-spawn baseline)',
+      filePath,
+      configured,
+      urlMapCount,
+    }
+  }
+
+  const strict = payload.strict === true
+  const parts = [...issues, ...warnings]
+  if (parts.length === 0) {
+    parts.push(`status=${isNonEmptyString(payload.status) ? payload.status.trim() : 'unknown'}`)
+  }
+
+  return {
+    present: true,
+    status: strict || parsedStatus === 'fail' ? 'fail' : 'warn',
+    reason: parts.join('; '),
+    filePath,
+    configured,
+    urlMapCount,
+    strict,
+  }
+}
+
+function summarizeForgetForwardConfigEvidence(payload, filePath) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return {
+      present: true,
+      status: 'invalid',
+      reason: 'forget-forward config evidence payload must be a JSON object',
+      filePath,
+    }
+  }
+
+  const parsedStatus = normalizeOptionalEvidenceStatus(payload.status)
+  const issues = Array.isArray(payload.issues) ? payload.issues.filter(isNonEmptyString).map((item) => item.trim()) : []
+  const warnings = Array.isArray(payload.warnings) ? payload.warnings.filter(isNonEmptyString).map((item) => item.trim()) : []
+  const forwardUrl = isNonEmptyString(payload?.values?.url) ? payload.values.url.trim() : ''
+  const relayConfigured = forwardUrl.length > 0
+
+  if (parsedStatus === 'pass' || payload.ok === true) {
+    return {
+      present: true,
+      status: 'pass',
+      reason: relayConfigured
+        ? 'forget-forward relay config is valid'
+        : 'forget-forward relay is disabled (optional)',
+      filePath,
+      relayConfigured,
+    }
+  }
+
+  if (parsedStatus === 'warn' && !relayConfigured && issues.length === 0) {
+    return {
+      present: true,
+      status: 'pass',
+      reason: 'forget-forward relay is disabled (optional)',
+      filePath,
+      relayConfigured,
+    }
+  }
+
+  const strict = payload.strict === true
+  const parts = [...issues, ...warnings]
+  if (parts.length === 0) {
+    parts.push(`status=${isNonEmptyString(payload.status) ? payload.status.trim() : 'unknown'}`)
+  }
+
+  return {
+    present: true,
+    status: strict || parsedStatus === 'fail' ? 'fail' : 'warn',
+    reason: parts.join('; '),
+    filePath,
+    relayConfigured,
+    strict,
+  }
+}
+
 async function findFirstExistingFileByNames(rootDir, fileNames) {
   for (const fileName of fileNames) {
     const found = await findFileByName(rootDir, fileName)
@@ -345,12 +474,19 @@ async function collectOptionalEvidenceArtifacts(rootDir) {
     return {
       coreExtraction: { present: false, status: 'missing', reason: 'not provided', files: {} },
       templateSignatureRefMap: { present: false, status: 'missing', reason: 'not provided', files: {} },
+      templateWorkerMapCoherence: { present: false, status: 'missing', reason: 'not provided', files: {} },
+      forgetForwardConfig: { present: false, status: 'missing', reason: 'not provided', files: {} },
     }
   }
 
   const root = resolve(rootDir)
   const coreExtractionFile = await findFirstExistingFileByNames(root, OPTIONAL_EVIDENCE_FILES.coreExtraction)
   const signatureRefMapFile = await findFirstExistingFileByNames(root, OPTIONAL_EVIDENCE_FILES.templateSignatureRefMap)
+  const templateWorkerMapCoherenceFile = await findFirstExistingFileByNames(
+    root,
+    OPTIONAL_EVIDENCE_FILES.templateWorkerMapCoherence,
+  )
+  const forgetForwardConfigFile = await findFirstExistingFileByNames(root, OPTIONAL_EVIDENCE_FILES.forgetForwardConfig)
 
   const coreExtraction = await (async () => {
     if (!coreExtractionFile) {
@@ -400,7 +536,55 @@ async function collectOptionalEvidenceArtifacts(rootDir) {
     }
   })()
 
-  return { coreExtraction, templateSignatureRefMap }
+  const templateWorkerMapCoherence = await (async () => {
+    if (!templateWorkerMapCoherenceFile) {
+      return {
+        present: false,
+        status: 'missing',
+        reason: 'artifact file not found',
+        filePath: '',
+        files: {},
+      }
+    }
+
+    try {
+      const payload = await readJson(templateWorkerMapCoherenceFile)
+      return summarizeTemplateWorkerMapCoherenceEvidence(payload, templateWorkerMapCoherenceFile)
+    } catch (err) {
+      return {
+        present: true,
+        status: 'invalid',
+        reason: err instanceof Error ? err.message : String(err),
+        filePath: templateWorkerMapCoherenceFile,
+      }
+    }
+  })()
+
+  const forgetForwardConfig = await (async () => {
+    if (!forgetForwardConfigFile) {
+      return {
+        present: false,
+        status: 'missing',
+        reason: 'artifact file not found',
+        filePath: '',
+        files: {},
+      }
+    }
+
+    try {
+      const payload = await readJson(forgetForwardConfigFile)
+      return summarizeForgetForwardConfigEvidence(payload, forgetForwardConfigFile)
+    } catch (err) {
+      return {
+        present: true,
+        status: 'invalid',
+        reason: err instanceof Error ? err.message : String(err),
+        filePath: forgetForwardConfigFile,
+      }
+    }
+  })()
+
+  return { coreExtraction, templateSignatureRefMap, templateWorkerMapCoherence, forgetForwardConfig }
 }
 
 function resolveConsistencyStatus(matrix) {
@@ -691,7 +875,7 @@ function combineOptionalEvidenceSignals(optionalEvidence) {
     if (!entry || typeof entry !== 'object') continue
     if (entry.present === false) continue
 
-    const label = key === 'coreExtraction' ? 'core extraction evidence' : 'template signature-ref map evidence'
+    const label = OPTIONAL_EVIDENCE_LABELS[key] || `${key} evidence`
     if (entry.status === 'invalid') {
       blockers.push(`${label} invalid JSON: ${entry.reason}`)
       continue
@@ -761,6 +945,8 @@ function renderMarkdown(pack) {
   const optionalEvidenceEntries = [
     ['Core extraction evidence', pack.optionalEvidence?.coreExtraction],
     ['Template signature-ref map evidence', pack.optionalEvidence?.templateSignatureRefMap],
+    ['Template worker map coherence evidence', pack.optionalEvidence?.templateWorkerMapCoherence],
+    ['Forget-forward config evidence', pack.optionalEvidence?.forgetForwardConfig],
   ]
   for (const [label, entry] of optionalEvidenceEntries) {
     lines.push(`- ${label}:`)

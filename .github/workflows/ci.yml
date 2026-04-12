@@ -193,14 +193,15 @@ jobs:
         run: npm ci
       - name: Check legacy core extraction evidence
         run: npm run ops:check-legacy-core-extraction-evidence -- --strict --json
-      - name: Check template worker routing map coherence
+      - name: Check template worker map coherence
         run: |
           set -euo pipefail
-          args=(npm run ops:check-template-worker-routing-config -- --strict --json --url-map "$GATEWAY_TEMPLATE_WORKER_URL_MAP")
-          if [ -n "${GATEWAY_TEMPLATE_WORKER_TOKEN_MAP:-}" ]; then
-            args+=(--token-map "$GATEWAY_TEMPLATE_WORKER_TOKEN_MAP")
+          url_map_count="$(node -e "const raw = process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP || ''; try { const parsed = raw ? JSON.parse(raw) : null; const count = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed).length : 0; process.stdout.write(String(count)); } catch (_) { process.stdout.write('0'); }")"
+          if [ "${url_map_count}" -gt 0 ]; then
+            npm run ops:check-template-worker-map-coherence -- --json --strict --require-token-map --require-signature-map
+          else
+            npm run ops:check-template-worker-map-coherence -- --json
           fi
-          "${args[@]}"
       - name: Check template signature-ref map
         run: npm run ops:check-template-signature-ref-map -- --strict --json
       - name: Check forget-forward config
@@ -482,6 +483,14 @@ jobs:
             npm run ops:check-template-worker-routing-config -- --help
           else
             echo "ops:check-template-worker-routing-config is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: check template worker map coherence"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-template-worker-map-coherence'] ? 0 : 1)"; then
+            npm run ops:check-template-worker-map-coherence -- --help
+          else
+            echo "ops:check-template-worker-map-coherence is not defined in package.json; skipping help check."
           fi
       - name: "Help: init template worker routing"
         run: |

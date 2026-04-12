@@ -479,9 +479,9 @@ npm run ops:check-release-readiness -- \
 
 ## One-shot release drill
 
-`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation output, legacy core extraction evidence, template signature-ref map validation, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, strict manifest validation output, strict artifact-set validation, and final release-evidence ledger generation.
+`scripts/run-release-drill.js` orchestrates the full operator drill in one pass: preflight, matrix compare, report export, evidence bundle selection/validation, AO gate validation output, legacy core extraction evidence, template worker map coherence validation, forget-forward config validation, template signature-ref map validation, release pack build, sign-off checklist, readiness JSON, release-drill manifest build, strict manifest validation output, strict artifact-set validation, and final release-evidence ledger generation.
 
-The drill also writes a bundled metadata file, `release-drill-checks.json`, that captures the JSON outputs from the two extra checks alongside the drill context. When `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` is present, the signature-ref check runs in strict mode and requires the configured site keys; otherwise it runs as a non-strict informational check with an empty map payload.
+The drill also writes a bundled metadata file, `release-drill-checks.json`, that captures the JSON outputs from the optional map/relay checks alongside the drill context. The template worker map coherence check runs strict only when at least one site key is configured in URL/token/signature maps; with no site mapping it stays informational. When `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` carries site keys, the signature-ref check runs strict and requires those keys; with an empty map it stays informational.
 
 Usage:
 ```bash
@@ -495,7 +495,7 @@ npm run ops:run-release-drill -- \
   --strict
 ```
 
-The drill directory will also contain `legacy-core-extraction-evidence.json`, `template-signature-ref-map.json`, and `release-drill-checks.json` for downstream review and archiving.
+The drill directory also contains `legacy-core-extraction-evidence.json`, `template-worker-map-coherence.json`, `forget-forward-config.json`, `template-signature-ref-map.json`, and `release-drill-checks.json` for downstream review and archiving.
 
 ## Release drill manifest build
 

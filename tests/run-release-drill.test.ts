@@ -116,7 +116,7 @@ describe('run-release-drill.js', () => {
     expect(result?.stdout).toContain('scripts/latest-evidence-bundle.js')
     expect(result?.stdout).toContain('scripts/check-evidence-bundle.js')
     expect(result?.stdout).toContain('scripts/check-legacy-core-extraction-evidence.js')
-    expect(result?.stdout).toContain('scripts/check-template-worker-routing-config.js --url-map "{}" --json')
+    expect(result?.stdout).toContain('scripts/check-template-worker-map-coherence.js --json')
     expect(result?.stdout).toContain('scripts/check-forget-forward-config.js --json')
     expect(result?.stdout).toContain('scripts/check-template-signature-ref-map.js --json')
     expect(result?.stdout).toContain('template-worker-map-coherence.json')
@@ -243,19 +243,45 @@ describe('run-release-drill.js', () => {
         )
       }
 
-      if (scriptName === 'check-template-worker-routing-config.js') {
+      if (scriptName === 'check-template-worker-map-coherence.js') {
         return makeSpawnResult(
           JSON.stringify(
             {
+              ok: true,
               status: 'complete',
+              strict: true,
+              envVars: {
+                urlMap: 'GATEWAY_TEMPLATE_WORKER_URL_MAP',
+                tokenMap: 'GATEWAY_TEMPLATE_WORKER_TOKEN_MAP',
+                signatureRefMap: 'GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP',
+              },
+              requiredSites: [],
               issues: [],
               warnings: [],
+              maps: {
+                url: {
+                  alpha: 'https://gw-a.example/template',
+                  beta: 'https://gw-b.example/template',
+                },
+                token: {
+                  alpha: 'token-alpha',
+                  beta: 'token-beta',
+                },
+                signatureRef: {
+                  alpha: 'sig-alpha',
+                  beta: 'sig-beta',
+                },
+              },
               counts: {
                 urlMapCount: 2,
                 tokenMapCount: 2,
-                coveredCount: 2,
+                signatureRefMapCount: 2,
+                requiredSiteCount: 0,
+                missingRequiredSiteCount: 0,
                 missingTokenCount: 0,
+                missingSignatureRefCount: 0,
                 extraTokenCount: 0,
+                extraSignatureRefCount: 0,
               },
             },
             null,
@@ -485,7 +511,7 @@ describe('run-release-drill.js', () => {
       'check-evidence-bundle.js',
       'validate-ao-dependency-gate.js',
       'check-legacy-core-extraction-evidence.js',
-      'check-template-worker-routing-config.js',
+      'check-template-worker-map-coherence.js',
       'check-forget-forward-config.js',
       'check-template-signature-ref-map.js',
       'build-release-evidence-pack.js',

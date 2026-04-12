@@ -24,7 +24,7 @@ const STEP_SCRIPTS = {
   checkEvidence: resolve(SCRIPT_DIR, 'check-evidence-bundle.js'),
   validateAoGate: resolve(SCRIPT_DIR, 'validate-ao-dependency-gate.js'),
   checkLegacyCoreEvidence: resolve(SCRIPT_DIR, 'check-legacy-core-extraction-evidence.js'),
-  checkTemplateWorkerMapCoherence: resolve(SCRIPT_DIR, 'check-template-worker-routing-config.js'),
+  checkTemplateWorkerMapCoherence: resolve(SCRIPT_DIR, 'check-template-worker-map-coherence.js'),
   checkForgetForwardConfig: resolve(SCRIPT_DIR, 'check-forget-forward-config.js'),
   checkTemplateSignatureRefMap: resolve(SCRIPT_DIR, 'check-template-signature-ref-map.js'),
   buildPack: resolve(SCRIPT_DIR, 'build-release-evidence-pack.js'),
@@ -213,9 +213,12 @@ function parseJsonObject(value) {
   }
 }
 
+function countObjectEntries(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value).length : 0
+}
+
 function buildTemplateSignatureRefMapCheckConfig(rawMap) {
-  const configured = isNonEmptyString(rawMap)
-  if (!configured) {
+  if (!isNonEmptyString(rawMap)) {
     return {
       configured: false,
       env: { GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP: '{}' },
@@ -227,8 +230,19 @@ function buildTemplateSignatureRefMapCheckConfig(rawMap) {
 
   const parsed = parseJsonObject(rawMap)
   const requiredSites = parsed ? Object.keys(parsed).map((site) => site.trim()).filter(Boolean) : []
+  const configured = requiredSites.length > 0
   const args = ['--json', '--strict']
-  if (requiredSites.length > 0) args.push('--require-sites', requiredSites.join(','))
+  if (!configured) {
+    return {
+      configured: false,
+      env: { GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP: rawMap },
+      args: ['--json'],
+      displayArgs: ['--json'],
+      requiredSites: [],
+    }
+  }
+
+  args.push('--require-sites', requiredSites.join(','))
 
   return {
     configured: true,
@@ -239,20 +253,42 @@ function buildTemplateSignatureRefMapCheckConfig(rawMap) {
   }
 }
 
-function buildTemplateWorkerMapCoherenceCheckConfig(urlMapRaw, tokenMapRaw) {
-  const configured = isNonEmptyString(urlMapRaw) || isNonEmptyString(tokenMapRaw)
-  const args = ['--url-map', isNonEmptyString(urlMapRaw) ? urlMapRaw : '{}', '--json']
+function buildTemplateWorkerMapCoherenceCheckConfig(urlMapRaw, tokenMapRaw, signatureRefMapRaw) {
+  const parsedUrlMap = parseJsonObject(urlMapRaw)
+  const parsedTokenMap = parseJsonObject(tokenMapRaw)
+  const parsedSignatureRefMap = parseJsonObject(signatureRefMapRaw)
+  const urlMapCount = countObjectEntries(parsedUrlMap)
+  const tokenMapCount = countObjectEntries(parsedTokenMap)
+  const signatureRefMapCount = countObjectEntries(parsedSignatureRefMap)
+  const configured = urlMapCount > 0 || tokenMapCount > 0 || signatureRefMapCount > 0
+  const env = {}
+
+  if (isNonEmptyString(urlMapRaw)) {
+    env.GATEWAY_TEMPLATE_WORKER_URL_MAP = urlMapRaw
+  }
+  if (isNonEmptyString(tokenMapRaw)) {
+    env.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP = tokenMapRaw
+  }
+  if (isNonEmptyString(signatureRefMapRaw)) {
+    env.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP = signatureRefMapRaw
+  }
+
+  const args = ['--json']
   if (configured) {
     args.push('--strict')
-    if (isNonEmptyString(tokenMapRaw)) {
-      args.push('--token-map', tokenMapRaw)
-    }
+    args.push('--require-token-map', '--require-signature-map')
   }
 
   return {
     configured,
+    env,
     args,
     displayArgs: [...args],
+    counts: {
+      urlMapCount,
+      tokenMapCount,
+      signatureRefMapCount,
+    },
   }
 }
 
@@ -307,6 +343,7 @@ function buildDrillPlan({
   const templateWorkerMapCoherenceCheck = buildTemplateWorkerMapCoherenceCheckConfig(
     process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP || '',
     process.env.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP || '',
+    process.env.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || '',
   )
   const forgetForwardConfigCheck = buildForgetForwardCheckConfig()
   const templateSignatureRefMapCheck = buildTemplateSignatureRefMapCheckConfig(
@@ -419,6 +456,7 @@ function buildDrillPlan({
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkTemplateWorkerMapCoherence),
       args: templateWorkerMapCoherenceCheck.args,
       displayArgs: templateWorkerMapCoherenceCheck.displayArgs,
+      env: templateWorkerMapCoherenceCheck.env,
       outputFile: templateWorkerMapCoherenceJson,
     },
     {
