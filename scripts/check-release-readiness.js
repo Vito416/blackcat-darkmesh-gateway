@@ -121,6 +121,21 @@ const OPTIONAL_EVIDENCE_SECTION_LABELS = {
   forgetForwardConfig: 'forget-forward config evidence',
 }
 
+function isPassLikeStatus(status) {
+  return (
+    status === 'pass' ||
+    status === 'ok' ||
+    status === 'closed' ||
+    status === 'complete' ||
+    status === 'ready' ||
+    status === 'success'
+  )
+}
+
+function isWarnLikeStatus(status) {
+  return status === 'warn' || status === 'warning' || status === 'degraded' || status === 'pending'
+}
+
 function normalizeOptionalEvidenceSection(value, fieldName) {
   if (typeof value === 'undefined' || value === null) return null
   if (!isPlainObject(value)) {
@@ -193,7 +208,7 @@ function formatBoundaryMessage(label, section) {
       ? `${section.findingCount} finding${section.findingCount === 1 ? '' : 's'}`
       : 'no additional details')
 
-  if (section.status === 'warn' || section.status === 'warning' || section.status === 'degraded') {
+  if (isWarnLikeStatus(section.status)) {
     return `${label} warning: ${reason}`
   }
 
@@ -232,9 +247,9 @@ export function assessReleaseReadiness(pack) {
 
   if (pack.installerRuntimeBoundary) {
     const section = pack.installerRuntimeBoundary
-    if (section.status === 'warn' || section.status === 'warning' || section.status === 'degraded') {
+    if (isWarnLikeStatus(section.status)) {
       warnings.push(formatBoundaryMessage('installer runtime boundary', section))
-    } else if (section.status !== 'pass' && section.status !== 'ok' && section.status !== 'closed') {
+    } else if (!isPassLikeStatus(section.status)) {
       blockers.push(formatBoundaryMessage('installer runtime boundary', section))
     }
   }
@@ -245,12 +260,12 @@ export function assessReleaseReadiness(pack) {
       const label = OPTIONAL_EVIDENCE_SECTION_LABELS[key]
       if (!label) continue
 
-      if (section.status === 'pass' || section.status === 'ok' || section.status === 'closed') {
+      if (isPassLikeStatus(section.status)) {
         continue
       }
 
       const reason = isNonEmptyString(section.reason) ? section.reason : `status=${section.status}`
-      if (section.status === 'warn' || section.status === 'warning' || section.status === 'degraded' || section.status === 'pending') {
+      if (isWarnLikeStatus(section.status)) {
         warnings.push(`${label} warning: ${reason}`)
       } else {
         blockers.push(`${label} blocker: status=${section.status}: ${reason}`)

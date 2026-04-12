@@ -171,6 +171,44 @@ describe('check-release-readiness.js', () => {
     )
   })
 
+  it('treats complete optional evidence statuses as pass-like', () => {
+    const packPath = writePack({
+      release: '1.4.0',
+      status: 'ready',
+      blockers: [],
+      warnings: [],
+      optionalEvidence: {
+        coreExtraction: {
+          present: true,
+          status: 'complete',
+          reason: 'core extraction evidence is complete',
+        },
+        templateSignatureRefMap: {
+          present: true,
+          status: 'complete',
+          reason: 'signature refs are complete',
+        },
+        templateWorkerMapCoherence: {
+          present: true,
+          status: 'complete',
+          reason: 'map coherence is complete',
+        },
+        forgetForwardConfig: {
+          present: true,
+          status: 'complete',
+          reason: 'forget-forward check is complete',
+        },
+      },
+    })
+
+    const res = runCheck(['--pack', packPath])
+
+    expect(res.status).toBe(0)
+    expect(res.stdout).toContain('Status: `ready`')
+    expect(res.stdout).toContain('Blockers: 0')
+    expect(res.stdout).toContain('Warnings: 0')
+  })
+
   it('adds optional evidence blockers from failing section statuses', () => {
     const packPath = writePack({
       release: '1.4.0',
