@@ -22,6 +22,8 @@
 - Decommission closeout artifact validator: `npm run ops:validate-decommission-closeout -- --file <drill-dir>/decommission-closeout.json [--strict] [--json]` verifies closeout shape and can hard-fail when closeout is not `ready`.
 - Worker-routing config checker: `node scripts/check-template-worker-routing-config.js --url-map <json> [--token-map <json>] [--strict] [--json]` validates tenant URL/token map shape before routing is published.
 - Worker-routing scaffold helper: `node scripts/init-template-worker-routing.js --sites <csv> [--url-map-out <file>] [--token-map-out <file>] [--force]` generates the routing map skeleton for a new site set.
+- Worker-routing example payloads: `config/template-worker-routing.example.json`, `config/template-worker-token-map.example.json`, and `config/template-worker-signature-ref-map.example.json` are non-secret operator templates that can be copied into repo vars/secrets before running strict checks.
+- Worker-map coherence checker: `npm run ops:check-template-worker-map-coherence -- --require-sites <csv> --require-token-map --require-signature-map --strict --json` validates URL/token/signature-ref map alignment for the same site set.
 - Template signature-ref map checker: `npm run ops:check-template-signature-ref-map -- --strict --json` reads `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` from repo vars/secrets in CI; when it is unset, the checker reports a deterministic `blocked` status instead of guessing.
 - Worker-secrets trust-model validator: `npm run ops:validate-worker-secrets-trust-model -- --help` is the companion machine check for `ops/worker-secrets-trust-model.md` and should stay a strict CI gate once wired.
 - Template secret-smuggling guard: `/template/call` recursively scans payloads for secret-like fields and fail-closes before any upstream fetch; keep the matching tests in `tests/runtime-template-secretGuard.test.ts` and `tests/template-api.test.ts` green.
@@ -64,6 +66,7 @@
 - Cache purge: `/cache/forget` (POST) with `GATEWAY_FORGET_TOKEN` bearer; body `{subject?, key?}`; returns `{removed, forwarded}`.
 - AO hook: configure AO ForgetSubject to POST to `/cache/forget` with the same token to wipe subject-indexed blobs.
 - Optional forward hook: set `GATEWAY_FORGET_FORWARD_URL` plus `GATEWAY_FORGET_FORWARD_TOKEN` and (optionally) `GATEWAY_FORGET_FORWARD_TIMEOUT_MS` to relay successful forgets to a per-site worker; the local forget stays 200 even if the forward times out or fails.
+- Forget-forward operator example: `config/forget-forward.example.env` provides a non-secret baseline for relay URL/token/timeout wiring.
 - Forget-forward config checker: `npm run ops:check-forget-forward-config -- [--strict] [--json]` validates the optional relay boundary and treats a missing URL as pending while still flagging invalid URLs, blank tokens, and out-of-range timeouts.
 - PSP certs: allowlist prefixes `PAYPAL_CERT_ALLOW_PREFIXES`, pins `GW_CERT_PIN_SHA256`, TTL `GW_CERT_CACHE_TTL_MS`; cert cache size exported.
 - Diskless mode: `GATEWAY_INTEGRITY_DISKLESS=1` (or `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`) disables checkpoint file IO and keeps integrity state memory-only.
@@ -71,6 +74,36 @@
 - Scheduled CI consistency smoke: set repo variable `CONSISTENCY_URLS` (optional `CONSISTENCY_MODE`, `GATEWAY_RESOURCE_PROFILE`) and secret `GATEWAY_INTEGRITY_STATE_TOKEN` when state auth is enabled.
 - Scheduled consistency preflight: CI now fails fast on missing/invalid `CONSISTENCY_*` config and reports issues in job summary; for public state endpoints only, set `CONSISTENCY_ALLOW_ANON=1`.
 - CI release artifact: workflow job `release-evidence-pack` now downloads consistency/evidence artifacts and uploads the sign-off bundle (`release-evidence-pack`, AO gate validation, drill manifest/check, and release evidence ledger).
+
+## Template worker map preflight
+
+Use the non-secret example files in `config/` as a baseline, replace placeholder values, then run strict checks:
+
+```bash
+export GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)"
+export GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)"
+export GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)"
+
+node scripts/check-template-worker-routing-config.js \
+  --url-map "$GATEWAY_TEMPLATE_WORKER_URL_MAP" \
+  --token-map "$GATEWAY_TEMPLATE_WORKER_TOKEN_MAP" \
+  --strict --json
+
+node scripts/check-template-worker-map-coherence.js \
+  --require-sites site-alpha,site-beta \
+  --require-token-map \
+  --require-signature-map \
+  --strict --json
+
+node scripts/check-template-signature-ref-map.js \
+  --require-sites site-alpha,site-beta \
+  --strict --json
+
+set -a
+source config/forget-forward.example.env
+set +a
+node scripts/check-forget-forward-config.js --strict --json
+```
 
 ## Release drill flow
 See `ops/release-drill-runbook.md` for the canonical step-by-step release drill, expected artifacts, and triage matrix.

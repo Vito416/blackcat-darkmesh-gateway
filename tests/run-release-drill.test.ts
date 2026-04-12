@@ -134,6 +134,37 @@ describe('run-release-drill.js', () => {
     expect(result?.stderr).toBe('')
   })
 
+  it('uses auto-generated output directory when --out-dir is omitted', () => {
+    const result = runCli([
+      '--urls',
+      'https://gw-a.example/integrity/state,https://gw-b.example/integrity/state',
+      '--allow-anon',
+      '--dry-run',
+    ])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Out dir: ')
+    expect(result.stdout).toContain('tmp/release-drills')
+    expect(result.stdout).toMatch(/1\.4\.0-wedos_medium-pairwise-/)
+    expect(result.stderr).toBe('')
+  })
+
+  it('fails when --out-dir and --out-root are used together', () => {
+    const result = runCli([
+      '--urls',
+      'https://gw-a.example/integrity/state,https://gw-b.example/integrity/state',
+      '--out-dir',
+      './tmp/release-drill',
+      '--out-root',
+      './tmp/release-drills',
+      '--dry-run',
+    ])
+
+    expect(result.exitCode).toBe(64)
+    expect(result.stdout).toContain('Usage:')
+    expect(result.stderr).toContain('error: use only one of --out-dir or --out-root')
+  })
+
   it('returns a usage error when required arguments are missing', () => {
     const result = runCli(['--out-dir', './tmp/release-drill'])
 

@@ -53,6 +53,41 @@ This document formalizes the boundary for the gateway/template/worker split.
 - `check-mailing-secret-boundary`: strict CI gate for request-path secret access in mailing code; this is the active enforcement example for the trust model.
 - `check-config-loader-runtime-boundary`: strict CI gate for request-path env access; it is the complementary runtime-secret boundary check.
 
+## Operator config examples (non-secret)
+
+- `config/template-worker-routing.example.json`: example `GATEWAY_TEMPLATE_WORKER_URL_MAP` payload (site -> absolute worker sign URL).
+- `config/template-worker-token-map.example.json`: example `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP` payload (site -> worker bearer token placeholder).
+- `config/template-worker-signature-ref-map.example.json`: example `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` payload (site -> expected signer ref).
+- `config/forget-forward.example.env`: example forget-forward relay config (`GATEWAY_FORGET_FORWARD_*`) for `/cache/forget` best-effort forwarding.
+
+Preflight command set (replace placeholders before production use):
+
+```bash
+export GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)"
+export GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)"
+export GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)"
+
+node scripts/check-template-worker-routing-config.js \
+  --url-map "$GATEWAY_TEMPLATE_WORKER_URL_MAP" \
+  --token-map "$GATEWAY_TEMPLATE_WORKER_TOKEN_MAP" \
+  --strict --json
+
+node scripts/check-template-worker-map-coherence.js \
+  --require-sites site-alpha,site-beta \
+  --require-token-map \
+  --require-signature-map \
+  --strict --json
+
+node scripts/check-template-signature-ref-map.js \
+  --require-sites site-alpha,site-beta \
+  --strict --json
+
+set -a
+source config/forget-forward.example.env
+set +a
+node scripts/check-forget-forward-config.js --strict --json
+```
+
 ## Operational rules
 
 - If a flow needs a secret, the worker owns the secret and performs the secret-dependent step.

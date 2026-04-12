@@ -317,6 +317,10 @@ Progress notes:
 Use this checklist before merge/release sign-off.
 
 - Automation complete, awaiting AO/manual proofs: the closeout helpers can build the final evidence bundle, but AO gate closure and manual proof links still need to be recorded before decommission sign-off.
+- Current blocker snapshot (`2026-04-12T16:35:12Z`):
+  - Implementation health is green (`npm test`, strict legacy boundary checks, strict template contract checks, strict WEDOS profile check against `config/example.env`).
+  - Release/decommission closeout is blocked until drill artifacts are generated in `kernel-migration/` and linked in the final evidence pack.
+  - AO dependency gate required checks remain `in_progress` and prevent a GO decision.
 
 - [ ] AO registry/authority lifecycle items are complete (`publish/revoke/query/pause`, `root/upgrade/emergency/reporter`, audit sequence surface).
 - [ ] `kernel-migration/ao-dependency-gate.json` required checks are updated to `closed` with evidence links.

@@ -10,6 +10,7 @@ const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
 const DEFAULT_RELEASE = '1.4.0'
 const DEFAULT_PROFILE = 'wedos_medium'
 const DEFAULT_MODE = 'pairwise'
+const DEFAULT_OUT_ROOT = './tmp/release-drills'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
@@ -52,11 +53,13 @@ function isNonEmptyString(value) {
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/run-release-drill.js --urls <csv> --out-dir <dir> [--profile wedos_small|wedos_medium|diskless] [--mode pairwise|all] [--token <value>] [--allow-anon] [--release <label>] [--strict] [--dry-run] [--help]',
+    '  node scripts/run-release-drill.js --urls <csv> [--out-dir <dir> | --out-root <dir>] [--run-label <label>] [--profile wedos_small|wedos_medium|diskless] [--mode pairwise|all] [--token <value>] [--allow-anon] [--release <label>] [--strict] [--dry-run] [--help]',
     '',
     'Options:',
     '  --urls <CSV>        Comma-separated gateway URLs (required)',
-    '  --out-dir <DIR>     Directory for drill artifacts (required)',
+    '  --out-dir <DIR>     Exact directory for drill artifacts',
+    '  --out-root <DIR>    Root for auto-generated drill directory (default: ./tmp/release-drills)',
+    '  --run-label <TEXT>  Optional slug appended to auto-generated directory name',
     '  --profile <NAME>    wedos_small|wedos_medium|diskless (default: wedos_medium)',
     '  --mode <MODE>       pairwise (default) or all',
     '  --token <VALUE>     Optional integrity state token',
@@ -65,6 +68,11 @@ function usageText() {
     '  --strict            Run readiness check in strict mode',
     '  --dry-run           Print the planned commands without running them',
     '  --help              Show this help',
+    '',
+    'Output directory rules:',
+    '  - Use --out-dir for an exact path',
+    '  - Use --out-root to choose the parent directory while keeping auto naming',
+    '  - If neither is provided, output defaults to ./tmp/release-drills/<release>-<profile>-<mode>-<timestamp>',
     '',
     'Sequence:',
     '  1) validate consistency preflight',
@@ -99,6 +107,8 @@ function parseArgs(argv) {
     help: false,
     urlsCsv: '',
     outDir: '',
+    outRoot: '',
+    runLabel: '',
     profile: DEFAULT_PROFILE,
     mode: DEFAULT_MODE,
     token: '',
@@ -143,6 +153,12 @@ function parseArgs(argv) {
       case '--out-dir':
         args.outDir = readValue()
         break
+      case '--out-root':
+        args.outRoot = readValue()
+        break
+      case '--run-label':
+        args.runLabel = readValue().trim()
+        break
       case '--profile':
         args.profile = readValue().trim().toLowerCase()
         break
@@ -162,13 +178,41 @@ function parseArgs(argv) {
   }
 
   if (!isNonEmptyString(args.urlsCsv)) throw new CliError('--urls is required', 64)
-  if (!isNonEmptyString(args.outDir)) throw new CliError('--out-dir is required', 64)
+  if (isNonEmptyString(args.outDir) && isNonEmptyString(args.outRoot)) {
+    throw new CliError('use only one of --out-dir or --out-root', 64)
+  }
   if (!VALID_PROFILES.has(args.profile)) throw new CliError(`unsupported --profile value: ${args.profile}`, 64)
   if (!VALID_MODES.has(args.mode)) throw new CliError(`unsupported --mode value: ${args.mode}`, 64)
   if (!isNonEmptyString(args.release)) throw new CliError('--release must not be blank', 64)
+  if (args.runLabel && !isNonEmptyString(args.runLabel)) throw new CliError('--run-label must not be blank', 64)
   if (args.token && !isNonEmptyString(args.token)) throw new CliError('--token must not be blank', 64)
+  if (!isNonEmptyString(args.outDir)) {
+    args.outDir = buildAutoOutDir(args)
+  }
 
   return args
+}
+
+function slugifySegment(value, fallback) {
+  if (!isNonEmptyString(value)) return fallback
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+  return slug.length > 0 ? slug : fallback
+}
+
+function buildTimestampLabel(now = new Date()) {
+  return now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+}
+
+function buildAutoOutDir({ outRoot = '', release = DEFAULT_RELEASE, profile = DEFAULT_PROFILE, mode = DEFAULT_MODE, runLabel = '' } = {}) {
+  const root = isNonEmptyString(outRoot) ? outRoot : DEFAULT_OUT_ROOT
+  const stamp = slugifySegment(runLabel || buildTimestampLabel(), 'run')
+  const releaseSlug = slugifySegment(release, 'release')
+  return resolve(root, `${releaseSlug}-${profile}-${mode}-${stamp}`)
 }
 
 function quoteArg(value) {

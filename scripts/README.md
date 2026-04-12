@@ -514,7 +514,46 @@ npm run ops:run-release-drill -- \
   --strict
 ```
 
+You can also let the script create a timestamped drill directory automatically while still choosing the parent folder:
+
+```bash
+npm run ops:run-release-drill -- \
+  --urls https://gateway-a.example.com,https://gateway-b.example.com \
+  --out-root ./tmp/release-drills \
+  --run-label canary-a \
+  --profile wedos_medium \
+  --mode pairwise \
+  --token "$GATEWAY_INTEGRITY_STATE_TOKEN" \
+  --release 1.4.0 \
+  --strict
+```
+
+Output directory behavior:
+- `--out-dir`: exact path (single run target)
+- `--out-root`: parent path for generated run dir (`<release>-<profile>-<mode>-<timestamp-or-run-label>`)
+- with neither flag, default root is `./tmp/release-drills`
+
 The drill directory also contains `legacy-core-extraction-evidence.json`, `legacy-crypto-boundary-evidence.json`, `template-worker-map-coherence.json`, `forget-forward-config.json`, `template-signature-ref-map.json`, and `release-drill-checks.json` for downstream review and archiving.
+
+## Gateway audit baseline
+
+Use the consolidated audit helper when you want a single command for implementation health and release closeout status.
+
+```bash
+# Checks that should pass on current implementation
+npm run ops:audit-implementation
+
+# Checks for release/decommission closeout readiness
+npm run ops:audit-release
+
+# Full chain (implementation + release checks)
+npm run ops:audit-all
+```
+
+Notes:
+- `ops:audit-implementation` is expected to be green when runtime implementation and guardrails are healthy.
+- `ops:audit-release` can fail while AO/manual closeout blockers remain (missing drill artifacts, open AO gate checks).
+- The helper script lives at `scripts/ci/gateway-audit.sh`.
 
 ## Release drill manifest build
 
