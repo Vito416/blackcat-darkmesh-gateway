@@ -10,8 +10,8 @@ const VALID_DECISIONS = new Set(['pending', 'go', 'no-go'])
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
-const DEFAULT_FINAL_SUMMARY_PATH = resolve(REPO_ROOT, 'kernel-migration/FINAL_MIGRATION_SUMMARY.md')
-const DEFAULT_SIGNOFF_RECORD_PATH = resolve(REPO_ROOT, 'kernel-migration/SIGNOFF_RECORD.md')
+const DEFAULT_FINAL_SUMMARY_PATH = resolve(REPO_ROOT, 'ops/decommission/FINAL_MIGRATION_SUMMARY.md')
+const DEFAULT_SIGNOFF_RECORD_PATH = resolve(REPO_ROOT, 'ops/decommission/SIGNOFF_RECORD.md')
 
 const STEP_SCRIPTS = {
   checkAoGateEvidence: resolve(SCRIPT_DIR, 'check-ao-gate-evidence.js'),
@@ -53,8 +53,8 @@ function usageText() {
     '  --ticket <ID>              Change/ticket reference for the evidence log',
     '  --decision <VALUE>         pending|go|no-go (default: pending)',
     '  --notes <TEXT>             Short manual notes for the evidence log',
-    '  --final-summary <FILE>     Final migration summary markdown (default: kernel-migration/FINAL_MIGRATION_SUMMARY.md)',
-    '  --signoff-record <FILE>    Signoff record markdown (default: kernel-migration/SIGNOFF_RECORD.md)',
+    '  --final-summary <FILE>     Final migration summary markdown (default: ops/decommission/FINAL_MIGRATION_SUMMARY.md)',
+    '  --signoff-record <FILE>    Signoff record markdown (default: ops/decommission/SIGNOFF_RECORD.md)',
     '  --recovery-drill-link <U>  Link to the recovery drill proof',
     '  --ao-fallback-link <U>     Link to the AO fallback proof',
     '  --rollback-proof-link <U>  Link to the rollback proof',

@@ -113,8 +113,8 @@ node scripts/check-forget-forward-config.js --strict --json
 ## Related docs
 
 - `ops/README.md`
-- `kernel-migration/BACKLOG.md`
-- `kernel-migration/legacy-archive/TEMPLATE_BACKEND_GUARDRAILS.md`
+- `ops/decommission/BACKLOG.md`
+- `ops/decommission/TEMPLATE_BACKEND_GUARDRAILS.md`
 
 ## Optional notes
 

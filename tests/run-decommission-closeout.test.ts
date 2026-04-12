@@ -152,8 +152,8 @@ function seedCloseoutArtifacts(dir: string) {
 - **Prepared by:** \`ops-user\`
 - **Repo:** \`blackcat-darkmesh-gateway\`
 - **Related release / tag:** \`1.4.0\`
-- **Related migration summary:** \`kernel-migration/FINAL_MIGRATION_SUMMARY.md\`
-- **Related checklist:** \`kernel-migration/DECOMMISSION_CHECKLIST.md\`
+- **Related migration summary:** \`ops/decommission/FINAL_MIGRATION_SUMMARY.md\`
+- **Related checklist:** \`ops/decommission/DECOMMISSION_CHECKLIST.md\`
 
 ## Decision
 

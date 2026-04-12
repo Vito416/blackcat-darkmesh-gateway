@@ -11,13 +11,13 @@ Purpose
 
 Consolidation status
 - Gateway is the active integration target for legacy backend modules.
-- Imported migration snapshots live in `kernel-migration/legacy-archive/snapshots/` (see `kernel-migration/legacy-archive/README.md` and `kernel-migration/legacy-archive/MANIFEST.md`).
-- Crypto manifest policy snapshot lives in `security/crypto-manifests/` (see `security/crypto-manifests/SNAPSHOT.md`).
+- Legacy library snapshots were fully retired from this repo; request-path runtime now uses gateway-owned modules only under `src/runtime/**` and `src/clients/**`.
+- Crypto manifest policy bundle is maintained in `security/crypto-manifests/` (gateway-owned, not a vendored snapshot).
 - Template code remains intentionally separate in `blackcat-templates`; gateway enforces controlled backend access for deployed templates.
 
 Migration status
-- Active backlog and blocker split: `kernel-migration/BACKLOG.md`
-- Decommission evidence checklist: `kernel-migration/DECOMMISSION_CHECKLIST.md`
+- Active backlog and blocker split: `ops/decommission/BACKLOG.md`
+- Decommission evidence checklist: `ops/decommission/DECOMMISSION_CHECKLIST.md`
 - Integrity gate command: `npm run test:integrity-gate`
 - Current migration goal: keep the gateway slice evidence-complete while AO-side dependencies finish and the final decommission gate is cleared.
 
@@ -243,16 +243,15 @@ When cache admission limits are exceeded, cache PUT returns:
 8. Re-run the full suite before any kernel-retirement decision.
 
 ## Kernel integrity migration
-- Detailed migration package from `blackcat-kernel-contracts` is tracked in `kernel-migration/`.
-- Start with `kernel-migration/README.md`, then follow:
+- Migration and decommission evidence from `blackcat-kernel-contracts` is tracked in `ops/decommission/`.
+- Start with `ops/decommission/README.md`, then follow:
   - `KERNEL_PORT_SCOPE.md`
   - `AO_GATEWAY_DESIGN.md`
   - `BACKLOG.md`
   - `DECOMMISSION_CHECKLIST.md`
-- Temporary upstream references are stored in `kernel-migration/upstream/` to avoid losing design/security context during the port.
 
 ## Template security model
-- Guardrails for the custom backend model are documented in `kernel-migration/legacy-archive/TEMPLATE_BACKEND_GUARDRAILS.md`.
+- Guardrails for the custom backend model are documented in `ops/decommission/TEMPLATE_BACKEND_GUARDRAILS.md`.
 - High-level rule: templates can call only declared gateway APIs; they do not get direct data-store or secret access.
 
 ## Releases

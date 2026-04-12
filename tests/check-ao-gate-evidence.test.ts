@@ -62,8 +62,8 @@ function gate(overrides: Record<string, unknown> = {}) {
 
 describe('check-ao-gate-evidence.js', () => {
   it('parses CLI args and supports --file= syntax', () => {
-    const parsed = parseArgs(['--file=./kernel-migration/ao-dependency-gate.json', '--strict', '--json'])
-    expect(parsed.file).toBe('./kernel-migration/ao-dependency-gate.json')
+    const parsed = parseArgs(['--file=./ops/decommission/ao-dependency-gate.json', '--strict', '--json'])
+    expect(parsed.file).toBe('./ops/decommission/ao-dependency-gate.json')
     expect(parsed.strict).toBe(true)
     expect(parsed.json).toBe(true)
   })

@@ -4,11 +4,22 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { parseManifestModules } from './validate-legacy-manifest.js'
-
 const DEFAULT_ROOT = 'src'
-const DEFAULT_MANIFEST = 'kernel-migration/legacy-archive/MANIFEST.md'
-const LEGACY_IMPORT_ROOTS = ['libs/legacy', 'kernel-migration/legacy-archive/snapshots']
+const DEFAULT_MANIFEST = ''
+const DEFAULT_MODULES = [
+  'blackcat-analytics',
+  'blackcat-auth',
+  'blackcat-auth-js',
+  'blackcat-config',
+  'blackcat-core',
+  'blackcat-crypto',
+  'blackcat-crypto-js',
+  'blackcat-gopay',
+  'blackcat-installer',
+  'blackcat-mailing',
+  'blackcat-sessions',
+]
+const LEGACY_IMPORT_ROOTS = ['libs/legacy', 'ops/decommission/legacy-archive/snapshots']
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx'])
 const URL_SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//
 const IMPORT_PATTERNS = [
@@ -38,8 +49,8 @@ function usage(exitCode = 0) {
       '',
       'Options:',
       `  --root <dir>      Source tree to scan (default: ${DEFAULT_ROOT})`,
-      `  --manifest <path> Legacy manifest markdown file (default: ${DEFAULT_MANIFEST})`,
-      '  --modules <csv>   Comma- or whitespace-separated module list; overrides --manifest',
+      '  --manifest <path> Optional legacy manifest markdown file (overrides built-in module list)',
+      '  --modules <csv>   Comma- or whitespace-separated module list; overrides --manifest and built-in list',
       '  --json            Print structured JSON only',
       '  --strict          Exit 3 when legacy references are found',
       '  --help            Show this help',
@@ -79,6 +90,28 @@ function parseModulesList(value) {
     seen.add(moduleName)
     modules.push(moduleName)
   }
+  return modules
+}
+
+function parseManifestModules(manifestText) {
+  const modules = []
+  const seen = new Set()
+  const lines = String(manifestText).replace(/\r\n?/g, '\n').split('\n')
+  const rowRe = /^\|\s*`?([a-z0-9-]+)`?\s*\|/i
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line.startsWith('|')) continue
+    if (/^\|\s*-+/.test(line)) continue
+
+    const match = rowRe.exec(line)
+    if (!match) continue
+    const moduleName = match[1].trim()
+    if (!moduleName || seen.has(moduleName)) continue
+    seen.add(moduleName)
+    modules.push(moduleName)
+  }
+
   return modules
 }
 
@@ -240,19 +273,27 @@ async function loadModuleNames(args) {
     }
   }
 
-  const manifestPath = resolve(args.manifest)
-  let manifestText
-  try {
-    manifestText = await readFile(manifestPath, 'utf8')
-  } catch (err) {
-    throw new Error(`unable to read manifest: ${err instanceof Error ? err.message : String(err)}`)
+  if (isNonEmptyString(args.manifest)) {
+    const manifestPath = resolve(args.manifest)
+    let manifestText
+    try {
+      manifestText = await readFile(manifestPath, 'utf8')
+    } catch (err) {
+      throw new Error(`unable to read manifest: ${err instanceof Error ? err.message : String(err)}`)
+    }
+
+    const modules = parseManifestModules(manifestText)
+    return {
+      source: 'manifest',
+      manifestPath: args.manifest,
+      modules,
+    }
   }
 
-  const modules = parseManifestModules(manifestText).map((entry) => entry.moduleName)
   return {
-    source: 'manifest',
-    manifestPath: args.manifest,
-    modules,
+    source: 'builtin',
+    manifestPath: null,
+    modules: [...DEFAULT_MODULES],
   }
 }
 

@@ -80,7 +80,7 @@ function assertParityCase(testCase: ParityCase) {
   expect(verifyManifestEntry(testCase.entry, testCase.policy)).toEqual(testCase.expected)
 }
 
-describe('kernel-migration P0 integrity parity', () => {
+describe('gateway decommission integrity parity', () => {
   it('fails closed when the active snapshot has been revoked', async () => {
     const snapshot = makeSnapshot()
     snapshot.release.revokedAt = '2026-04-10T00:00:00Z'

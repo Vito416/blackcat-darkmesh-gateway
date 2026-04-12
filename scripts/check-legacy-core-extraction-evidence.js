@@ -27,7 +27,7 @@ export const REQUIRED_TEST_FILES = [
 ]
 
 const DEFAULT_ROOT = '.'
-const LEGACY_CORE_IMPORT_PATHS = ['libs/legacy/blackcat-core', 'kernel-migration/legacy-archive/snapshots/blackcat-core']
+const LEGACY_CORE_IMPORT_PATHS = ['libs/legacy/blackcat-core', 'ops/decommission/legacy-archive/snapshots/blackcat-core']
 const IMPORT_LIKE_LINE_RE = /\b(?:import|export|require)\b|\bimport\s*\(/i
 
 class CliError extends Error {

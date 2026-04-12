@@ -35,7 +35,7 @@ This command generates:
 - Deployment profile: `wedos_small`, `wedos_medium`, or `diskless` (`wedos_medium` is the default)
 - Integrity state token: `GATEWAY_INTEGRITY_STATE_TOKEN`
 - Optional attestation HMAC env: `GATEWAY_ATTESTATION_HMAC_KEY`
-- AO dependency gate file: `kernel-migration/ao-dependency-gate.json`
+- AO dependency gate file: `ops/decommission/ao-dependency-gate.json`
 - Optional public-state mode: use `--allow-anon` only when the `/integrity/state` endpoint is intentionally public
 
 Suggested shell setup:
@@ -159,11 +159,11 @@ Make sure the release gate file is structurally valid and all required checks ar
 ```bash
 AO_GATE_VALIDATE="$DRILL_DIR/ao-dependency-gate.validation.txt"
 npm run ops:validate-ao-dependency-gate -- \
-  --file kernel-migration/ao-dependency-gate.json | tee "$AO_GATE_VALIDATE"
+  --file ops/decommission/ao-dependency-gate.json | tee "$AO_GATE_VALIDATE"
 ```
 
 Expected output:
-- `valid dependency gate: kernel-migration/ao-dependency-gate.json`
+- `valid dependency gate: ops/decommission/ao-dependency-gate.json`
 - Exit code `0`
 
 Artifacts:
@@ -178,7 +178,7 @@ npm run ops:build-release-evidence-pack -- \
   --release "$RELEASE_VERSION" \
   --consistency-dir "$DRILL_DIR" \
   --evidence-dir "$DRILL_DIR/evidence" \
-  --ao-gate-file kernel-migration/ao-dependency-gate.json \
+  --ao-gate-file ops/decommission/ao-dependency-gate.json \
   --require-both \
   --require-ao-gate \
   --out "$DRILL_DIR/release-evidence-pack.md" \
@@ -313,7 +313,7 @@ Use the final machine summary before archive or deletion work. This reads the co
 ```bash
 npm run ops:check-decommission-readiness -- \
   --dir "$DRILL_DIR" \
-  --ao-gate kernel-migration/ao-dependency-gate.json \
+  --ao-gate ops/decommission/ao-dependency-gate.json \
   --strict \
   --json
 ```
@@ -332,7 +332,7 @@ Use the final closeout orchestrator after the drill bundle is complete. This ste
 ```bash
 node scripts/run-decommission-closeout.js \
   --dir "$DRILL_DIR" \
-  --ao-gate kernel-migration/ao-dependency-gate.json \
+  --ao-gate ops/decommission/ao-dependency-gate.json \
   --operator "$OPERATOR_NAME" \
   --decision pending \
   --strict \
@@ -363,7 +363,7 @@ Notes:
 | `ops:export-integrity-evidence` | Child compare or attestation script failed; token/HMAC mismatch is the common cause | Open the bundle `compare.txt` and check the recorded child exit codes |
 | `ops:latest-evidence-bundle` | No timestamped bundle exists yet, or the bundle root points at the wrong directory | Confirm `ops:export-integrity-evidence` wrote a bundle under `$DRILL_DIR/evidence` |
 | `ops:check-evidence-bundle` | Bundle files are missing, the manifest is malformed, or attestation validation failed | Open `manifest.json` and `attestation.json` in the latest bundle |
-| `ops:validate-ao-dependency-gate` | Gate JSON malformed or a required AO check is not closed | Inspect `required` versus `checks` in `kernel-migration/ao-dependency-gate.json`, then check `ao-dependency-gate.validation.txt` |
+| `ops:validate-ao-dependency-gate` | Gate JSON malformed or a required AO check is not closed | Inspect `required` versus `checks` in `ops/decommission/ao-dependency-gate.json`, then check `ao-dependency-gate.validation.txt` |
 | `ops:build-release-evidence-pack` | Missing consistency evidence, missing evidence bundle, or an AO gate that is not closed | Verify the latest bundle directory and the release pack status fields |
 | `ops:build-release-signoff-checklist` | Pack JSON missing, unreadable, or not `ready` under `--strict` | Read the pack blockers and warnings before retrying |
 | `ops:check-release-readiness` | Pack contains blockers, or warnings remain under strict mode | Inspect `blockers` and `warnings` in `release-evidence-pack.json` |
@@ -380,7 +380,7 @@ Notes:
 | --- | --- | --- |
 | Confirm consistency is acceptable | `ops:validate-consistency-preflight`, `ops:compare-integrity-matrix`, `ops:export-consistency-report` | `consistency-matrix.json`, `consistency-drift-report.md`, `consistency-drift-summary.json` |
 | Confirm evidence bundle is acceptable | `ops:export-integrity-evidence`, `ops:latest-evidence-bundle`, `ops:check-evidence-bundle` | Timestamped bundle containing `compare.txt`, `attestation.json`, and `manifest.json` |
-| Confirm AO dependency gate is acceptable | `ops:validate-ao-dependency-gate` | `kernel-migration/ao-dependency-gate.json` with all required checks closed + `$DRILL_DIR/ao-dependency-gate.validation.txt` |
+| Confirm AO dependency gate is acceptable | `ops:validate-ao-dependency-gate` | `ops/decommission/ao-dependency-gate.json` with all required checks closed + `$DRILL_DIR/ao-dependency-gate.validation.txt` |
 | Confirm archive manifest is acceptable | `ops:build-release-drill-manifest`, `ops:validate-release-drill-manifest` | `$DRILL_DIR/release-drill-manifest.json` and `$DRILL_DIR/release-drill-manifest.validation.txt` |
 | Confirm drill artifact completeness is acceptable | `ops:check-release-drill-artifacts` | `$DRILL_DIR/release-drill-check.json`, `$DRILL_DIR/release-drill-checks.json` |
 | Confirm final machine ledger is acceptable | `ops:build-release-evidence-ledger` | `$DRILL_DIR/release-evidence-ledger.md`, `$DRILL_DIR/release-evidence-ledger.json` |

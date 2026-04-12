@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
@@ -22,35 +22,16 @@ function makeTempRoot() {
 }
 
 function writeText(filePath: string, text: string) {
-  mkdirSync(join(filePath, '..'), { recursive: true })
+  mkdirSync(dirname(filePath), { recursive: true })
   writeFileSync(filePath, text, 'utf8')
 }
 
-function makeManifest(rows: Array<[string, string]>) {
-  return [
-    '# Legacy Import Manifest',
-    '',
-    '## Source snapshots',
-    '',
-    '| Module | Source commit |',
-    '|---|---|',
-    ...rows.map(([module, commit]) => `| \`${module}\` | \`${commit}\` |`),
-    '',
-  ].join('\n')
-}
-
 function makeFixture({
-  manifestRows,
   srcFiles,
 }: {
-  manifestRows?: Array<[string, string]>
   srcFiles: Record<string, string>
 }) {
   const root = makeTempRoot()
-
-  if (manifestRows) {
-    writeText(join(root, 'kernel-migration', 'legacy-archive', 'MANIFEST.md'), makeManifest(manifestRows))
-  }
 
   for (const [relativePath, contents] of Object.entries(srcFiles)) {
     writeText(join(root, 'src', relativePath), `${contents}\n`)
@@ -67,12 +48,8 @@ function runCheck(root: string, args: string[]) {
 }
 
 describe('check-legacy-no-import-evidence.js', () => {
-  it('prints structured JSON and passes when src has no legacy references', () => {
+  it('prints structured JSON and passes with built-in legacy module list', () => {
     const root = makeFixture({
-      manifestRows: [
-        ['blackcat-analytics', '9f69f1d'],
-        ['blackcat-auth', '14534b4'],
-      ],
       srcFiles: {
         'handler.ts': [
           "import { createHash } from 'node:crypto'",
@@ -94,26 +71,12 @@ describe('check-legacy-no-import-evidence.js', () => {
 
     const report = JSON.parse(res.stdout)
     expect(report.status).toBe('pass')
-    expect(report.moduleSource).toBe('manifest')
-    expect(report.moduleCount).toBe(2)
+    expect(report.moduleSource).toBe('builtin')
+    expect(report.moduleCount).toBe(11)
     expect(report.referencedModuleCount).toBe(0)
     expect(report.findingCount).toBe(0)
-    expect(report.modules).toEqual([
-      {
-        module: 'blackcat-analytics',
-        legacyPath: 'libs/legacy/blackcat-analytics',
-        referenced: false,
-        findingCount: 0,
-        references: [],
-      },
-      {
-        module: 'blackcat-auth',
-        legacyPath: 'libs/legacy/blackcat-auth',
-        referenced: false,
-        findingCount: 0,
-        references: [],
-      },
-    ])
+    expect(report.modules.some((module: { module: string }) => module.module === 'blackcat-analytics')).toBe(true)
+    expect(report.modules.some((module: { module: string }) => module.module === 'blackcat-auth')).toBe(true)
     expect(res.stdout).toContain('"strict": false')
   })
 

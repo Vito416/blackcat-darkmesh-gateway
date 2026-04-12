@@ -43,7 +43,6 @@ run_implementation_checks() {
   run_cmd npm test
   run_cmd npm run ops:validate-template-backend-contract -- --strict --json
   run_cmd npm run ops:validate-worker-secrets-trust-model -- --strict --json
-  run_cmd npm run ops:validate-legacy-manifest -- --strict --json
   run_cmd npm run ops:check-legacy-runtime-boundary -- --strict --json
   run_cmd npm run ops:check-legacy-no-import-evidence -- --strict --json
   run_cmd npm run ops:check-legacy-core-extraction-evidence -- --strict --json
@@ -82,12 +81,12 @@ run_implementation_checks() {
 }
 
 run_release_checks() {
-  run_cmd npm run ops:validate-ao-dependency-gate -- --file kernel-migration/ao-dependency-gate.json
-  run_cmd npm run ops:check-ao-gate-evidence -- --file kernel-migration/ao-dependency-gate.json --strict --json
-  run_cmd npm run ops:validate-final-migration-summary -- --file kernel-migration/FINAL_MIGRATION_SUMMARY.md --strict --json
-  run_cmd npm run ops:validate-signoff-record -- --file kernel-migration/SIGNOFF_RECORD.md --strict --json
-  run_cmd npm run ops:check-release-drill-artifacts -- --dir kernel-migration --strict --json
-  run_cmd npm run ops:check-decommission-readiness -- --dir kernel-migration --ao-gate kernel-migration/ao-dependency-gate.json --strict --json
+  run_cmd npm run ops:validate-ao-dependency-gate -- --file ops/decommission/ao-dependency-gate.json
+  run_cmd npm run ops:check-ao-gate-evidence -- --file ops/decommission/ao-dependency-gate.json --strict --json
+  run_cmd npm run ops:validate-final-migration-summary -- --file ops/decommission/FINAL_MIGRATION_SUMMARY.md --strict --json
+  run_cmd npm run ops:validate-signoff-record -- --file ops/decommission/SIGNOFF_RECORD.md --strict --json
+  run_cmd npm run ops:check-release-drill-artifacts -- --dir ops/decommission --strict --json
+  run_cmd npm run ops:check-decommission-readiness -- --dir ops/decommission --ao-gate ops/decommission/ao-dependency-gate.json --strict --json
 }
 
 case "${MODE}" in

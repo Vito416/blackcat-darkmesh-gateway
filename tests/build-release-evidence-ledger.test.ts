@@ -30,7 +30,7 @@ async function seedDrillArtifacts(dir: string, overrides: Record<string, string>
       bundleName: '2026-04-11T12-00-00Z-abc',
       bundleDir: join(dir, 'evidence', '2026-04-11T12-00-00Z-abc'),
     }),
-    'ao-dependency-gate.validation.txt': 'valid dependency gate: ./kernel-migration/ao-dependency-gate.json\n',
+    'ao-dependency-gate.validation.txt': 'valid dependency gate: ./ops/decommission/ao-dependency-gate.json\n',
     'release-evidence-pack.md': '# Release Evidence Pack\n',
     'release-evidence-pack.json': JSON.stringify({ release: '1.4.0', status: 'ready' }),
     'release-signoff-checklist.md': '# Release Sign-off Checklist\n',

@@ -43,7 +43,7 @@ function seedDrillDir(options = {}) {
     'consistency-drift-report.md': '# Drift report\n',
     'consistency-drift-summary.json': JSON.stringify({ status: 'ok', counts: { total: 1 } }),
     'latest-evidence-bundle.json': JSON.stringify({ bundleDir: join(dir, 'evidence', 'bundle-1'), bundleName: 'bundle-1' }),
-    'ao-dependency-gate.validation.txt': 'valid dependency gate: ./kernel-migration/ao-dependency-gate.json\n',
+    'ao-dependency-gate.validation.txt': 'valid dependency gate: ./ops/decommission/ao-dependency-gate.json\n',
     'release-evidence-pack.md': '# Release pack\n',
     'release-evidence-pack.json': JSON.stringify({ release, status: 'ready', blockers: [], warnings: [] }),
     'release-signoff-checklist.md': '# Checklist\n',

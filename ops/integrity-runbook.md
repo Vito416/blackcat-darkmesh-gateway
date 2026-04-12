@@ -426,7 +426,7 @@ node scripts/build-release-evidence-pack.js \
   --release 1.4.0 \
   --consistency-dir ./tmp/consistency-artifacts \
   --evidence-dir ./tmp/evidence-artifacts \
-  --ao-gate-file ./kernel-migration/ao-dependency-gate.json \
+  --ao-gate-file ./ops/decommission/ao-dependency-gate.json \
   --out ./tmp/release-evidence-pack.md \
   --json-out ./tmp/release-evidence-pack.json \
   --require-both \

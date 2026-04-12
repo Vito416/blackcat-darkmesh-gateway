@@ -14,7 +14,7 @@ const DEFAULT_OUT_ROOT = './tmp/release-drills'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
-const DEFAULT_AO_GATE_FILE = resolve(REPO_ROOT, 'kernel-migration/ao-dependency-gate.json')
+const DEFAULT_AO_GATE_FILE = resolve(REPO_ROOT, 'ops/decommission/ao-dependency-gate.json')
 
 const STEP_SCRIPTS = {
   preflight: resolve(SCRIPT_DIR, 'validate-consistency-preflight.js'),

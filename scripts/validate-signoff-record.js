@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const DEFAULT_FILE = 'kernel-migration/SIGNOFF_RECORD.md'
+const DEFAULT_FILE = 'ops/decommission/SIGNOFF_RECORD.md'
 
 const REQUIRED_SECTIONS = [
   'Record metadata',
@@ -67,7 +67,7 @@ function usageText() {
     '  node scripts/validate-signoff-record.js [--file <FILE>] [--json] [--strict] [--help]',
     '',
     'Options:',
-    '  --file <FILE>   Signoff record markdown file to validate (default: kernel-migration/SIGNOFF_RECORD.md)',
+    '  --file <FILE>   Signoff record markdown file to validate (default: ops/decommission/SIGNOFF_RECORD.md)',
     '  --json          Print structured JSON only',
     '  --strict        Fail on placeholder content',
     '  --help          Show this help',

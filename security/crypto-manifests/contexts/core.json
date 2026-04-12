@@ -1,7 +1,6 @@
 {
   "slots": {
     "core.crypto.default": {"type": "aead", "key": "crypto_key", "length": 32},
-    "core.crypto.legacy": {"type": "aead", "key": "crypto_key", "length": 32},
     "core.vault": {"type": "aead", "key": "filevault_key", "length": 32},
     "core.hmac.csrf": {"type": "hmac", "key": "csrf_key", "length": 64},
     "core.hmac.session": {"type": "hmac", "key": "session_token_key", "length": 64},

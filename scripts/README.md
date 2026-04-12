@@ -95,17 +95,17 @@ Notes:
 
 ## Signoff record validator
 
-`scripts/validate-signoff-record.js` checks `kernel-migration/SIGNOFF_RECORD.md` for the required closeout sections, tables, and decision metadata. It also supports strict placeholder detection so final signoff can fail closed if the template was not fully filled in.
+`scripts/validate-signoff-record.js` checks `ops/decommission/SIGNOFF_RECORD.md` for the required closeout sections, tables, and decision metadata. It also supports strict placeholder detection so final signoff can fail closed if the template was not fully filled in.
 
 Usage:
 ```bash
 node scripts/validate-signoff-record.js
-node scripts/validate-signoff-record.js --file kernel-migration/SIGNOFF_RECORD.md --json
+node scripts/validate-signoff-record.js --file ops/decommission/SIGNOFF_RECORD.md --json
 node scripts/validate-signoff-record.js --strict
 ```
 
 Notes:
-- the default target is `kernel-migration/SIGNOFF_RECORD.md`
+- the default target is `ops/decommission/SIGNOFF_RECORD.md`
 - human output prints a short status summary plus any blockers
 - JSON output is deterministic and includes the parsed section presence map and blockers
 - exit codes are `0` for success, `3` for blockers, and `64` for usage or file access errors
@@ -271,12 +271,12 @@ npm run ops:export-consistency-report -- \
 
 ## AO dependency gate validation
 
-`scripts/validate-ao-dependency-gate.js` checks `kernel-migration/ao-dependency-gate.json` before release gating. It verifies the required checks, allowed statuses, and evidence links for closed items.
+`scripts/validate-ao-dependency-gate.js` checks `ops/decommission/ao-dependency-gate.json` before release gating. It verifies the required checks, allowed statuses, and evidence links for closed items.
 
 Usage:
 ```bash
 npm run ops:validate-ao-dependency-gate -- \
-  --file kernel-migration/ao-dependency-gate.json
+  --file ops/decommission/ao-dependency-gate.json
 ```
 
 ## Template backend contract validation
@@ -302,36 +302,19 @@ Exit codes:
 
 ## Final migration summary validation
 
-`scripts/validate-final-migration-summary.js` checks `kernel-migration/FINAL_MIGRATION_SUMMARY.md` for the required headings, bullet fields, and evidence tables that close out the migration record.
+`scripts/validate-final-migration-summary.js` checks `ops/decommission/FINAL_MIGRATION_SUMMARY.md` for the required headings, bullet fields, and evidence tables that close out the migration record.
 In `--strict` mode it also rejects template placeholders such as `...`, `YYYY-...`, and the option-list guidance that should be replaced before release signoff.
 
 Usage:
 ```bash
-node scripts/validate-final-migration-summary.js --file kernel-migration/FINAL_MIGRATION_SUMMARY.md
-node scripts/validate-final-migration-summary.js --file kernel-migration/FINAL_MIGRATION_SUMMARY.md --strict
-node scripts/validate-final-migration-summary.js --file kernel-migration/FINAL_MIGRATION_SUMMARY.md --json
+node scripts/validate-final-migration-summary.js --file ops/decommission/FINAL_MIGRATION_SUMMARY.md
+node scripts/validate-final-migration-summary.js --file ops/decommission/FINAL_MIGRATION_SUMMARY.md --strict
+node scripts/validate-final-migration-summary.js --file ops/decommission/FINAL_MIGRATION_SUMMARY.md --json
 ```
-
-## Legacy import manifest validation
-
-`scripts/validate-legacy-manifest.js` checks the imported legacy module inventory against `kernel-migration/legacy-archive/MANIFEST.md`.
-It parses the manifest table, verifies every listed module directory exists under `kernel-migration/legacy-archive/snapshots/<module>`, and confirms each module has `README.md`, `LICENSE`, and a `.import-source` file with a commit-ish marker.
-
-Usage:
-```bash
-npm run ops:validate-legacy-manifest
-npm run ops:validate-legacy-manifest -- --json
-npm run ops:validate-legacy-manifest -- --manifest kernel-migration/legacy-archive/MANIFEST.md --legacy-dir kernel-migration/legacy-archive/snapshots --strict
-```
-
-Exit codes:
-- `0` validation passed, or issues were reported without `--strict`
-- `3` validation issues found in `--strict` mode
-- `64` usage error
 
 ## Legacy runtime boundary check
 
-`scripts/check-legacy-runtime-boundary.js` scans runtime source files (default `src`) and reports import/require specifiers that reference legacy snapshot paths (`libs/legacy/**` or `kernel-migration/legacy-archive/snapshots/**`).
+`scripts/check-legacy-runtime-boundary.js` scans runtime source files (default `src`) and reports import/require specifiers that reference retired legacy paths.
 
 Usage:
 ```bash
@@ -393,53 +376,6 @@ Exit codes:
 - `3` findings in `--strict` mode, or a runtime error occurred
 - `64` usage error
 
-## Legacy risk audit
-
-`scripts/audit-legacy-risk.js` scans `kernel-migration/legacy-archive/snapshots` for high-risk patterns before runtime extraction.
-
-It reports:
-- JS/TS risk patterns (`eval`, `new Function`, `child_process` execution and shell mode)
-- PHP risk patterns (`eval`, command execution functions, dynamic include/require paths)
-- generic risk hints (private keys, bearer tokens, SQL string concatenation hints)
-
-Usage:
-```bash
-npm run ops:audit-legacy-risk
-npm run ops:audit-legacy-risk -- --strict
-npm run ops:audit-legacy-risk -- --json > ./tmp/legacy-risk.json
-```
-
-Exit codes:
-- `0` no critical findings in strict mode, or report generated in non-strict mode
-- `3` strict mode with critical findings (or runtime scan failure)
-- `64` usage error
-
-## Legacy migration matrix build
-
-`scripts/build-legacy-migration-matrix.js` generates a markdown matrix from `kernel-migration/legacy-archive/MANIFEST.md`, optional risk JSON, and an optional machine-readable `blackcat-core` primitive map.
-
-Usage:
-```bash
-npm run ops:build-legacy-migration-matrix
-npm run ops:build-legacy-migration-matrix -- --risk ./tmp/legacy-risk.json
-npm run ops:build-legacy-migration-matrix -- --core-map ./kernel-migration/core-primitive-map.json
-npm run ops:build-legacy-migration-matrix -- --out ./kernel-migration/legacy-libs-matrix.md --json
-```
-
-## Legacy module-map sync check
-
-`scripts/check-legacy-module-map-sync.js` ensures legacy module names stay synchronized across:
-
-- `kernel-migration/legacy-archive/MIGRATION_PLAN.md`
-- `kernel-migration/LEGACY_MODULE_MAP.md`
-- `kernel-migration/LEGACY_DECOMMISSION_CONDITIONS.md`
-
-Usage:
-```bash
-npm run ops:check-legacy-module-map-sync -- --json
-npm run ops:check-legacy-module-map-sync -- --strict
-```
-
 ## Release evidence pack
 
 `scripts/build-release-evidence-pack.js` merges consistency and evidence artifacts into a single release-ready summary (`markdown` + optional JSON) for sign-off.
@@ -459,7 +395,7 @@ node scripts/build-release-evidence-pack.js \
   --release 1.4.0 \
   --consistency-dir ./tmp/consistency-artifacts \
   --evidence-dir ./tmp/evidence-artifacts \
-  --ao-gate-file ./kernel-migration/ao-dependency-gate.json \
+  --ao-gate-file ./ops/decommission/ao-dependency-gate.json \
   --out ./tmp/release-evidence-pack.md \
   --json-out ./tmp/release-evidence-pack.json \
   --require-both \
@@ -469,7 +405,7 @@ npm run ops:build-release-evidence-pack -- \
   --release 1.4.0 \
   --consistency-dir ./tmp/consistency-artifacts \
   --evidence-dir ./tmp/evidence-artifacts \
-  --ao-gate-file ./kernel-migration/ao-dependency-gate.json \
+  --ao-gate-file ./ops/decommission/ao-dependency-gate.json \
   --json
 ```
 
@@ -676,11 +612,11 @@ Use `--force` only when intentionally regenerating files.
 Usage:
 ```bash
 npm run ops:check-ao-gate-evidence -- \
-  --file ./kernel-migration/ao-dependency-gate.json \
+  --file ./ops/decommission/ao-dependency-gate.json \
   --json
 
 npm run ops:check-ao-gate-evidence -- \
-  --file ./kernel-migration/ao-dependency-gate.json \
+  --file ./ops/decommission/ao-dependency-gate.json \
   --strict
 ```
 
@@ -696,7 +632,7 @@ Usage:
 ```bash
 npm run ops:check-decommission-readiness -- \
   --dir ./tmp/release-drill \
-  --ao-gate ./kernel-migration/ao-dependency-gate.json \
+  --ao-gate ./ops/decommission/ao-dependency-gate.json \
   --strict \
   --json
 ```
@@ -706,16 +642,16 @@ npm run ops:check-decommission-readiness -- \
 `scripts/run-decommission-closeout.js` is the final operator entrypoint for decommission closeout. It is intended to combine the machine checks, `check-decommission-manual-proofs`, evidence log generation, and AO-gate/readiness summaries into one run. The automation can complete while AO checks or manual proofs are still pending, so treat this as the closeout bundle step rather than the final approval itself.
 
 By default it also validates:
-- `kernel-migration/FINAL_MIGRATION_SUMMARY.md`
-- `kernel-migration/SIGNOFF_RECORD.md`
+- `ops/decommission/FINAL_MIGRATION_SUMMARY.md`
+- `ops/decommission/SIGNOFF_RECORD.md`
 
 Usage:
 ```bash
 node scripts/run-decommission-closeout.js \
   --dir ./tmp/release-drill \
-  --ao-gate ./kernel-migration/ao-dependency-gate.json \
-  --final-summary ./kernel-migration/FINAL_MIGRATION_SUMMARY.md \
-  --signoff-record ./kernel-migration/SIGNOFF_RECORD.md \
+  --ao-gate ./ops/decommission/ao-dependency-gate.json \
+  --final-summary ./ops/decommission/FINAL_MIGRATION_SUMMARY.md \
+  --signoff-record ./ops/decommission/SIGNOFF_RECORD.md \
   --operator ops-user \
   --decision pending \
   --strict \
