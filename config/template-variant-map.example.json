@@ -1,0 +1,12 @@
+{
+  "site-alpha": {
+    "variant": "signal",
+    "templateTxId": "REPLACE_WITH_TEMPLATE_TXID",
+    "manifestTxId": "REPLACE_WITH_MANIFEST_TXID"
+  },
+  "site-beta": {
+    "variant": "bastion",
+    "templateTxId": "REPLACE_WITH_TEMPLATE_TXID",
+    "manifestTxId": "REPLACE_WITH_MANIFEST_TXID"
+  }
+}

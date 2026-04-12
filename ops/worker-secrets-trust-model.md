@@ -12,7 +12,7 @@ This document formalizes the boundary for the gateway/template/worker split.
 
 ## Component roles
 
-- `blackcat-templates`: public template bundles, manifests, hashes, and other verifiable assets.
+- `blackcat-darkmesh-templates`: public template bundles, manifests, hashes, and other verifiable assets.
 - `blackcat-darkmesh-gateway`: public edge, request router, integrity gate, and policy enforcement point.
 - Per-site worker: secret holder for PSP keys, SMTP credentials, OTP secrets, and other site-specific private material.
 - Mailing dispatch: public-safe queue/transport helpers live in the gateway runtime, but any SMTP/API credential, relay token, or tenant-specific secret remains worker-owned and injected from outside the request path.

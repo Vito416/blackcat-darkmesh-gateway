@@ -2,6 +2,8 @@
 
 Use this runbook before a release PR merge or staging promotion to verify gateway consistency, export evidence, and produce the final sign-off pack.
 
+For a new host or clean-operator machine, run `ops/fresh-machine-production-bootstrap-runbook.md` first (install + env bootstrap + strict preflight).
+
 ## Fast path (one-shot orchestration)
 
 Use this when you want one command to run the full drill end-to-end and write canonical artifacts.
@@ -17,15 +19,60 @@ npm run ops:run-release-drill -- \
   --strict
 ```
 
+Optional safety check before the real run:
+
+```bash
+npm run ops:run-release-drill -- \
+  --urls "$CONSISTENCY_URLS" \
+  --out-dir "$DRILL_DIR" \
+  --profile "$GATEWAY_RESOURCE_PROFILE" \
+  --mode pairwise \
+  --token "$GATEWAY_INTEGRITY_STATE_TOKEN" \
+  --release "$RELEASE_VERSION" \
+  --strict \
+  --dry-run
+```
+
+The `--dry-run` output is the authoritative step order for the current script version.
+
 This command generates:
 - `consistency-matrix.json`
 - `consistency-drift-report.md`
 - `consistency-drift-summary.json`
 - `latest-evidence-bundle.json`
+- `ao-dependency-gate.validation.txt`
+- `legacy-core-extraction-evidence.json`
+- `legacy-crypto-boundary-evidence.json`
+- `template-worker-map-coherence.json`
+- `forget-forward-config.json`
+- `template-signature-ref-map.json`
 - `release-evidence-pack.md`
 - `release-evidence-pack.json`
 - `release-signoff-checklist.md`
 - `release-readiness.json`
+- `release-drill-checks.json`
+- `release-drill-manifest.json`
+- `release-drill-manifest.validation.txt`
+- `release-drill-check.json`
+- `release-evidence-ledger.md`
+- `release-evidence-ledger.json`
+
+## Pre-live path (no live gateways yet)
+
+Use this when no gateway endpoints are live yet, but we still want a complete decommission artifact set and a clean split between automation and AO/manual blockers.
+
+```bash
+npm run ops:bootstrap-prelive-decommission-artifacts -- \
+  --dir ops/decommission \
+  --release 1.4.0 \
+  --profile wedos_medium \
+  --mode pairwise
+```
+
+Expected result:
+- `ops/decommission` contains the full strict artifact set (`release-evidence-pack*`, `release-readiness.json`, `release-drill-manifest*`, `release-drill-check.json`, `release-evidence-ledger*`, etc.).
+- `npm run ops:check-decommission-readiness -- --dir ops/decommission --ao-gate ops/decommission/ao-dependency-gate.json --json` reports `automationState=complete` with only AO/manual blockers still open.
+- This is **not** a GO signal by itself; final GO still requires AO gate closure plus a live strict drill.
 
 ## Prerequisites
 
@@ -364,6 +411,12 @@ Notes:
 | `ops:latest-evidence-bundle` | No timestamped bundle exists yet, or the bundle root points at the wrong directory | Confirm `ops:export-integrity-evidence` wrote a bundle under `$DRILL_DIR/evidence` |
 | `ops:check-evidence-bundle` | Bundle files are missing, the manifest is malformed, or attestation validation failed | Open `manifest.json` and `attestation.json` in the latest bundle |
 | `ops:validate-ao-dependency-gate` | Gate JSON malformed or a required AO check is not closed | Inspect `required` versus `checks` in `ops/decommission/ao-dependency-gate.json`, then check `ao-dependency-gate.validation.txt` |
+| `ops:check-legacy-core-extraction-evidence` | Legacy core extraction evidence is missing, stale, or no-import checks regressed | Re-run the strict check and inspect `legacy-core-extraction-evidence.json` fields for failing checks |
+| `ops:check-legacy-crypto-boundary-evidence` | Runtime crypto boundary proof is incomplete or request-path imports regressed | Re-run strict mode, then inspect `legacy-crypto-boundary-evidence.json` blockers |
+| `ops:check-template-worker-map-coherence` | URL/token/signatureRef maps are missing coverage or site keys do not align | Re-check `GATEWAY_TEMPLATE_WORKER_URL_MAP`, `_TOKEN_MAP`, and `_SIGNATURE_REF_MAP` for identical site keys |
+| `ops:check-forget-forward-config` | Forget-forward relay URL/token/timeout is invalid or pending in strict mode | Validate `GATEWAY_FORGET_FORWARD_URL`, `GATEWAY_FORGET_FORWARD_TOKEN`, and timeout bounds before retry |
+| `ops:check-template-signature-ref-map` | Signature-ref map is malformed or required site refs are missing | Rebuild `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` and enforce required sites before rerun |
+| `ops:check-template-variant-map` | Site variant map is malformed, missing site coverage, or references unsupported variants | Rebuild `GATEWAY_TEMPLATE_VARIANT_MAP` from `config/template-variant-map.example.json` and enforce required sites before rerun |
 | `ops:build-release-evidence-pack` | Missing consistency evidence, missing evidence bundle, or an AO gate that is not closed | Verify the latest bundle directory and the release pack status fields |
 | `ops:build-release-signoff-checklist` | Pack JSON missing, unreadable, or not `ready` under `--strict` | Read the pack blockers and warnings before retrying |
 | `ops:check-release-readiness` | Pack contains blockers, or warnings remain under strict mode | Inspect `blockers` and `warnings` in `release-evidence-pack.json` |
@@ -381,6 +434,7 @@ Notes:
 | Confirm consistency is acceptable | `ops:validate-consistency-preflight`, `ops:compare-integrity-matrix`, `ops:export-consistency-report` | `consistency-matrix.json`, `consistency-drift-report.md`, `consistency-drift-summary.json` |
 | Confirm evidence bundle is acceptable | `ops:export-integrity-evidence`, `ops:latest-evidence-bundle`, `ops:check-evidence-bundle` | Timestamped bundle containing `compare.txt`, `attestation.json`, and `manifest.json` |
 | Confirm AO dependency gate is acceptable | `ops:validate-ao-dependency-gate` | `ops/decommission/ao-dependency-gate.json` with all required checks closed + `$DRILL_DIR/ao-dependency-gate.validation.txt` |
+| Confirm legacy/runtime boundary evidence is acceptable | `ops:check-legacy-core-extraction-evidence`, `ops:check-legacy-crypto-boundary-evidence`, `ops:check-template-worker-map-coherence`, `ops:check-forget-forward-config`, `ops:check-template-signature-ref-map` | `$DRILL_DIR/legacy-core-extraction-evidence.json`, `$DRILL_DIR/legacy-crypto-boundary-evidence.json`, `$DRILL_DIR/template-worker-map-coherence.json`, `$DRILL_DIR/forget-forward-config.json`, `$DRILL_DIR/template-signature-ref-map.json` |
 | Confirm archive manifest is acceptable | `ops:build-release-drill-manifest`, `ops:validate-release-drill-manifest` | `$DRILL_DIR/release-drill-manifest.json` and `$DRILL_DIR/release-drill-manifest.validation.txt` |
 | Confirm drill artifact completeness is acceptable | `ops:check-release-drill-artifacts` | `$DRILL_DIR/release-drill-check.json`, `$DRILL_DIR/release-drill-checks.json` |
 | Confirm final machine ledger is acceptable | `ops:build-release-evidence-ledger` | `$DRILL_DIR/release-evidence-ledger.md`, `$DRILL_DIR/release-evidence-ledger.json` |

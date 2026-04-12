@@ -13,7 +13,7 @@ Consolidation status
 - Gateway is the active integration target for legacy backend modules.
 - Legacy library snapshots were fully retired from this repo; request-path runtime now uses gateway-owned modules only under `src/runtime/**` and `src/clients/**`.
 - Crypto policy bundle is maintained in `security/crypto-policy/` (gateway-owned, not a vendored snapshot).
-- Template code remains intentionally separate in `blackcat-templates`; gateway enforces controlled backend access for deployed templates.
+- Template code remains intentionally separate in `blackcat-darkmesh-templates`; gateway enforces controlled backend access for deployed templates.
 
 Migration status
 - Active backlog and blocker split: `ops/decommission/BACKLOG.md`
@@ -106,6 +106,7 @@ Configuration (per site)
   - `GATEWAY_TEMPLATE_WORKER_URL_MAP` (multi-tenant worker signer routing map, JSON: `{ \"site-a\": \"https://worker-a.example\", \"site-b\": \"https://worker-b.example\" }`)
   - `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP` (optional per-site signer token map, JSON with same keys as the URL map)
     - when signer map is configured, write actions fail closed for unknown `siteId`
+  - `GATEWAY_TEMPLATE_VARIANT_MAP` (optional per-site template variant map, JSON `{ "<site>": { "variant": "signal|bastion|horizon", "templateTxId": "...", "manifestTxId": "..." } }`)
   - `GATEWAY_TEMPLATE_HMAC_SECRET` (optional HMAC signature header for forwarded template calls)
 - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`

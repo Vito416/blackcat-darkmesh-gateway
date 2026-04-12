@@ -19,12 +19,14 @@
 - Decommission manual-proof scaffold: `npm run ops:init-decommission-manual-proofs -- --dir <drill-dir> [--force]` generates JSON + Markdown placeholders for recovery/fallback/rollback/approvals proof links.
 - Decommission manual-proof checker: `npm run ops:check-decommission-manual-proofs -- --file <drill-dir>/decommission-evidence-log.json [--strict] [--json]` validates recovery/fallback/rollback/approvals links and returns `pending` (non-strict) vs hard failure (strict).
 - Decommission readiness summary: `npm run ops:check-decommission-readiness -- --dir <drill-dir> --ao-gate ops/decommission/ao-dependency-gate.json [--strict] [--json]` emits `automationState`, `aoManualState`, and `closeoutState` so `automation-complete`, `ao-manual-pending`, and `ao-manual-blocked` are not conflated.
+- Production GO/NO-GO summary: `npm run ops:check-production-readiness -- [--dir ops/decommission] [--ao-gate <file>] [--json]` prints a concise closeout decision with actionable blockers only.
 - Decommission closeout artifact validator: `npm run ops:validate-decommission-closeout -- --file <drill-dir>/decommission-closeout.json [--strict] [--json]` verifies closeout shape and can hard-fail when closeout is not `ready`.
 - Worker-routing config checker: `node scripts/check-template-worker-routing-config.js --url-map <json> [--token-map <json>] [--strict] [--json]` validates tenant URL/token map shape before routing is published.
 - Worker-routing scaffold helper: `node scripts/init-template-worker-routing.js --sites <csv> [--url-map-out <file>] [--token-map-out <file>] [--force]` generates the routing map skeleton for a new site set.
 - Worker-routing example payloads: `config/template-worker-routing.example.json`, `config/template-worker-token-map.example.json`, and `config/template-worker-signature-ref-map.example.json` are non-secret operator templates that can be copied into repo vars/secrets before running strict checks.
 - Worker-map coherence checker: `npm run ops:check-template-worker-map-coherence -- --require-sites <csv> --require-token-map --require-signature-map --strict --json` validates URL/token/signature-ref map alignment for the same site set.
 - Template signature-ref map checker: `npm run ops:check-template-signature-ref-map -- --strict --json` reads `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` from repo vars/secrets in CI; when it is unset, the checker reports a deterministic `blocked` status instead of guessing.
+- Template variant map checker: `npm run ops:check-template-variant-map -- --require-sites <csv> --strict --json` validates gateway template variant routing (`variant`, `templateTxId`, `manifestTxId`) from `GATEWAY_TEMPLATE_VARIANT_MAP`.
 - Worker-secrets trust-model validator: `npm run ops:validate-worker-secrets-trust-model -- --help` is the companion machine check for `ops/worker-secrets-trust-model.md` and should stay a strict CI gate once wired.
 - Template secret-smuggling guard: `/template/call` recursively scans payloads for secret-like fields and fail-closes before any upstream fetch; keep the matching tests in `tests/runtime-template-secretGuard.test.ts` and `tests/template-api.test.ts` green.
 - Forget-forward semantics: `/cache/forget` stays local-200 even if the optional worker forward skips, times out, or fails; the relay is best-effort only and uses the `GATEWAY_FORGET_FORWARD_*` settings when enabled.
@@ -38,6 +40,7 @@
 - Evidence quality rule: keep machine verification and AO/manual proof links as separate artifacts in the closeout bundle; both are required before the final signoff record can move to `GO`.
 - WEDOS profile readiness validator: `npm run ops:validate-wedos-readiness -- --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--strict]`.
 - Legacy no-import evidence checker: `npm run ops:check-legacy-no-import-evidence -- [--root src] [--modules <csv>] [--strict] [--json]` scans `src/**` for references to retired legacy import roots (`libs/legacy/<module>`) and emits machine-readable evidence for the runtime boundary gate.
+- Retired path guard: `npm run ops:check-retired-path-references -- --strict --json` scans active automation surfaces (`.github/workflows`, `scripts`, `package.json`) for retired path usage such as `kernel-migration/` and old `security/crypto-manifests/`.
 - Runtime config boundary check: `npm run ops:check-config-loader-runtime-boundary -- [--root src] [--strict] [--json]` flags any raw `process.env` usage under `src/runtime/**` outside `src/runtime/config/loader.ts`; CI runs the strict form as a hard gate.
 - Mailing secret boundary check: `npm run ops:check-mailing-secret-boundary -- [--root src/runtime/mailing] [--strict] [--json]` ensures mailing request-path runtime code stays public-safe and does not read local secret env sources.
 - AO dependency gate source: `ops/decommission/ao-dependency-gate.json` provides machine-readable P0.1/P1.1/P1.2 status for release gating.
@@ -46,7 +49,11 @@
 - Release sign-off checklist generator: `npm run ops:build-release-signoff-checklist -- --pack <release-evidence-pack.json> [--strict]`.
 - Release readiness evaluator: `npm run ops:check-release-readiness -- --pack <release-evidence-pack.json> [--strict] [--json]`.
 - One-shot release drill orchestrator: `npm run ops:run-release-drill -- --urls <CSV> --out-dir <DIR> [--profile ...] [--mode ...] [--token ...] [--allow-anon] [--release ...] [--strict]`.
+- Pre-live decommission bootstrap (no live gateways yet): `npm run ops:bootstrap-prelive-decommission-artifacts -- --dir ops/decommission --release 1.4.0` seeds a deterministic baseline artifact set so readiness can report `automation-complete` while AO checks remain open.
 - Release drill runbook: `ops/release-drill-runbook.md`.
+- Fresh-machine production bootstrap runbook: `ops/fresh-machine-production-bootstrap-runbook.md` (prereqs, env bootstrap, strict preflight, strict drill path).
+- WEDOS live handoff folder: `ops/live-wedos/` (layout bootstrap + preflight checklist for FTP-based rollout).
+- Production gaplist tracker for 1.4.0: `ops/decommission/PRODUCTION_READY_GAPLIST_1.4.0.md`.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
 - Bundle indexing/exchange pack: `npm run ops:index-evidence-bundles` and `npm run ops:build-attestation-exchange-pack` for portable review artifacts.
 - Schema validation: keep attestation payloads aligned with `ops/schemas/integrity-attestation.schema.json` before archiving the bundle.
@@ -79,6 +86,7 @@ Use the non-secret example files in `config/` as a baseline, replace placeholder
 export GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)"
 export GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)"
 export GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)"
+export GATEWAY_TEMPLATE_VARIANT_MAP="$(cat config/template-variant-map.example.json)"
 
 node scripts/check-template-worker-routing-config.js \
   --url-map "$GATEWAY_TEMPLATE_WORKER_URL_MAP" \
@@ -95,6 +103,10 @@ node scripts/check-template-signature-ref-map.js \
   --require-sites site-alpha,site-beta \
   --strict --json
 
+node scripts/check-template-variant-map.js \
+  --require-sites site-alpha,site-beta \
+  --strict --json
+
 set -a
 source config/forget-forward.example.env
 set +a
@@ -103,6 +115,7 @@ node scripts/check-forget-forward-config.js --strict --json
 
 ## Release drill flow
 See `ops/release-drill-runbook.md` for the canonical step-by-step release drill, expected artifacts, and triage matrix.
+For first-time host setup, start with `ops/fresh-machine-production-bootstrap-runbook.md` before running the release drill.
 
 ## Production guardrails
 - Cache: keep `gateway_cache_size` below the host memory budget with a clear ceiling per deployment tier.
