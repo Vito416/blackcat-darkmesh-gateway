@@ -542,7 +542,7 @@ npm run ops:validate-release-drill-manifest -- \
 
 `scripts/check-release-drill-artifacts.js` validates that the drill directory contains the full mandatory artifact set and, in strict mode, verifies cross-file release consistency plus manifest-validation output.
 
-The strict artifact set now includes `release-drill-checks.json` (drill context metadata), so `ops:run-release-drill` should be treated as the canonical producer before running the strict artifact checker.
+The strict artifact set now includes `release-drill-checks.json` (drill context metadata) plus `legacy-core-extraction-evidence.json` and `legacy-crypto-boundary-evidence.json`, so `ops:run-release-drill` should be treated as the canonical producer before running the strict artifact checker.
 
 Usage:
 ```bash

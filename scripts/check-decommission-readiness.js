@@ -7,6 +7,8 @@ import { pathToFileURL } from 'node:url'
 const REQUIRED_ARTIFACTS = [
   { key: 'release-evidence-pack', file: 'release-evidence-pack.json', json: true },
   { key: 'release-readiness', file: 'release-readiness.json', json: true },
+  { key: 'legacy-core-extraction-evidence', file: 'legacy-core-extraction-evidence.json', json: true },
+  { key: 'legacy-crypto-boundary-evidence', file: 'legacy-crypto-boundary-evidence.json', json: true },
   { key: 'release-drill-checks', file: 'release-drill-checks.json', json: true },
   { key: 'release-drill-manifest', file: 'release-drill-manifest.json', json: true },
   { key: 'release-drill-check', file: 'release-drill-check.json', json: true },
@@ -243,6 +245,8 @@ function assessDecommissionReadiness({ dir, aoGateFile }) {
 
   const pack = artifacts['release-evidence-pack'].value
   const readiness = artifacts['release-readiness'].value
+  const coreEvidence = artifacts['legacy-core-extraction-evidence'].value
+  const cryptoEvidence = artifacts['legacy-crypto-boundary-evidence'].value
   const drillChecks = artifacts['release-drill-checks'].value
   const manifest = artifacts['release-drill-manifest'].value
   const drillCheck = artifacts['release-drill-check'].value
@@ -250,16 +254,31 @@ function assessDecommissionReadiness({ dir, aoGateFile }) {
 
   const packStatus = normalizeStatus(pack?.status)
   const readinessStatus = normalizeStatus(readiness?.status)
+  const coreEvidenceStatus = normalizeStatus(coreEvidence?.status)
+  const cryptoEvidenceStatus = normalizeStatus(cryptoEvidence?.status)
   const drillChecksRelease = isNonEmptyString(drillChecks?.release) ? drillChecks.release.trim() : ''
   const manifestStatus = normalizeStatus(manifest?.status)
   const ledgerStatus = normalizeStatus(ledger?.overallStatus || ledger?.status)
   const drillCheckOk = drillCheck?.ok === true
+  const coreEvidenceOk = coreEvidence?.ok === true || coreEvidenceStatus === 'pass' || coreEvidenceStatus === 'ready'
+  const cryptoEvidenceOk =
+    cryptoEvidence?.ok === true || cryptoEvidenceStatus === 'pass' || cryptoEvidenceStatus === 'ready'
 
   if (artifacts['release-evidence-pack'].present && packStatus !== 'ready') {
     automationBlockers.push(`release-evidence-pack.json status is ${packStatus || 'missing'} (expected ready)`)
   }
   if (artifacts['release-readiness'].present && readinessStatus !== 'ready') {
     automationBlockers.push(`release-readiness.json status is ${readinessStatus || 'missing'} (expected ready)`)
+  }
+  if (artifacts['legacy-core-extraction-evidence'].present && !coreEvidenceOk) {
+    automationBlockers.push(
+      `legacy-core-extraction-evidence.json status is ${coreEvidenceStatus || 'missing'} (expected pass/ready)`,
+    )
+  }
+  if (artifacts['legacy-crypto-boundary-evidence'].present && !cryptoEvidenceOk) {
+    automationBlockers.push(
+      `legacy-crypto-boundary-evidence.json status is ${cryptoEvidenceStatus || 'missing'} (expected pass/ready)`,
+    )
   }
   if (artifacts['release-drill-manifest'].present && manifestStatus !== 'ready') {
     automationBlockers.push(`release-drill-manifest.json status is ${manifestStatus || 'missing'} (expected ready)`)
@@ -343,6 +362,18 @@ function assessDecommissionReadiness({ dir, aoGateFile }) {
         warningCount: Number.isInteger(readiness?.warningCount) ? readiness.warningCount : null,
         release: isNonEmptyString(readiness?.release) ? readiness.release.trim() : '',
       },
+      legacyCoreExtractionEvidence: {
+        present: artifacts['legacy-core-extraction-evidence'].present,
+        valid: artifacts['legacy-core-extraction-evidence'].valid,
+        status: coreEvidenceStatus,
+        ok: coreEvidence?.ok === true,
+      },
+      legacyCryptoBoundaryEvidence: {
+        present: artifacts['legacy-crypto-boundary-evidence'].present,
+        valid: artifacts['legacy-crypto-boundary-evidence'].valid,
+        status: cryptoEvidenceStatus,
+        ok: cryptoEvidence?.ok === true,
+      },
       releaseDrillChecks: {
         present: artifacts['release-drill-checks'].present,
         valid: artifacts['release-drill-checks'].valid,
@@ -405,6 +436,12 @@ function renderHuman(summary) {
   )
   lines.push(
     `- release-readiness.json: ${summary.checks.releaseReadiness.present ? 'present' : 'missing'} / ${summary.checks.releaseReadiness.status || 'n/a'}`,
+  )
+  lines.push(
+    `- legacy-core-extraction-evidence.json: ${summary.checks.legacyCoreExtractionEvidence.present ? 'present' : 'missing'} / ${summary.checks.legacyCoreExtractionEvidence.status || 'n/a'}`,
+  )
+  lines.push(
+    `- legacy-crypto-boundary-evidence.json: ${summary.checks.legacyCryptoBoundaryEvidence.present ? 'present' : 'missing'} / ${summary.checks.legacyCryptoBoundaryEvidence.status || 'n/a'}`,
   )
   lines.push(`- release-drill-checks.json: ${summary.checks.releaseDrillChecks.present ? 'present' : 'missing'}`)
   lines.push(

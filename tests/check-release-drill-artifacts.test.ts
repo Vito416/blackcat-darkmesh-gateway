@@ -48,6 +48,8 @@ function seedDrillDir(options = {}) {
     'release-evidence-pack.json': JSON.stringify({ release, status: 'ready', blockers: [], warnings: [] }),
     'release-signoff-checklist.md': '# Checklist\n',
     'release-readiness.json': JSON.stringify({ release: readinessRelease, status: 'ready', blockerCount: 0, warningCount: 0 }),
+    'legacy-core-extraction-evidence.json': JSON.stringify({ ok: true, status: 'pass' }),
+    'legacy-crypto-boundary-evidence.json': JSON.stringify({ ok: true, status: 'pass' }),
     'release-drill-checks.json': JSON.stringify({
       release,
       profile: 'wedos_medium',

@@ -39,6 +39,14 @@ function seedCloseoutArtifacts(dir: string) {
   writeJson(join(dir, 'release-evidence-pack.json'), { release: '1.4.0', status: 'ready' })
   writeFileSync(join(dir, 'release-signoff-checklist.md'), '# Release Sign-off Checklist\n', 'utf8')
   writeJson(join(dir, 'release-readiness.json'), { release: '1.4.0', status: 'ready', blockerCount: 0, warningCount: 0 })
+  writeJson(join(dir, 'legacy-core-extraction-evidence.json'), { ok: true, status: 'pass' })
+  writeJson(join(dir, 'legacy-crypto-boundary-evidence.json'), { ok: true, status: 'pass' })
+  writeJson(join(dir, 'release-drill-checks.json'), {
+    release: '1.4.0',
+    profile: 'wedos_medium',
+    mode: 'pairwise',
+    strict: false,
+  })
   writeJson(join(dir, 'release-drill-manifest.json'), {
     release: '1.4.0',
     status: 'ready',

@@ -51,6 +51,8 @@ function seedDrill(options: { omit?: string[] } = {}) {
       blockerCount: 0,
       warningCount: 0,
     }),
+    'legacy-core-extraction-evidence.json': JSON.stringify({ ok: true, status: 'pass' }),
+    'legacy-crypto-boundary-evidence.json': JSON.stringify({ ok: true, status: 'pass' }),
     'release-drill-checks.json': JSON.stringify({
       release: '1.4.0',
       profile: 'wedos_medium',

@@ -51,6 +51,8 @@ function seedDrillDir(options = {}) {
   const payloads: Record<string, unknown> = {
     'release-evidence-pack.json': { release, status: packStatus, blockers: [], warnings: [] },
     'release-readiness.json': { release, status: readinessStatus, blockerCount: 0, warningCount: 0 },
+    'legacy-core-extraction-evidence.json': { ok: true, status: 'pass' },
+    'legacy-crypto-boundary-evidence.json': { ok: true, status: 'pass' },
     'release-drill-checks.json': {
       release,
       profile: 'wedos_medium',
@@ -138,6 +140,8 @@ describe('check-decommission-readiness.js', () => {
     expect(payload.checks.automation.status).toBe('complete')
     expect(payload.checks.aoManual.status).toBe('complete')
     expect(payload.checks.releaseEvidencePack.status).toBe('ready')
+    expect(payload.checks.legacyCoreExtractionEvidence.status).toBe('pass')
+    expect(payload.checks.legacyCryptoBoundaryEvidence.status).toBe('pass')
     expect(payload.checks.releaseDrillChecks.present).toBe(true)
     expect(payload.checks.releaseDrillChecks.release).toBe('1.4.0')
     expect(payload.checks.aoGate.closedCount).toBe(3)
