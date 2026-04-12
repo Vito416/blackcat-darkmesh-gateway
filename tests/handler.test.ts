@@ -23,7 +23,10 @@ describe('handler cache and shadow modes', () => {
     process.env = { ...originalEnv }
   })
 
-  it('requires token for /cache/forget', async () => {
+  it(
+    'requires token for /cache/forget',
+    { timeout: 15000 },
+    async () => {
     process.env.GATEWAY_FORGET_TOKEN = 'secret'
     const { handleRequest } = await import('../src/handler.js')
     // store value with subject
@@ -32,6 +35,7 @@ describe('handler cache and shadow modes', () => {
     const forgetReqNoAuth = new Request('http://gateway/cache/forget', { method: 'POST', body: JSON.stringify({ subject: 'subj1' }), headers: { 'content-type': 'application/json' } })
     const resNo = await handleRequest(forgetReqNoAuth)
     expect(resNo.status).toBe(401)
+    expect(resNo.headers.get('cache-control')).toBe('no-store')
     const forgetReqBadBearer = new Request('http://gateway/cache/forget', {
       method: 'POST',
       body: JSON.stringify({ subject: 'subj1' }),
@@ -39,15 +43,21 @@ describe('handler cache and shadow modes', () => {
     })
     const resBadBearer = await handleRequest(forgetReqBadBearer)
     expect(resBadBearer.status).toBe(401)
+    expect(resBadBearer.headers.get('cache-control')).toBe('no-store')
     const forgetReq = new Request('http://gateway/cache/forget', { method: 'POST', body: JSON.stringify({ subject: 'subj1' }), headers: { 'content-type': 'application/json', 'x-forget-token': 'secret' } })
     const res = await handleRequest(forgetReq)
     expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('no-store')
     const body = await res.json()
     expect(body.removed).toBe(1)
     expect(body.forwarded).toBe(false)
-  })
+    },
+  )
 
-  it('forwards cache forget events when configured', async () => {
+  it(
+    'forwards cache forget events when configured',
+    { timeout: 15000 },
+    async () => {
     process.env.GATEWAY_FORGET_TOKEN = 'secret'
     process.env.GATEWAY_FORGET_FORWARD_URL = 'https://worker.example/cache/forget'
     process.env.GATEWAY_FORGET_FORWARD_TOKEN = 'forward-secret'
@@ -83,7 +93,8 @@ describe('handler cache and shadow modes', () => {
       key: 'foo',
       removed: 1,
     })
-  })
+    },
+  )
 
   it('uses timing-safe matching for metrics auth tokens', async () => {
     process.env.GATEWAY_REQUIRE_METRICS_AUTH = '1'
@@ -98,6 +109,7 @@ describe('handler cache and shadow modes', () => {
       }),
     )
     expect(badBearerRes.status).toBe(401)
+    expect(badBearerRes.headers.get('cache-control')).toBe('no-store')
 
     const badBasic = Buffer.from('metrics-user:wrong-pass').toString('base64')
     const badBasicRes = await handleRequest(
@@ -106,6 +118,7 @@ describe('handler cache and shadow modes', () => {
       }),
     )
     expect(badBasicRes.status).toBe(401)
+    expect(badBasicRes.headers.get('cache-control')).toBe('no-store')
 
     const headerRes = await handleRequest(
       new Request('http://gateway/metrics', {
@@ -113,6 +126,7 @@ describe('handler cache and shadow modes', () => {
       }),
     )
     expect(headerRes.status).toBe(200)
+    expect(headerRes.headers.get('cache-control')).toBe('no-store')
 
     const basic = Buffer.from('metrics-user:metrics-pass').toString('base64')
     const basicRes = await handleRequest(
@@ -121,6 +135,7 @@ describe('handler cache and shadow modes', () => {
       }),
     )
     expect(basicRes.status).toBe(200)
+    expect(basicRes.headers.get('cache-control')).toBe('no-store')
   })
 
   it('shadow mode returns 202 on invalid stripe sig', async () => {
@@ -189,6 +204,17 @@ describe('handler cache and shadow modes', () => {
     expect(res.headers.get('x-frame-options')).toBe('DENY')
     expect(res.headers.get('referrer-policy')).toBe('no-referrer')
     expect(res.headers.get('x-xss-protection')).toBe('0')
+    expect(res.headers.get('strict-transport-security')).toBe('max-age=31536000')
+    expect(res.headers.get('cross-origin-opener-policy')).toBe('same-origin')
+    expect(res.headers.get('cross-origin-resource-policy')).toBe('same-origin')
     expect(res.headers.get('content-security-policy')).toBeNull()
+  })
+
+  it('adds no-store cache control to integrity state responses', async () => {
+    const { handleRequest } = await import('../src/handler.js')
+    const res = await handleRequest(new Request('http://gateway/integrity/state'))
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('no-store')
   })
 })

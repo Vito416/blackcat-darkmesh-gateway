@@ -5,6 +5,9 @@ const DEFAULT_SECURITY_HEADERS = {
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
   'X-XSS-Protection': '0',
+  'Strict-Transport-Security': 'max-age=31536000',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
 } as const
 
 function isSecurityHeadersEnabled(): boolean {

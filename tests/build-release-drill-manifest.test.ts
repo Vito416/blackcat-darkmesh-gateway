@@ -53,6 +53,23 @@ function seedDrill(options: { omit?: string[] } = {}) {
     }),
     'legacy-core-extraction-evidence.json': JSON.stringify({ ok: true, status: 'pass' }),
     'legacy-crypto-boundary-evidence.json': JSON.stringify({ ok: true, status: 'pass' }),
+    'template-variant-map.json': JSON.stringify({
+      ok: true,
+      status: 'complete',
+      strict: true,
+      providedSites: ['site-alpha'],
+      requiredSites: ['site-alpha'],
+      missingSites: [],
+      issues: [],
+      warnings: [],
+      map: {
+        'site-alpha': {
+          variant: 'signal',
+          templateTxId: 'tx-alpha',
+          manifestTxId: 'manifest-alpha',
+        },
+      },
+    }),
     'release-drill-checks.json': JSON.stringify({
       release: '1.4.0',
       profile: 'wedos_medium',

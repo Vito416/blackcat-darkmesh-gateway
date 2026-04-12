@@ -330,6 +330,8 @@ export async function runCli(argv = process.argv.slice(2)) {
           blockerCount: result.blockerCount,
           warningCount: result.warningCount,
           release: result.release,
+          blockers: result.blockers,
+          warnings: result.warnings,
         },
         null,
         2,

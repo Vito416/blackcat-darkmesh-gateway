@@ -6,21 +6,63 @@ import { pathToFileURL } from 'node:url'
 
 const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
 
-const PROFILE_WINDOWS = {
+const PROFILE_TUNING = {
   wedos_small: {
-    mirror: 'for: 2m',
-    auditLag: 'for: 12m',
-    checkpoint: 'for: 15m',
+    fetchCadence: {
+      timeoutMs: 4000,
+      retryAttempts: 2,
+      retryBackoffMs: 75,
+      retryJitterMs: 25,
+    },
+    thresholds: {
+      mirrorMismatchIncrease10m: 0,
+      mirrorFetchFailIncrease10m: 0,
+      auditLagSeconds: 1800,
+      checkpointStaleSeconds: 32400,
+    },
+    windows: {
+      mirror: 'for: 2m',
+      auditLag: 'for: 12m',
+      checkpoint: 'for: 15m',
+    },
   },
   wedos_medium: {
-    mirror: 'for: 1m',
-    auditLag: 'for: 8m',
-    checkpoint: 'for: 10m',
+    fetchCadence: {
+      timeoutMs: 5000,
+      retryAttempts: 3,
+      retryBackoffMs: 100,
+      retryJitterMs: 25,
+    },
+    thresholds: {
+      mirrorMismatchIncrease10m: 0,
+      mirrorFetchFailIncrease10m: 0,
+      auditLagSeconds: 3600,
+      checkpointStaleSeconds: 64800,
+    },
+    windows: {
+      mirror: 'for: 1m',
+      auditLag: 'for: 8m',
+      checkpoint: 'for: 10m',
+    },
   },
   diskless: {
-    mirror: 'for: 1m',
-    auditLag: 'for: 10m',
-    checkpoint: 'for: 12m',
+    fetchCadence: {
+      timeoutMs: 4000,
+      retryAttempts: 2,
+      retryBackoffMs: 75,
+      retryJitterMs: 25,
+    },
+    thresholds: {
+      mirrorMismatchIncrease10m: 0,
+      mirrorFetchFailIncrease10m: 0,
+      auditLagSeconds: 1200,
+      checkpointStaleSeconds: 21600,
+    },
+    windows: {
+      mirror: 'for: 1m',
+      auditLag: 'for: 10m',
+      checkpoint: 'for: 12m',
+    },
   },
 }
 
@@ -157,6 +199,7 @@ function parseMatrixJson(value) {
 
 function buildSummary(matrix, profile) {
   const status = matrix.counts.failure > 0 ? 'critical' : matrix.counts.mismatch > 0 ? 'warning' : 'ok'
+  const profileTuning = PROFILE_TUNING[profile] || PROFILE_TUNING.wedos_medium
 
   const alertSet = new Set()
   if (matrix.counts.mismatch > 0) {
@@ -175,7 +218,9 @@ function buildSummary(matrix, profile) {
     issueCount: matrix.issues.length,
     issues: matrix.issues,
     recommendedAlerts: Array.from(alertSet),
-    recommendedWindows: PROFILE_WINDOWS[profile],
+    recommendedCadence: profileTuning.fetchCadence,
+    recommendedThresholds: profileTuning.thresholds,
+    recommendedWindows: profileTuning.windows,
   }
 }
 
@@ -202,12 +247,28 @@ function buildMarkdown(summary) {
       lines.push(`- ${alertName}`)
     }
     lines.push('')
-    lines.push('### Suggested anti-flap windows')
-    lines.push(`- Mirror mismatch / fetch fail: ${summary.recommendedWindows.mirror}`)
-    lines.push(`- Audit lag: ${summary.recommendedWindows.auditLag}`)
-    lines.push(`- Checkpoint stale: ${summary.recommendedWindows.checkpoint}`)
-    lines.push('')
   }
+
+  lines.push('## Profile tuning defaults')
+  lines.push('- Keep these defaults profile-specific unless the same failure mode survives a full alert window.')
+  lines.push('')
+  lines.push('### Fetch/retry cadence')
+  lines.push(`- timeout: ${summary.recommendedCadence.timeoutMs}ms`)
+  lines.push(`- retry attempts: ${summary.recommendedCadence.retryAttempts}`)
+  lines.push(`- retry backoff: ${summary.recommendedCadence.retryBackoffMs}ms`)
+  lines.push(`- retry jitter: ${summary.recommendedCadence.retryJitterMs}ms`)
+  lines.push('')
+  lines.push('### Drift alert thresholds')
+  lines.push(`- Mirror mismatch (10m): > ${summary.recommendedThresholds.mirrorMismatchIncrease10m}`)
+  lines.push(`- Mirror fetch fail (10m): > ${summary.recommendedThresholds.mirrorFetchFailIncrease10m}`)
+  lines.push(`- Audit lag (seconds): > ${summary.recommendedThresholds.auditLagSeconds}`)
+  lines.push(`- Checkpoint stale (seconds): > ${summary.recommendedThresholds.checkpointStaleSeconds}`)
+  lines.push('')
+  lines.push('### Suggested anti-flap windows')
+  lines.push(`- Mirror mismatch / fetch fail: ${summary.recommendedWindows.mirror}`)
+  lines.push(`- Audit lag: ${summary.recommendedWindows.auditLag}`)
+  lines.push(`- Checkpoint stale: ${summary.recommendedWindows.checkpoint}`)
+  lines.push('')
 
   if (summary.issues.length > 0) {
     lines.push('## Non-pass runs')

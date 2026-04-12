@@ -94,6 +94,17 @@ function secureResponse(response: Response): Response {
   return applySecurityHeaders(response)
 }
 
+function applyNoStoreCacheControl(response: Response): Response {
+  if (response.headers.has('cache-control')) return response
+  const headers = new Headers(response.headers)
+  headers.set('cache-control', 'no-store')
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 function updateIntegrityAuditGauges(snapshot: IntegritySnapshot | null) {
   if (!snapshot) {
     gauge('gateway_integrity_audit_seq_from', 0)
@@ -722,22 +733,22 @@ export async function handleRequest(request: Request): Promise<Response> {
 
   if (url.pathname === '/integrity/state') {
     markReadonlyFallback(integrityPaused)
-    return handleIntegrityState(request, integrity)
+    return applyNoStoreCacheControl(await handleIntegrityState(request, integrity))
   }
   if (url.pathname === '/integrity/incident') {
-    return handleIntegrityIncident(request, integrity)
+    return applyNoStoreCacheControl(await handleIntegrityIncident(request, integrity))
   }
 
   if (url.pathname.startsWith('/cache/forget')) {
-    if (request.method !== 'POST') return respond('method', { status: 405 })
-    if (integrityPaused) return policyPausedResponse()
+    if (request.method !== 'POST') return applyNoStoreCacheControl(respond('method', { status: 405 }))
+    if (integrityPaused) return applyNoStoreCacheControl(policyPausedResponse())
     const token = readForgetToken()
     if (token) {
       const auth = request.headers.get('authorization') || ''
       const bearer = readBearerToken(request)
       const header = readHeaderToken(request, 'x-forget-token')
       if (!tokenEquals(token, bearer) && !tokenEquals(token, auth.trim()) && !tokenEquals(token, header)) {
-        return respond('unauthorized', { status: 401 })
+        return applyNoStoreCacheControl(respond('unauthorized', { status: 401 }))
       }
     }
     const body = await request.json().catch(() => ({}))
@@ -756,12 +767,14 @@ export async function handleRequest(request: Request): Promise<Response> {
       },
       forwardConfig,
     )
-    return respond(
-      JSON.stringify({
-        removed,
-        forwarded: forwardResult.forwarded,
-      }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
+    return applyNoStoreCacheControl(
+      respond(
+        JSON.stringify({
+          removed,
+          forwarded: forwardResult.forwarded,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
     )
   }
   if (url.pathname.startsWith('/cache/')) {
@@ -779,7 +792,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     markReadonlyFallback(integrityPaused)
     const metricsAuth = readMetricsAuthConfig()
     if (!metricsAuth.needBasic && !metricsAuth.needBearer && metricsAuth.mustGuard) {
-      return respond('metrics_auth_not_configured', { status: 500 })
+      return applyNoStoreCacheControl(respond('metrics_auth_not_configured', { status: 500 }))
     }
     if (metricsAuth.needBasic || metricsAuth.needBearer || metricsAuth.mustGuard) {
       const auth = request.headers.get('authorization') || ''
@@ -797,11 +810,15 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       if (!authed) {
         inc('gateway_metrics_auth_blocked')
-        return respond('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } })
+        return applyNoStoreCacheControl(
+          respond('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } }),
+        )
       }
     }
     const prom = toProm()
-    return respond(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } })
+    return applyNoStoreCacheControl(
+      respond(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } }),
+    )
   }
   if (url.pathname === '/webhook/stripe') {
     if (integrityPaused) return policyPausedResponse()

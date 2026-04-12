@@ -9,6 +9,7 @@ const tempDirs: string[] = []
 const TEMPLATE_URL_MAP_ENV = 'GATEWAY_TEMPLATE_WORKER_URL_MAP'
 const TEMPLATE_TOKEN_MAP_ENV = 'GATEWAY_TEMPLATE_WORKER_TOKEN_MAP'
 const TEMPLATE_SIGNATURE_REF_MAP_ENV = 'GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP'
+const TEMPLATE_VARIANT_MAP_ENV = 'GATEWAY_TEMPLATE_VARIANT_MAP'
 const FORGET_FORWARD_URL_ENV = 'GATEWAY_FORGET_FORWARD_URL'
 const FORGET_FORWARD_TOKEN_ENV = 'GATEWAY_FORGET_FORWARD_TOKEN'
 const FORGET_FORWARD_TIMEOUT_ENV = 'GATEWAY_FORGET_FORWARD_TIMEOUT_MS'
@@ -18,6 +19,7 @@ afterEach(() => {
   delete process.env[TEMPLATE_URL_MAP_ENV]
   delete process.env[TEMPLATE_TOKEN_MAP_ENV]
   delete process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV]
+  delete process.env[TEMPLATE_VARIANT_MAP_ENV]
   delete process.env[FORGET_FORWARD_URL_ENV]
   delete process.env[FORGET_FORWARD_TOKEN_ENV]
   delete process.env[FORGET_FORWARD_TIMEOUT_ENV]
@@ -85,6 +87,7 @@ describe('run-release-drill.js', () => {
         [TEMPLATE_URL_MAP_ENV]: undefined,
         [TEMPLATE_TOKEN_MAP_ENV]: undefined,
         [TEMPLATE_SIGNATURE_REF_MAP_ENV]: undefined,
+        [TEMPLATE_VARIANT_MAP_ENV]: undefined,
         [FORGET_FORWARD_URL_ENV]: undefined,
         [FORGET_FORWARD_TOKEN_ENV]: undefined,
         [FORGET_FORWARD_TIMEOUT_ENV]: undefined,
@@ -120,9 +123,11 @@ describe('run-release-drill.js', () => {
     expect(result?.stdout).toContain('scripts/check-template-worker-map-coherence.js --json')
     expect(result?.stdout).toContain('scripts/check-forget-forward-config.js --json')
     expect(result?.stdout).toContain('scripts/check-template-signature-ref-map.js --json')
+    expect(result?.stdout).toContain('scripts/check-template-variant-map.js --json')
     expect(result?.stdout).toContain('legacy-crypto-boundary-evidence.json')
     expect(result?.stdout).toContain('template-worker-map-coherence.json')
     expect(result?.stdout).toContain('forget-forward-config.json')
+    expect(result?.stdout).toContain('template-variant-map.json')
     expect(result?.stdout).toContain('release-drill-checks.json')
     expect(result?.stdout).toContain('release-evidence-pack.json')
     expect(result?.stdout).toContain('release-readiness.json')
@@ -410,6 +415,44 @@ describe('run-release-drill.js', () => {
         )
       }
 
+      if (scriptName === 'check-template-variant-map.js') {
+        return makeSpawnResult(
+          JSON.stringify(
+            {
+              ok: true,
+              status: 'complete',
+              strict: true,
+              envVar: 'GATEWAY_TEMPLATE_VARIANT_MAP',
+              requiredSites: ['alpha', 'beta'],
+              allowedVariants: ['signal', 'bastion', 'horizon'],
+              providedSites: ['alpha', 'beta'],
+              missingSites: [],
+              counts: {
+                providedCount: 2,
+                requiredCount: 2,
+                missingCount: 0,
+              },
+              issues: [],
+              warnings: [],
+              map: {
+                alpha: {
+                  variant: 'signal',
+                  templateTxId: 'tx-alpha',
+                  manifestTxId: 'manifest-alpha',
+                },
+                beta: {
+                  variant: 'bastion',
+                  templateTxId: 'tx-beta',
+                  manifestTxId: 'manifest-beta',
+                },
+              },
+            },
+            null,
+            2,
+          ),
+        )
+      }
+
       if (scriptName === 'build-release-evidence-pack.js') {
         const packMd = join(outDir, 'release-evidence-pack.md')
         const packJson = join(outDir, 'release-evidence-pack.json')
@@ -532,6 +575,18 @@ describe('run-release-drill.js', () => {
           alpha: 'sig-alpha',
           beta: 'sig-beta',
         }),
+        [TEMPLATE_VARIANT_MAP_ENV]: JSON.stringify({
+          alpha: {
+            variant: 'signal',
+            templateTxId: 'tx-alpha',
+            manifestTxId: 'manifest-alpha',
+          },
+          beta: {
+            variant: 'bastion',
+            templateTxId: 'tx-beta',
+            manifestTxId: 'manifest-beta',
+          },
+        }),
         [FORGET_FORWARD_URL_ENV]: 'https://forward.example/forget',
         [FORGET_FORWARD_TOKEN_ENV]: 'relay-token',
         [FORGET_FORWARD_TIMEOUT_ENV]: '5000',
@@ -554,7 +609,7 @@ describe('run-release-drill.js', () => {
     )
 
     expect(result?.exitCode).toBe(0)
-    expect(spawnSyncFn).toHaveBeenCalledTimes(19)
+    expect(spawnSyncFn).toHaveBeenCalledTimes(20)
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'validate-consistency-preflight.js',
       'compare-integrity-matrix.js',
@@ -568,6 +623,7 @@ describe('run-release-drill.js', () => {
       'check-template-worker-map-coherence.js',
       'check-forget-forward-config.js',
       'check-template-signature-ref-map.js',
+      'check-template-variant-map.js',
       'build-release-evidence-pack.js',
       'build-release-signoff-checklist.js',
       'check-release-readiness.js',
@@ -576,7 +632,7 @@ describe('run-release-drill.js', () => {
       'check-release-drill-artifacts.js',
       'build-release-evidence-ledger.js',
     ])
-    expect(result?.stdout).toContain('[1/19] validate consistency preflight')
+    expect(result?.stdout).toContain('[1/20] validate consistency preflight')
     expect(result?.stdout).toContain('# Release Evidence Pack')
     expect(result?.stdout).toContain('# Release Sign-off Checklist')
     expect(result?.stdout).toContain('# Release Evidence Ledger')
@@ -589,6 +645,7 @@ describe('run-release-drill.js', () => {
     const templateWorkerMapCoherence = JSON.parse(readFileSync(join(outDir, 'template-worker-map-coherence.json'), 'utf8'))
     const forgetForwardConfig = JSON.parse(readFileSync(join(outDir, 'forget-forward-config.json'), 'utf8'))
     const signatureRefMap = JSON.parse(readFileSync(join(outDir, 'template-signature-ref-map.json'), 'utf8'))
+    const variantMap = JSON.parse(readFileSync(join(outDir, 'template-variant-map.json'), 'utf8'))
     const drillChecks = JSON.parse(readFileSync(join(outDir, 'release-drill-checks.json'), 'utf8'))
     const pack = JSON.parse(readFileSync(join(outDir, 'release-evidence-pack.json'), 'utf8'))
     const latest = JSON.parse(readFileSync(join(outDir, 'latest-evidence-bundle.json'), 'utf8'))
@@ -607,12 +664,16 @@ describe('run-release-drill.js', () => {
     expect(forgetForwardConfig.present.url).toBe(true)
     expect(signatureRefMap.ok).toBe(true)
     expect(signatureRefMap.requiredSites).toEqual(['alpha', 'beta'])
+    expect(variantMap.ok).toBe(true)
+    expect(variantMap.requiredSites).toEqual(['alpha', 'beta'])
     expect(drillChecks.legacyCoreExtractionEvidence.status).toBe('complete')
     expect(drillChecks.legacyCryptoBoundaryEvidence.status).toBe('pass')
     expect(drillChecks.templateWorkerMapCoherence.status).toBe('complete')
     expect(drillChecks.forgetForwardConfig.status).toBe('complete')
     expect(drillChecks.templateSignatureRefMap.configured).toBe(true)
     expect(drillChecks.templateSignatureRefMap.requiredSites).toEqual(['alpha', 'beta'])
+    expect(drillChecks.templateVariantMap.configured).toBe(true)
+    expect(drillChecks.templateVariantMap.requiredSites).toEqual(['alpha', 'beta'])
     expect(matrix.counts.total).toBe(1)
     expect(pack.status).toBe('ready')
     expect(latest.bundleName).toBe('2026-04-11T12-00-00Z-abc')

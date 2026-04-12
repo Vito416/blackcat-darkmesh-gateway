@@ -46,6 +46,7 @@ This command generates:
 - `template-worker-map-coherence.json`
 - `forget-forward-config.json`
 - `template-signature-ref-map.json`
+- `template-variant-map.json`
 - `release-evidence-pack.md`
 - `release-evidence-pack.json`
 - `release-signoff-checklist.md`
@@ -82,6 +83,11 @@ Expected result:
 - Deployment profile: `wedos_small`, `wedos_medium`, or `diskless` (`wedos_medium` is the default)
 - Integrity state token: `GATEWAY_INTEGRITY_STATE_TOKEN`
 - Optional attestation HMAC env: `GATEWAY_ATTESTATION_HMAC_KEY`
+- Template worker maps and variant map (for strict drill):
+  - `GATEWAY_TEMPLATE_WORKER_URL_MAP`
+  - `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP`
+  - `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP`
+  - `GATEWAY_TEMPLATE_VARIANT_MAP`
 - AO dependency gate file: `ops/decommission/ao-dependency-gate.json`
 - Optional public-state mode: use `--allow-anon` only when the `/integrity/state` endpoint is intentionally public
 
@@ -434,7 +440,7 @@ Notes:
 | Confirm consistency is acceptable | `ops:validate-consistency-preflight`, `ops:compare-integrity-matrix`, `ops:export-consistency-report` | `consistency-matrix.json`, `consistency-drift-report.md`, `consistency-drift-summary.json` |
 | Confirm evidence bundle is acceptable | `ops:export-integrity-evidence`, `ops:latest-evidence-bundle`, `ops:check-evidence-bundle` | Timestamped bundle containing `compare.txt`, `attestation.json`, and `manifest.json` |
 | Confirm AO dependency gate is acceptable | `ops:validate-ao-dependency-gate` | `ops/decommission/ao-dependency-gate.json` with all required checks closed + `$DRILL_DIR/ao-dependency-gate.validation.txt` |
-| Confirm legacy/runtime boundary evidence is acceptable | `ops:check-legacy-core-extraction-evidence`, `ops:check-legacy-crypto-boundary-evidence`, `ops:check-template-worker-map-coherence`, `ops:check-forget-forward-config`, `ops:check-template-signature-ref-map` | `$DRILL_DIR/legacy-core-extraction-evidence.json`, `$DRILL_DIR/legacy-crypto-boundary-evidence.json`, `$DRILL_DIR/template-worker-map-coherence.json`, `$DRILL_DIR/forget-forward-config.json`, `$DRILL_DIR/template-signature-ref-map.json` |
+| Confirm legacy/runtime boundary evidence is acceptable | `ops:check-legacy-core-extraction-evidence`, `ops:check-legacy-crypto-boundary-evidence`, `ops:check-template-worker-map-coherence`, `ops:check-forget-forward-config`, `ops:check-template-signature-ref-map`, `ops:check-template-variant-map` | `$DRILL_DIR/legacy-core-extraction-evidence.json`, `$DRILL_DIR/legacy-crypto-boundary-evidence.json`, `$DRILL_DIR/template-worker-map-coherence.json`, `$DRILL_DIR/forget-forward-config.json`, `$DRILL_DIR/template-signature-ref-map.json`, `$DRILL_DIR/template-variant-map.json` |
 | Confirm archive manifest is acceptable | `ops:build-release-drill-manifest`, `ops:validate-release-drill-manifest` | `$DRILL_DIR/release-drill-manifest.json` and `$DRILL_DIR/release-drill-manifest.validation.txt` |
 | Confirm drill artifact completeness is acceptable | `ops:check-release-drill-artifacts` | `$DRILL_DIR/release-drill-check.json`, `$DRILL_DIR/release-drill-checks.json` |
 | Confirm final machine ledger is acceptable | `ops:build-release-evidence-ledger` | `$DRILL_DIR/release-evidence-ledger.md`, `$DRILL_DIR/release-evidence-ledger.json` |

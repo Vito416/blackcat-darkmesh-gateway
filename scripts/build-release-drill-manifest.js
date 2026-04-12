@@ -17,6 +17,7 @@ const REQUIRED_ARTIFACTS = [
   'release-readiness.json',
   'legacy-core-extraction-evidence.json',
   'legacy-crypto-boundary-evidence.json',
+  'template-variant-map.json',
   'release-drill-checks.json',
 ]
 

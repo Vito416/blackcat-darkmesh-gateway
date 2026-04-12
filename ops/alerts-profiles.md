@@ -26,6 +26,16 @@ Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskl
 | `increase(gateway_integrity_mirror_fetch_fail_total[10m])` | `> 0` | `> 0` | `> 0` |
 | `gateway_ratelimit_override_count` missing when expected | `0`* | `0`* | `0`* |
 
+## Profile baseline pack (cadence + thresholds)
+
+Use this pack when you need one profile-specific baseline without cross-reading multiple sections.
+
+| Profile | Fetch/retry cadence | Mirror mismatch/fetch fail | Audit lag | Checkpoint stale |
+| --- | --- | --- | --- | --- |
+| `wedos_small` | `timeout=4000ms`, `attempts=2`, `backoff=75ms`, `jitter=25ms` | `> 0` over `10m`, `for: 2m` | `> 1800`, `for: 12m` | `> 32400`, `for: 15m` |
+| `wedos_medium` | `timeout=5000ms`, `attempts=3`, `backoff=100ms`, `jitter=25ms` | `> 0` over `10m`, `for: 1m` | `> 3600`, `for: 8m` | `> 64800`, `for: 10m` |
+| `diskless` | `timeout=4000ms`, `attempts=2`, `backoff=75ms`, `jitter=25ms` | `> 0` over `10m`, `for: 1m` | `> 1200`, `for: 10m` | `> 21600`, `for: 12m` |
+
 ## Tuning loop by profile
 
 Use this loop when you are deciding whether to change fetch cadence, alert windows, or both. Start from the profile defaults in `ops/resource-budgets.md`; only override them when the same failure mode survives one full alert window.
@@ -70,7 +80,7 @@ Use this quick map when a panel is noisy and you need the matching alert name wi
 
 ## Notes
 
-- Keep this matrix in sync with `tests/profile-tuning-sync.test.ts`; that guard fails CI when anti-flap windows or checkpoint stale thresholds drift from the profile tuning expectations.
+- Keep the threshold matrix + profile baseline pack in sync with `tests/profile-tuning-sync.test.ts` and `scripts/build-drift-alert-summary.js`; the guard fails CI when fetch cadence, anti-flap windows, or drift thresholds drift from profile expectations.
 - Keep thresholds below the hard caps from `ops/resource-budgets.md` so alerts fire before exhaustion.
 - Cache thresholds are early warnings; keep them roughly 10-15% below the entry caps.
 - If cache rejects are mostly size-based, lower `GATEWAY_CACHE_MAX_ENTRY_BYTES`; if they are mostly capacity-based, lower `GATEWAY_CACHE_MAX_ENTRIES`.

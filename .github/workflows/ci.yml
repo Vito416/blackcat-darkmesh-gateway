@@ -149,9 +149,11 @@ jobs:
       - name: Install
         run: npm ci
       - name: Validate final migration summary template shape
-        run: npm run ops:validate-final-migration-summary -- --file kernel-migration/FINAL_MIGRATION_SUMMARY.md
+        run: npm run ops:validate-final-migration-summary -- --file ops/decommission/FINAL_MIGRATION_SUMMARY.md
       - name: Validate signoff record template shape
-        run: npm run ops:validate-signoff-record -- --file kernel-migration/SIGNOFF_RECORD.md
+        run: npm run ops:validate-signoff-record -- --file ops/decommission/SIGNOFF_RECORD.md
+      - name: Check retired path references
+        run: npm run ops:check-retired-path-references -- --strict --json
 
   legacy-no-import-evidence:
     name: Legacy no-import evidence
@@ -779,7 +781,7 @@ jobs:
             --release "$RELEASE_LABEL" \
             --consistency-dir "$CONSISTENCY_ARTIFACT_DIR" \
             --evidence-dir "$EVIDENCE_ARTIFACT_DIR" \
-            --ao-gate-file "./kernel-migration/ao-dependency-gate.json" \
+            --ao-gate-file "./ops/decommission/ao-dependency-gate.json" \
             --out "$RELEASE_PACK_MD" \
             --json-out "$RELEASE_PACK_JSON" \
             --require-both \
@@ -792,7 +794,7 @@ jobs:
       - name: Validate AO dependency gate
         run: |
           set -euo pipefail
-          node scripts/validate-ao-dependency-gate.js --file "./kernel-migration/ao-dependency-gate.json" | tee "$RELEASE_AO_GATE_VALIDATE"
+          node scripts/validate-ao-dependency-gate.js --file "./ops/decommission/ao-dependency-gate.json" | tee "$RELEASE_AO_GATE_VALIDATE"
       - name: Check release readiness
         run: |
           set -euo pipefail
@@ -942,7 +944,7 @@ jobs:
           set -euo pipefail
           if [ -f "$GITHUB_WORKSPACE/scripts/check-ao-gate-evidence.js" ]; then
             node "$GITHUB_WORKSPACE/scripts/check-ao-gate-evidence.js" \
-              --file "$GITHUB_WORKSPACE/kernel-migration/ao-dependency-gate.json" \
+              --file "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
               --json > "$RELEASE_AO_GATE_EVIDENCE_JSON"
             node -e "const fs=require('node:fs');const p=process.env.RELEASE_AO_GATE_EVIDENCE_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### AO gate evidence quality');console.log('');console.log('- Result: '+String(d.result||'unknown'));console.log('- Issues: '+(Array.isArray(d.issues)?d.issues.length:0));console.log('- Warnings: '+(Array.isArray(d.warnings)?d.warnings.length:0));" >> "$GITHUB_STEP_SUMMARY"
           else
@@ -956,7 +958,7 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" ]; then
             node "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" \
               --dir "$RELEASE_PACK_WORKDIR" \
-              --ao-gate "$GITHUB_WORKSPACE/kernel-migration/ao-dependency-gate.json" \
+              --ao-gate "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
               --json > "$RELEASE_DECOMMISSION_READY_JSON"
             node -e "const fs=require('node:fs');const p=process.env.RELEASE_DECOMMISSION_READY_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission readiness');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Blockers: '+Number(d.blockerCount||0));" >> "$GITHUB_STEP_SUMMARY"
           else
@@ -1014,7 +1016,7 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/scripts/run-decommission-closeout.js" ]; then
             node "$GITHUB_WORKSPACE/scripts/run-decommission-closeout.js" \
               --dir "$RELEASE_PACK_WORKDIR" \
-              --ao-gate "$GITHUB_WORKSPACE/kernel-migration/ao-dependency-gate.json" \
+              --ao-gate "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
               --json > "$RELEASE_CLOSEOUT_JSON"
             node -e "const fs=require('node:fs');const p=process.env.RELEASE_CLOSEOUT_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission closeout');console.log('');console.log('- Status: '+String(d.status||d.result||'unknown'));console.log('- Blockers: '+Number(d.blockerCount ?? (Array.isArray(d.blockers)?d.blockers.length:0)));console.log('- Warnings: '+Number(d.warningCount ?? (Array.isArray(d.warnings)?d.warnings.length:0)));" >> "$GITHUB_STEP_SUMMARY"
           else

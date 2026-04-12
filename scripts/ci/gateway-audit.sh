@@ -47,6 +47,7 @@ run_implementation_checks() {
   run_cmd npm run ops:check-legacy-no-import-evidence -- --strict --json
   run_cmd npm run ops:check-legacy-core-extraction-evidence -- --strict --json
   run_cmd npm run ops:check-legacy-crypto-boundary-evidence -- --strict --json
+  run_cmd npm run ops:check-retired-path-references -- --strict --json
   run_cmd npm run ops:validate-wedos-readiness -- --profile wedos_medium --env-file config/example.env --strict --json
 
   export GATEWAY_TEMPLATE_WORKER_URL_MAP

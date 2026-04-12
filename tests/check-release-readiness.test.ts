@@ -127,6 +127,8 @@ describe('check-release-readiness.js', () => {
       blockerCount: 1,
       warningCount: 0,
       release: '1.4.0',
+      blockers: ['installer runtime boundary status=fail: installer runtime still imports blackcat-installer'],
+      warnings: [],
     })
   })
 
@@ -318,6 +320,8 @@ describe('check-release-readiness.js', () => {
       blockerCount: 0,
       warningCount: 1,
       release: '1.4.0',
+      blockers: [],
+      warnings: ['evidence bundle should be revalidated before approval'],
     })
     expect(res.stdout.trim().startsWith('{')).toBe(true)
     expect(res.stdout.trim().endsWith('}')).toBe(true)

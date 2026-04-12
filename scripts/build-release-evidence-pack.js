@@ -960,7 +960,11 @@ function combineReadiness(consistency, evidence, aoGate, requireBoth, requireAoG
     if (requireAoGate) blockers.push(`ao dependency gate missing: ${aoGate.reason}`)
     else warnings.push(`ao dependency gate missing: ${aoGate.reason}`)
   } else if (aoGate.status !== 'pass') {
-    blockers.push(`ao dependency gate status=${aoGate.status}: ${aoGate.reason}`)
+    if (requireAoGate) {
+      blockers.push(`ao dependency gate status=${aoGate.status}: ${aoGate.reason}`)
+    } else {
+      warnings.push(`ao dependency gate status=${aoGate.status}: ${aoGate.reason}`)
+    }
   }
 
   const status = blockers.length > 0 ? 'not-ready' : warnings.length > 0 ? 'warning' : 'ready'

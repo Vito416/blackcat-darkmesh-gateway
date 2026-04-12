@@ -88,8 +88,18 @@ Use these as deployment guardrails. The numbers below are starting points; tight
   2. env vars (`AO_INTEGRITY_FETCH_*`)
   3. profile defaults from `GATEWAY_RESOURCE_PROFILE`
   4. fallback default profile (`wedos_medium`)
+- Profile defaults by `GATEWAY_RESOURCE_PROFILE`:
+
+| Profile | Timeout | Retry attempts | Retry backoff | Retry jitter |
+| --- | ---: | ---: | ---: | ---: |
+| `wedos_small` | `4000ms` | `2` | `75ms` | `25ms` |
+| `wedos_medium` | `5000ms` | `3` | `100ms` | `25ms` |
+| `diskless` | `4000ms` | `2` | `75ms` | `25ms` |
+
+- `diskless` intentionally keeps the same conservative fetch cadence as `wedos_small` so ephemeral hosts do not accumulate long retry tails.
 - Use `AO_INTEGRITY_FETCH_*` only when you need a profile-specific exception without changing the whole deployment profile.
 - Keep `AO_INTEGRITY_FETCH_RETRY_JITTER_MS` in the same family as timeout/backoff/attempts; if you adjust one knob for stability, check the others before declaring the profile tuned.
+- Keep tuning deterministic: change one fetch knob at a time, then observe one full alert window before the next adjustment.
 
 ## Mailing retry budget
 - Mailing dispatch now uses a deterministic exponential retry helper with a small cap so constrained hosts can requeue safely without building long retry tails.

@@ -28,6 +28,9 @@ describe('security headers helper', () => {
     expect(output.headers.get('x-frame-options')).toBe('SAMEORIGIN')
     expect(output.headers.get('referrer-policy')).toBe('no-referrer')
     expect(output.headers.get('x-xss-protection')).toBe('0')
+    expect(output.headers.get('strict-transport-security')).toBe('max-age=31536000')
+    expect(output.headers.get('cross-origin-opener-policy')).toBe('same-origin')
+    expect(output.headers.get('cross-origin-resource-policy')).toBe('same-origin')
     expect(output.headers.get('content-security-policy')).toBeNull()
   })
 
@@ -46,6 +49,7 @@ describe('security headers helper', () => {
     expect(await output.text()).toBe('disabled')
     expect(output.headers.get('x-content-type-options')).toBeNull()
     expect(output.headers.get('x-frame-options')).toBe('SAMEORIGIN')
+    expect(output.headers.get('strict-transport-security')).toBeNull()
   })
 
   it('applies csp from env even when the response already has one', () => {

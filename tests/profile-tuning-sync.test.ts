@@ -66,6 +66,29 @@ function readThresholdCell(cell: string) {
   return Number.parseInt(match[1], 10)
 }
 
+function readProfileBaselineRow(markdown: string, profile: 'wedos_small' | 'wedos_medium' | 'diskless') {
+  const line = markdown
+    .split('\n')
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`| \`${profile}\` |`))
+  if (!line) throw new Error(`unable to find profile baseline row: ${profile}`)
+
+  const cells = line
+    .split('|')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => value.replace(/^`|`$/g, '').trim())
+
+  if (cells.length < 5) throw new Error(`unexpected baseline table shape for profile: ${profile}`)
+
+  return {
+    fetchCadence: cells[1],
+    mirror: cells[2],
+    auditLag: cells[3],
+    checkpoint: cells[4],
+  }
+}
+
 function readProfileDefaultsFromBudgets(markdown: string) {
   const small = getSection(markdown, '### Profile A: WEDOS small (conservative)', '### Profile B: WEDOS medium (balanced default)')
   const medium = getSection(markdown, '### Profile B: WEDOS medium (balanced default)', '### Profile C: Diskless/ephemeral host')
@@ -118,11 +141,17 @@ describe('profile tuning synchronization', () => {
     }
   })
 
-  it('keeps drift-summary anti-flap windows in sync with ops/alerts-profiles.md', () => {
-    const markdown = readFileSync(ALERT_PROFILES_PATH, 'utf8')
-    const mirrorRow = readTableRow(markdown, 'Mirror mismatch / mirror fetch fail')
-    const auditRow = readTableRow(markdown, 'Audit lag')
-    const checkpointRow = readTableRow(markdown, 'Checkpoint stale')
+  it('keeps drift-summary profile defaults in sync with ops docs', () => {
+    const alertsMarkdown = readFileSync(ALERT_PROFILES_PATH, 'utf8')
+    const budgetsMarkdown = readFileSync(RESOURCE_BUDGETS_PATH, 'utf8')
+    const budgetDefaults = readProfileDefaultsFromBudgets(budgetsMarkdown)
+    const mirrorWindowRow = readTableRow(alertsMarkdown, 'Mirror mismatch / mirror fetch fail')
+    const auditWindowRow = readTableRow(alertsMarkdown, 'Audit lag')
+    const checkpointWindowRow = readTableRow(alertsMarkdown, 'Checkpoint stale')
+    const mirrorMismatchThresholdRow = readTableRow(alertsMarkdown, 'increase(gateway_integrity_mirror_mismatch_total[10m])')
+    const mirrorFetchFailThresholdRow = readTableRow(alertsMarkdown, 'increase(gateway_integrity_mirror_fetch_fail_total[10m])')
+    const auditLagThresholdRow = readTableRow(alertsMarkdown, 'gateway_integrity_audit_lag_seconds high')
+    const checkpointThresholdRow = readTableRow(alertsMarkdown, 'gateway_integrity_checkpoint_age_seconds stale')
     const matrix = {
       mode: 'pairwise',
       counts: { total: 1, pass: 1, mismatch: 0, failure: 0 },
@@ -131,11 +160,36 @@ describe('profile tuning synchronization', () => {
 
     for (const profile of ['wedos_small', 'wedos_medium', 'diskless'] as const) {
       const summary = buildSummary(matrix, profile)
-      expect(summary.recommendedWindows).toEqual({
-        mirror: mirrorRow[profile],
-        auditLag: auditRow[profile],
-        checkpoint: checkpointRow[profile],
+      const baselineRow = readProfileBaselineRow(alertsMarkdown, profile)
+
+      expect(summary.recommendedCadence).toEqual({
+        timeoutMs: budgetDefaults[profile].timeoutMs,
+        retryAttempts: budgetDefaults[profile].retryAttempts,
+        retryBackoffMs: budgetDefaults[profile].retryBackoffMs,
+        retryJitterMs: budgetDefaults[profile].retryJitterMs,
       })
+      expect(summary.recommendedThresholds).toEqual({
+        mirrorMismatchIncrease10m: readThresholdCell(mirrorMismatchThresholdRow[profile]),
+        mirrorFetchFailIncrease10m: readThresholdCell(mirrorFetchFailThresholdRow[profile]),
+        auditLagSeconds: readThresholdCell(auditLagThresholdRow[profile]),
+        checkpointStaleSeconds: readThresholdCell(checkpointThresholdRow[profile]),
+      })
+      expect(summary.recommendedWindows).toEqual({
+        mirror: mirrorWindowRow[profile],
+        auditLag: auditWindowRow[profile],
+        checkpoint: checkpointWindowRow[profile],
+      })
+
+      expect(baselineRow.fetchCadence).toContain(`timeout=${summary.recommendedCadence.timeoutMs}ms`)
+      expect(baselineRow.fetchCadence).toContain(`attempts=${summary.recommendedCadence.retryAttempts}`)
+      expect(baselineRow.fetchCadence).toContain(`backoff=${summary.recommendedCadence.retryBackoffMs}ms`)
+      expect(baselineRow.fetchCadence).toContain(`jitter=${summary.recommendedCadence.retryJitterMs}ms`)
+      expect(baselineRow.mirror).toContain(`> ${summary.recommendedThresholds.mirrorMismatchIncrease10m}`)
+      expect(baselineRow.mirror).toContain(summary.recommendedWindows.mirror)
+      expect(baselineRow.auditLag).toContain(`> ${summary.recommendedThresholds.auditLagSeconds}`)
+      expect(baselineRow.auditLag).toContain(summary.recommendedWindows.auditLag)
+      expect(baselineRow.checkpoint).toContain(`> ${summary.recommendedThresholds.checkpointStaleSeconds}`)
+      expect(baselineRow.checkpoint).toContain(summary.recommendedWindows.checkpoint)
     }
   })
 

@@ -83,6 +83,18 @@ describe('build-drift-alert-summary.js', () => {
     expect(summary.recommendedAlerts).toContain('GatewayIntegrityMirrorFetchFail')
     expect(summary.recommendedAlerts).toContain('GatewayIntegrityAuditLagHigh')
     expect(summary.recommendedAlerts).toContain('GatewayIntegrityCheckpointStale')
+    expect(summary.recommendedCadence).toEqual({
+      timeoutMs: 4000,
+      retryAttempts: 2,
+      retryBackoffMs: 75,
+      retryJitterMs: 25,
+    })
+    expect(summary.recommendedThresholds).toEqual({
+      mirrorMismatchIncrease10m: 0,
+      mirrorFetchFailIncrease10m: 0,
+      auditLagSeconds: 1800,
+      checkpointStaleSeconds: 32400,
+    })
   })
 
   it('renders markdown with status, counts, and issue lines', () => {
@@ -101,6 +113,10 @@ describe('build-drift-alert-summary.js', () => {
     expect(markdown).toContain('Status: **WARNING**')
     expect(markdown).toContain('| Mismatch | 1 |')
     expect(markdown).toContain('GatewayIntegrityMirrorMismatch')
+    expect(markdown).toContain('## Profile tuning defaults')
+    expect(markdown).toContain('- timeout: 5000ms')
+    expect(markdown).toContain('- Audit lag (seconds): > 3600')
+    expect(markdown).toContain('- Mirror mismatch / fetch fail: for: 1m')
     expect(markdown).toContain('pair-1')
   })
 
@@ -130,6 +146,8 @@ describe('build-drift-alert-summary.js', () => {
 
     expect(md).toContain('Multi-region drift report')
     expect(json.status).toBe('ok')
+    expect(json.recommendedCadence.retryAttempts).toBe(3)
+    expect(json.recommendedThresholds.checkpointStaleSeconds).toBe(64800)
     expect(writeSpy).toHaveBeenCalled()
   })
 })

@@ -12,6 +12,124 @@ const DEFAULT_PROFILE = 'wedos_medium'
 const DEFAULT_MODE = 'pairwise'
 const DEFAULT_OUT_ROOT = './tmp/release-drills'
 
+const RELEASE_DRILL_ARTIFACT_FILES = Object.freeze({
+  matrixJson: 'consistency-matrix.json',
+  reportMd: 'consistency-drift-report.md',
+  summaryJson: 'consistency-drift-summary.json',
+  latestBundleJson: 'latest-evidence-bundle.json',
+  aoGateValidationTxt: 'ao-dependency-gate.validation.txt',
+  legacyCoreEvidenceJson: 'legacy-core-extraction-evidence.json',
+  legacyCryptoEvidenceJson: 'legacy-crypto-boundary-evidence.json',
+  templateWorkerMapCoherenceJson: 'template-worker-map-coherence.json',
+  forgetForwardConfigJson: 'forget-forward-config.json',
+  templateSignatureRefMapJson: 'template-signature-ref-map.json',
+  templateVariantMapJson: 'template-variant-map.json',
+  drillChecksJson: 'release-drill-checks.json',
+  packMd: 'release-evidence-pack.md',
+  packJson: 'release-evidence-pack.json',
+  checklistMd: 'release-signoff-checklist.md',
+  readinessJson: 'release-readiness.json',
+  drillManifestJson: 'release-drill-manifest.json',
+  drillManifestValidation: 'release-drill-manifest.validation.txt',
+  drillCheckJson: 'release-drill-check.json',
+  ledgerMd: 'release-evidence-ledger.md',
+  ledgerJson: 'release-evidence-ledger.json',
+})
+
+const RELEASE_DRILL_ARTIFACT_ALIASES = Object.freeze({
+  [RELEASE_DRILL_ARTIFACT_FILES.templateWorkerMapCoherenceJson]: Object.freeze([
+    'check-template-worker-map-coherence.json',
+    'template-worker-routing-check.json',
+  ]),
+  [RELEASE_DRILL_ARTIFACT_FILES.forgetForwardConfigJson]: Object.freeze([
+    'check-forget-forward-config.json',
+    'forget-forward-check.json',
+  ]),
+  [RELEASE_DRILL_ARTIFACT_FILES.templateSignatureRefMapJson]: Object.freeze([
+    'check-template-signature-ref-map.json',
+    'signature-ref-map-check.json',
+  ]),
+  [RELEASE_DRILL_ARTIFACT_FILES.templateVariantMapJson]: Object.freeze([
+    'check-template-variant-map.json',
+    'template-variant-map-check.json',
+  ]),
+})
+
+function createArtifactRequirement(key, file, aliases = []) {
+  return Object.freeze({ key, file, aliases: Object.freeze([...aliases]) })
+}
+
+const RELEASE_DRILL_STRICT_ARTIFACT_REQUIREMENTS = Object.freeze([
+  createArtifactRequirement('consistency-matrix', RELEASE_DRILL_ARTIFACT_FILES.matrixJson),
+  createArtifactRequirement('consistency-drift-report', RELEASE_DRILL_ARTIFACT_FILES.reportMd),
+  createArtifactRequirement('consistency-drift-summary', RELEASE_DRILL_ARTIFACT_FILES.summaryJson),
+  createArtifactRequirement('latest-evidence-bundle', RELEASE_DRILL_ARTIFACT_FILES.latestBundleJson),
+  createArtifactRequirement('ao-dependency-gate-validation', RELEASE_DRILL_ARTIFACT_FILES.aoGateValidationTxt),
+  createArtifactRequirement('release-evidence-pack-markdown', RELEASE_DRILL_ARTIFACT_FILES.packMd),
+  createArtifactRequirement('release-evidence-pack-json', RELEASE_DRILL_ARTIFACT_FILES.packJson),
+  createArtifactRequirement('release-signoff-checklist', RELEASE_DRILL_ARTIFACT_FILES.checklistMd),
+  createArtifactRequirement('release-readiness', RELEASE_DRILL_ARTIFACT_FILES.readinessJson),
+  createArtifactRequirement('legacy-core-extraction-evidence', RELEASE_DRILL_ARTIFACT_FILES.legacyCoreEvidenceJson),
+  createArtifactRequirement('legacy-crypto-boundary-evidence', RELEASE_DRILL_ARTIFACT_FILES.legacyCryptoEvidenceJson),
+  createArtifactRequirement(
+    'template-worker-map-coherence',
+    RELEASE_DRILL_ARTIFACT_FILES.templateWorkerMapCoherenceJson,
+    RELEASE_DRILL_ARTIFACT_ALIASES[RELEASE_DRILL_ARTIFACT_FILES.templateWorkerMapCoherenceJson],
+  ),
+  createArtifactRequirement(
+    'forget-forward-config',
+    RELEASE_DRILL_ARTIFACT_FILES.forgetForwardConfigJson,
+    RELEASE_DRILL_ARTIFACT_ALIASES[RELEASE_DRILL_ARTIFACT_FILES.forgetForwardConfigJson],
+  ),
+  createArtifactRequirement(
+    'template-signature-ref-map',
+    RELEASE_DRILL_ARTIFACT_FILES.templateSignatureRefMapJson,
+    RELEASE_DRILL_ARTIFACT_ALIASES[RELEASE_DRILL_ARTIFACT_FILES.templateSignatureRefMapJson],
+  ),
+  createArtifactRequirement(
+    'template-variant-map',
+    RELEASE_DRILL_ARTIFACT_FILES.templateVariantMapJson,
+    RELEASE_DRILL_ARTIFACT_ALIASES[RELEASE_DRILL_ARTIFACT_FILES.templateVariantMapJson],
+  ),
+  createArtifactRequirement('release-drill-checks', RELEASE_DRILL_ARTIFACT_FILES.drillChecksJson),
+  createArtifactRequirement('release-drill-manifest', RELEASE_DRILL_ARTIFACT_FILES.drillManifestJson),
+  createArtifactRequirement(
+    'release-drill-manifest-validation',
+    RELEASE_DRILL_ARTIFACT_FILES.drillManifestValidation,
+  ),
+])
+
+const DECOMMISSION_READINESS_ARTIFACT_REQUIREMENTS = Object.freeze([
+  createArtifactRequirement('release-evidence-pack', RELEASE_DRILL_ARTIFACT_FILES.packJson),
+  createArtifactRequirement('release-readiness', RELEASE_DRILL_ARTIFACT_FILES.readinessJson),
+  createArtifactRequirement('legacy-core-extraction-evidence', RELEASE_DRILL_ARTIFACT_FILES.legacyCoreEvidenceJson),
+  createArtifactRequirement('legacy-crypto-boundary-evidence', RELEASE_DRILL_ARTIFACT_FILES.legacyCryptoEvidenceJson),
+  createArtifactRequirement(
+    'template-worker-map-coherence',
+    RELEASE_DRILL_ARTIFACT_FILES.templateWorkerMapCoherenceJson,
+    RELEASE_DRILL_ARTIFACT_ALIASES[RELEASE_DRILL_ARTIFACT_FILES.templateWorkerMapCoherenceJson],
+  ),
+  createArtifactRequirement(
+    'forget-forward-config',
+    RELEASE_DRILL_ARTIFACT_FILES.forgetForwardConfigJson,
+    RELEASE_DRILL_ARTIFACT_ALIASES[RELEASE_DRILL_ARTIFACT_FILES.forgetForwardConfigJson],
+  ),
+  createArtifactRequirement(
+    'template-signature-ref-map',
+    RELEASE_DRILL_ARTIFACT_FILES.templateSignatureRefMapJson,
+    RELEASE_DRILL_ARTIFACT_ALIASES[RELEASE_DRILL_ARTIFACT_FILES.templateSignatureRefMapJson],
+  ),
+  createArtifactRequirement(
+    'template-variant-map',
+    RELEASE_DRILL_ARTIFACT_FILES.templateVariantMapJson,
+    RELEASE_DRILL_ARTIFACT_ALIASES[RELEASE_DRILL_ARTIFACT_FILES.templateVariantMapJson],
+  ),
+  createArtifactRequirement('release-drill-checks', RELEASE_DRILL_ARTIFACT_FILES.drillChecksJson),
+  createArtifactRequirement('release-drill-manifest', RELEASE_DRILL_ARTIFACT_FILES.drillManifestJson),
+  createArtifactRequirement('release-drill-check', RELEASE_DRILL_ARTIFACT_FILES.drillCheckJson),
+  createArtifactRequirement('release-evidence-ledger', RELEASE_DRILL_ARTIFACT_FILES.ledgerJson),
+])
+
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
 const DEFAULT_AO_GATE_FILE = resolve(REPO_ROOT, 'ops/decommission/ao-dependency-gate.json')
@@ -29,6 +147,7 @@ const STEP_SCRIPTS = {
   checkTemplateWorkerMapCoherence: resolve(SCRIPT_DIR, 'check-template-worker-map-coherence.js'),
   checkForgetForwardConfig: resolve(SCRIPT_DIR, 'check-forget-forward-config.js'),
   checkTemplateSignatureRefMap: resolve(SCRIPT_DIR, 'check-template-signature-ref-map.js'),
+  checkTemplateVariantMap: resolve(SCRIPT_DIR, 'check-template-variant-map.js'),
   buildPack: resolve(SCRIPT_DIR, 'build-release-evidence-pack.js'),
   buildChecklist: resolve(SCRIPT_DIR, 'build-release-signoff-checklist.js'),
   checkReadiness: resolve(SCRIPT_DIR, 'check-release-readiness.js'),
@@ -87,13 +206,14 @@ function usageText() {
     '  10) check template worker map coherence',
     '  11) check forget-forward config',
     '  12) check template signature-ref map',
-    '  13) build release evidence pack',
-    '  14) build release sign-off checklist',
-    '  15) check release readiness',
-    '  16) build release drill manifest',
-    '  17) validate release drill manifest',
-    '  18) check release drill artifacts',
-    '  19) build release evidence ledger',
+    '  13) check template variant map',
+    '  14) build release evidence pack',
+    '  15) build release sign-off checklist',
+    '  16) check release readiness',
+    '  17) build release drill manifest',
+    '  18) validate release drill manifest',
+    '  19) check release drill artifacts',
+    '  20) build release evidence ledger',
     '',
     'Exit codes:',
     '  0   success',
@@ -299,6 +419,42 @@ function buildTemplateSignatureRefMapCheckConfig(rawMap) {
   }
 }
 
+function buildTemplateVariantMapCheckConfig(rawMap) {
+  if (!isNonEmptyString(rawMap)) {
+    return {
+      configured: false,
+      env: { GATEWAY_TEMPLATE_VARIANT_MAP: '{}' },
+      args: ['--json'],
+      displayArgs: ['--json'],
+      requiredSites: [],
+    }
+  }
+
+  const parsed = parseJsonObject(rawMap)
+  const requiredSites = parsed ? Object.keys(parsed).map((site) => site.trim()).filter(Boolean) : []
+  const configured = requiredSites.length > 0
+  const args = ['--json', '--strict']
+  if (!configured) {
+    return {
+      configured: false,
+      env: { GATEWAY_TEMPLATE_VARIANT_MAP: rawMap },
+      args: ['--json'],
+      displayArgs: ['--json'],
+      requiredSites: [],
+    }
+  }
+
+  args.push('--require-sites', requiredSites.join(','))
+
+  return {
+    configured: true,
+    env: { GATEWAY_TEMPLATE_VARIANT_MAP: rawMap },
+    args,
+    displayArgs: [...args],
+    requiredSites,
+  }
+}
+
 function buildTemplateWorkerMapCoherenceCheckConfig(urlMapRaw, tokenMapRaw, signatureRefMapRaw) {
   const parsedUrlMap = parseJsonObject(urlMapRaw)
   const parsedTokenMap = parseJsonObject(tokenMapRaw)
@@ -354,6 +510,12 @@ function getStepArgs(step, context) {
   return typeof step.args === 'function' ? step.args(context) : step.args
 }
 
+function buildArtifactPaths(outDir) {
+  return Object.fromEntries(
+    Object.entries(RELEASE_DRILL_ARTIFACT_FILES).map(([key, fileName]) => [key, join(outDir, fileName)]),
+  )
+}
+
 function buildDrillPlan({
   urlsCsv,
   outDir,
@@ -366,27 +528,8 @@ function buildDrillPlan({
 } = {}) {
   const resolvedOutDir = resolve(outDir)
   const urls = splitUrls(urlsCsv || '')
+  const artifactPaths = buildArtifactPaths(resolvedOutDir)
   const evidenceRoot = join(resolvedOutDir, 'evidence')
-  const packMd = join(resolvedOutDir, 'release-evidence-pack.md')
-  const packJson = join(resolvedOutDir, 'release-evidence-pack.json')
-  const checklistMd = join(resolvedOutDir, 'release-signoff-checklist.md')
-  const matrixJson = join(resolvedOutDir, 'consistency-matrix.json')
-  const reportMd = join(resolvedOutDir, 'consistency-drift-report.md')
-  const summaryJson = join(resolvedOutDir, 'consistency-drift-summary.json')
-  const latestBundleJson = join(resolvedOutDir, 'latest-evidence-bundle.json')
-  const aoGateValidationTxt = join(resolvedOutDir, 'ao-dependency-gate.validation.txt')
-  const legacyCoreEvidenceJson = join(resolvedOutDir, 'legacy-core-extraction-evidence.json')
-  const legacyCryptoEvidenceJson = join(resolvedOutDir, 'legacy-crypto-boundary-evidence.json')
-  const templateWorkerMapCoherenceJson = join(resolvedOutDir, 'template-worker-map-coherence.json')
-  const forgetForwardConfigJson = join(resolvedOutDir, 'forget-forward-config.json')
-  const templateSignatureRefMapJson = join(resolvedOutDir, 'template-signature-ref-map.json')
-  const drillChecksJson = join(resolvedOutDir, 'release-drill-checks.json')
-  const readinessJson = join(resolvedOutDir, 'release-readiness.json')
-  const drillManifestJson = join(resolvedOutDir, 'release-drill-manifest.json')
-  const drillManifestValidation = join(resolvedOutDir, 'release-drill-manifest.validation.txt')
-  const drillCheckJson = join(resolvedOutDir, 'release-drill-check.json')
-  const ledgerMd = join(resolvedOutDir, 'release-evidence-ledger.md')
-  const ledgerJson = join(resolvedOutDir, 'release-evidence-ledger.json')
   const templateWorkerMapCoherenceCheck = buildTemplateWorkerMapCoherenceCheckConfig(
     process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP || '',
     process.env.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP || '',
@@ -395,6 +538,9 @@ function buildDrillPlan({
   const forgetForwardConfigCheck = buildForgetForwardCheckConfig()
   const templateSignatureRefMapCheck = buildTemplateSignatureRefMapCheckConfig(
     process.env.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || '',
+  )
+  const templateVariantMapCheck = buildTemplateVariantMapCheckConfig(
+    process.env.GATEWAY_TEMPLATE_VARIANT_MAP || '',
   )
 
   const preflightArgs = ['--urls', urlsCsv, '--mode', mode, '--profile', profile]
@@ -428,7 +574,7 @@ function buildDrillPlan({
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.compare),
       args: compareArgs,
       displayArgs: redactTokenArgs(compareArgs),
-      outputFile: matrixJson,
+      outputFile: artifactPaths.matrixJson,
     },
     {
       id: 'export-report',
@@ -437,9 +583,9 @@ function buildDrillPlan({
       command: 'node',
       scriptPath: STEP_SCRIPTS.exportReport,
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.exportReport),
-      args: ['--matrix', matrixJson, '--out-dir', resolvedOutDir, '--profile', profile],
-      displayArgs: ['--matrix', matrixJson, '--out-dir', resolvedOutDir, '--profile', profile],
-      outputFiles: [reportMd, summaryJson],
+      args: ['--matrix', artifactPaths.matrixJson, '--out-dir', resolvedOutDir, '--profile', profile],
+      displayArgs: ['--matrix', artifactPaths.matrixJson, '--out-dir', resolvedOutDir, '--profile', profile],
+      outputFiles: [artifactPaths.reportMd, artifactPaths.summaryJson],
     },
     {
       id: 'export-evidence',
@@ -460,7 +606,7 @@ function buildDrillPlan({
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.latestBundle),
       args: ['--root', evidenceRoot, '--json', '--require-files'],
       displayArgs: ['--root', evidenceRoot, '--json', '--require-files'],
-      outputFile: latestBundleJson,
+      outputFile: artifactPaths.latestBundleJson,
     },
     {
       id: 'check-evidence',
@@ -481,7 +627,7 @@ function buildDrillPlan({
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.validateAoGate),
       args: ['--file', DEFAULT_AO_GATE_FILE],
       displayArgs: ['--file', DEFAULT_AO_GATE_FILE],
-      outputFile: aoGateValidationTxt,
+      outputFile: artifactPaths.aoGateValidationTxt,
     },
     {
       id: 'check-legacy-core-evidence',
@@ -492,7 +638,7 @@ function buildDrillPlan({
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkLegacyCoreEvidence),
       args: ['--strict', '--json'],
       displayArgs: ['--strict', '--json'],
-      outputFile: legacyCoreEvidenceJson,
+      outputFile: artifactPaths.legacyCoreEvidenceJson,
     },
     {
       id: 'check-legacy-crypto-evidence',
@@ -503,7 +649,7 @@ function buildDrillPlan({
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkLegacyCryptoEvidence),
       args: ['--strict', '--json'],
       displayArgs: ['--strict', '--json'],
-      outputFile: legacyCryptoEvidenceJson,
+      outputFile: artifactPaths.legacyCryptoEvidenceJson,
     },
     {
       id: 'check-template-worker-map-coherence',
@@ -515,7 +661,7 @@ function buildDrillPlan({
       args: templateWorkerMapCoherenceCheck.args,
       displayArgs: templateWorkerMapCoherenceCheck.displayArgs,
       env: templateWorkerMapCoherenceCheck.env,
-      outputFile: templateWorkerMapCoherenceJson,
+      outputFile: artifactPaths.templateWorkerMapCoherenceJson,
     },
     {
       id: 'check-forget-forward-config',
@@ -526,7 +672,7 @@ function buildDrillPlan({
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkForgetForwardConfig),
       args: forgetForwardConfigCheck.args,
       displayArgs: forgetForwardConfigCheck.displayArgs,
-      outputFile: forgetForwardConfigJson,
+      outputFile: artifactPaths.forgetForwardConfigJson,
     },
     {
       id: 'check-template-signature-ref-map',
@@ -538,11 +684,23 @@ function buildDrillPlan({
       args: templateSignatureRefMapCheck.args,
       displayArgs: templateSignatureRefMapCheck.displayArgs,
       env: templateSignatureRefMapCheck.env,
-      outputFile: templateSignatureRefMapJson,
+      outputFile: artifactPaths.templateSignatureRefMapJson,
+    },
+    {
+      id: 'check-template-variant-map',
+      index: 13,
+      label: 'check template variant map',
+      command: 'node',
+      scriptPath: STEP_SCRIPTS.checkTemplateVariantMap,
+      displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkTemplateVariantMap),
+      args: templateVariantMapCheck.args,
+      displayArgs: templateVariantMapCheck.displayArgs,
+      env: templateVariantMapCheck.env,
+      outputFile: artifactPaths.templateVariantMapJson,
     },
     {
       id: 'build-pack',
-      index: 13,
+      index: 14,
       label: 'build release evidence pack',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildPack,
@@ -557,9 +715,9 @@ function buildDrillPlan({
         '--ao-gate-file',
         DEFAULT_AO_GATE_FILE,
         '--out',
-        packMd,
+        artifactPaths.packMd,
         '--json-out',
-        packJson,
+        artifactPaths.packJson,
         '--require-both',
         '--require-ao-gate',
       ],
@@ -573,83 +731,125 @@ function buildDrillPlan({
         '--ao-gate-file',
         DEFAULT_AO_GATE_FILE,
         '--out',
-        packMd,
+        artifactPaths.packMd,
         '--json-out',
-        packJson,
+        artifactPaths.packJson,
         '--require-both',
         '--require-ao-gate',
       ],
-      outputFiles: [packMd, packJson],
+      outputFiles: [artifactPaths.packMd, artifactPaths.packJson],
     },
     {
       id: 'build-checklist',
-      index: 14,
+      index: 15,
       label: 'build release sign-off checklist',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildChecklist,
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.buildChecklist),
-      args: ['--pack', packJson, '--out', checklistMd],
-      displayArgs: ['--pack', packJson, '--out', checklistMd],
-      outputFile: checklistMd,
+      args: ['--pack', artifactPaths.packJson, '--out', artifactPaths.checklistMd],
+      displayArgs: ['--pack', artifactPaths.packJson, '--out', artifactPaths.checklistMd],
+      outputFile: artifactPaths.checklistMd,
     },
     {
       id: 'readiness',
-      index: 15,
+      index: 16,
       label: 'check release readiness',
       command: 'node',
       scriptPath: STEP_SCRIPTS.checkReadiness,
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkReadiness),
-      args: strict ? ['--pack', packJson, '--json', '--strict'] : ['--pack', packJson, '--json'],
-      displayArgs: strict ? ['--pack', packJson, '--json', '--strict'] : ['--pack', packJson, '--json'],
-      outputFile: readinessJson,
+      args: strict
+        ? ['--pack', artifactPaths.packJson, '--json', '--strict']
+        : ['--pack', artifactPaths.packJson, '--json'],
+      displayArgs: strict
+        ? ['--pack', artifactPaths.packJson, '--json', '--strict']
+        : ['--pack', artifactPaths.packJson, '--json'],
+      outputFile: artifactPaths.readinessJson,
     },
     {
       id: 'build-drill-manifest',
-      index: 16,
+      index: 17,
       label: 'build release drill manifest',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildDrillManifest,
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.buildDrillManifest),
-      args: ['--dir', resolvedOutDir, '--out', drillManifestJson],
-      displayArgs: ['--dir', resolvedOutDir, '--out', drillManifestJson],
-      outputFile: drillManifestJson,
+      args: ['--dir', resolvedOutDir, '--out', artifactPaths.drillManifestJson],
+      displayArgs: ['--dir', resolvedOutDir, '--out', artifactPaths.drillManifestJson],
+      outputFile: artifactPaths.drillManifestJson,
     },
     {
       id: 'validate-drill-manifest',
-      index: 17,
+      index: 18,
       label: 'validate release drill manifest',
       command: 'node',
       scriptPath: STEP_SCRIPTS.validateDrillManifest,
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.validateDrillManifest),
-      args: ['--file', drillManifestJson, '--strict'],
-      displayArgs: ['--file', drillManifestJson, '--strict'],
-      outputFile: drillManifestValidation,
+      args: ['--file', artifactPaths.drillManifestJson, '--strict'],
+      displayArgs: ['--file', artifactPaths.drillManifestJson, '--strict'],
+      outputFile: artifactPaths.drillManifestValidation,
     },
     {
       id: 'check-drill-artifacts',
-      index: 18,
+      index: 19,
       label: 'check release drill artifacts',
       command: 'node',
       scriptPath: STEP_SCRIPTS.checkDrillArtifacts,
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.checkDrillArtifacts),
       args: ['--dir', resolvedOutDir, '--strict', '--json'],
       displayArgs: ['--dir', resolvedOutDir, '--strict', '--json'],
-      outputFile: drillCheckJson,
+      outputFile: artifactPaths.drillCheckJson,
     },
     {
       id: 'build-ledger',
-      index: 19,
+      index: 20,
       label: 'build release evidence ledger',
       command: 'node',
       scriptPath: STEP_SCRIPTS.buildLedger,
       displayScriptPath: relative(REPO_ROOT, STEP_SCRIPTS.buildLedger),
       args: strict
-        ? ['--dir', resolvedOutDir, '--decision', 'pending', '--out', ledgerMd, '--json-out', ledgerJson, '--strict']
-        : ['--dir', resolvedOutDir, '--decision', 'pending', '--out', ledgerMd, '--json-out', ledgerJson],
+        ? [
+            '--dir',
+            resolvedOutDir,
+            '--decision',
+            'pending',
+            '--out',
+            artifactPaths.ledgerMd,
+            '--json-out',
+            artifactPaths.ledgerJson,
+            '--strict',
+          ]
+        : [
+            '--dir',
+            resolvedOutDir,
+            '--decision',
+            'pending',
+            '--out',
+            artifactPaths.ledgerMd,
+            '--json-out',
+            artifactPaths.ledgerJson,
+          ],
       displayArgs: strict
-        ? ['--dir', resolvedOutDir, '--decision', 'pending', '--out', ledgerMd, '--json-out', ledgerJson, '--strict']
-        : ['--dir', resolvedOutDir, '--decision', 'pending', '--out', ledgerMd, '--json-out', ledgerJson],
-      outputFiles: [ledgerMd, ledgerJson],
+        ? [
+            '--dir',
+            resolvedOutDir,
+            '--decision',
+            'pending',
+            '--out',
+            artifactPaths.ledgerMd,
+            '--json-out',
+            artifactPaths.ledgerJson,
+            '--strict',
+          ]
+        : [
+            '--dir',
+            resolvedOutDir,
+            '--decision',
+            'pending',
+            '--out',
+            artifactPaths.ledgerMd,
+            '--json-out',
+            artifactPaths.ledgerJson,
+          ],
+      outputFiles: [artifactPaths.ledgerMd, artifactPaths.ledgerJson],
     },
   ]
 
@@ -663,32 +863,14 @@ function buildDrillPlan({
     allowAnon,
     strict,
     artifacts: {
-      matrixJson,
-      reportMd,
-      summaryJson,
+      ...artifactPaths,
       evidenceRoot,
-      latestBundleJson,
-      aoGateValidationTxt,
-      legacyCoreEvidenceJson,
-      legacyCryptoEvidenceJson,
-      templateWorkerMapCoherenceJson,
-      forgetForwardConfigJson,
-      templateSignatureRefMapJson,
-      drillChecksJson,
-      packMd,
-      packJson,
-      checklistMd,
-      readinessJson,
-      drillManifestJson,
-      drillManifestValidation,
-      drillCheckJson,
-      ledgerMd,
-      ledgerJson,
       aoGateFile: DEFAULT_AO_GATE_FILE,
     },
     templateWorkerMapCoherenceCheck,
     forgetForwardConfigCheck,
     templateSignatureRefMapCheck,
+    templateVariantMapCheck,
     steps,
   }
 }
@@ -760,6 +942,7 @@ function runReleaseDrill(options = {}, deps = {}) {
     templateWorkerMapCoherence: null,
     forgetForwardConfig: null,
     templateSignatureRefMap: null,
+    templateVariantMap: null,
   }
 
   if (options.dryRun) {
@@ -854,6 +1037,15 @@ function runReleaseDrill(options = {}, deps = {}) {
           ...templateSignatureRefMap,
         }
         writeTextFile(plan.artifacts.templateSignatureRefMapJson, `${JSON.stringify(context.templateSignatureRefMap, null, 2)}\n`)
+      }
+      if (step.id === 'check-template-variant-map') {
+        const templateVariantMap = JSON.parse(childStdout || '{}')
+        context.templateVariantMap = {
+          configured: plan.templateVariantMapCheck.configured,
+          requiredSites: plan.templateVariantMapCheck.requiredSites,
+          ...templateVariantMap,
+        }
+        writeTextFile(plan.artifacts.templateVariantMapJson, `${JSON.stringify(context.templateVariantMap, null, 2)}\n`)
         const drillChecks = {
           release: plan.release,
           profile: plan.profile,
@@ -865,6 +1057,7 @@ function runReleaseDrill(options = {}, deps = {}) {
           templateWorkerMapCoherence: context.templateWorkerMapCoherence,
           forgetForwardConfig: context.forgetForwardConfig,
           templateSignatureRefMap: context.templateSignatureRefMap,
+          templateVariantMap: context.templateVariantMap,
         }
         writeTextFile(plan.artifacts.drillChecksJson, `${JSON.stringify(drillChecks, null, 2)}\n`)
       }
@@ -897,6 +1090,9 @@ function runReleaseDrill(options = {}, deps = {}) {
       if (step.id === 'check-forget-forward-config') ensureFile(plan.artifacts.forgetForwardConfigJson, step.label)
       if (step.id === 'check-template-signature-ref-map') {
         ensureFile(plan.artifacts.templateSignatureRefMapJson, step.label)
+      }
+      if (step.id === 'check-template-variant-map') {
+        ensureFile(plan.artifacts.templateVariantMapJson, step.label)
         ensureFile(plan.artifacts.drillChecksJson, 'release drill metadata')
       }
       if (step.id === 'build-checklist') ensureFile(plan.artifacts.checklistMd, step.label)
@@ -948,4 +1144,16 @@ function main() {
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url
 if (isMain) main()
 
-export { CliError, buildDrillPlan, formatDryRunPlan, parseArgs, runCli, runReleaseDrill, usageText }
+export {
+  CliError,
+  DECOMMISSION_READINESS_ARTIFACT_REQUIREMENTS,
+  RELEASE_DRILL_ARTIFACT_ALIASES,
+  RELEASE_DRILL_ARTIFACT_FILES,
+  RELEASE_DRILL_STRICT_ARTIFACT_REQUIREMENTS,
+  buildDrillPlan,
+  formatDryRunPlan,
+  parseArgs,
+  runCli,
+  runReleaseDrill,
+  usageText,
+}

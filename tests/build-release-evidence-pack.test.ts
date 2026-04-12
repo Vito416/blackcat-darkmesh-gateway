@@ -167,6 +167,20 @@ describe('build-release-evidence-pack.js', () => {
     expect(notReady.blockers.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('treats AO gate failures as warnings when require-ao-gate is disabled', () => {
+    const readiness = combineReadiness(
+      { present: true, status: 'pass', reason: 'ok' },
+      { present: true, status: 'pass', reason: 'ok' },
+      { present: true, status: 'fail', reason: 'required AO checks still in progress' },
+      true,
+      false,
+    )
+
+    expect(readiness.status).toBe('warning')
+    expect(readiness.blockers).toEqual([])
+    expect(readiness.warnings).toEqual(['ao dependency gate status=fail: required AO checks still in progress'])
+  })
+
   it('propagates AO gate and consistency blockers into a not-ready pack', () => {
     const readiness = combineReadiness(
       { present: true, status: 'fail', reason: '1 failure run(s)' },

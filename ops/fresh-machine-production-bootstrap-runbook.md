@@ -172,13 +172,14 @@ npm run ops:run-release-drill -- \
 10. `check-template-worker-map-coherence`
 11. `check-forget-forward-config`
 12. `check-template-signature-ref-map`
-13. `build-release-evidence-pack`
-14. `build-release-signoff-checklist`
-15. `check-release-readiness`
-16. `build-release-drill-manifest`
-17. `validate-release-drill-manifest`
-18. `check-release-drill-artifacts`
-19. `build-release-evidence-ledger`
+13. `check-template-variant-map`
+14. `build-release-evidence-pack`
+15. `build-release-signoff-checklist`
+16. `check-release-readiness`
+17. `build-release-drill-manifest`
+18. `validate-release-drill-manifest`
+19. `check-release-drill-artifacts`
+20. `build-release-evidence-ledger`
 
 ## 6) Expected artifacts
 
@@ -194,6 +195,7 @@ Expected under `$DRILL_DIR` after a strict run:
 - `template-worker-map-coherence.json`
 - `forget-forward-config.json`
 - `template-signature-ref-map.json`
+- `template-variant-map.json`
 - `release-evidence-pack.md`
 - `release-evidence-pack.json`
 - `release-signoff-checklist.md`
@@ -246,10 +248,11 @@ Note: strict closeout remains blocked until AO required checks and manual proof 
 | `ops:check-template-worker-routing-config --strict` | URL/token map JSON malformed or missing coverage | Rebuild from `config/template-worker-routing.example.json` and `config/template-worker-token-map.example.json`; rerun strict check. |
 | `ops:check-template-worker-map-coherence --strict` | URL/token/signatureRef maps are out of sync | Ensure all three maps contain the same site keys before rerun. |
 | `ops:check-template-signature-ref-map --strict` | Missing signature refs for required sites | Fill `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` for every `REQUIRED_TEMPLATE_SITES` key. |
+| `ops:check-template-variant-map --strict` | Missing or unsupported template variants for required sites | Fill `GATEWAY_TEMPLATE_VARIANT_MAP` for every `REQUIRED_TEMPLATE_SITES` key and only use supported variants. |
 | `ops:check-forget-forward-config --strict` | Relay URL missing/invalid, token blank, or timeout out of range | Fix `GATEWAY_FORGET_FORWARD_URL`, `GATEWAY_FORGET_FORWARD_TOKEN`, and timeout (`100..30000`). |
 | `ops:validate-consistency-preflight` | Bad URL list, unsupported mode/profile, or missing token | Recheck `CONSISTENCY_URLS`, `GATEWAY_RESOURCE_PROFILE`, and auth mode (`--token` vs `--allow-anon`). |
 | `ops:run-release-drill` (step 2/4/6) | Endpoint/network/auth/evidence-bundle failure | Test `/integrity/state` URLs manually with the same token; inspect bundle `compare.txt` when evidence export fails. |
-| `ops:run-release-drill` (step 13/15) | Pack/readiness not `ready` due blockers | Open `$DRILL_DIR/release-evidence-pack.json` and `$DRILL_DIR/release-readiness.json` and clear listed blockers. |
+| `ops:run-release-drill` (step 14/16) | Pack/readiness not `ready` due blockers | Open `$DRILL_DIR/release-evidence-pack.json` and `$DRILL_DIR/release-readiness.json` and clear listed blockers. |
 | `ops:check-release-drill-artifacts --strict` | Missing files or cross-file release mismatch | Inspect `$DRILL_DIR/release-drill-check.json` and regenerate missing artifacts from the same drill directory. |
 | `ops:run-decommission-closeout --strict` | AO gate still open or manual proof links missing | Check `ops/decommission/ao-dependency-gate.json`, then fill links in `$DRILL_DIR/decommission-evidence-log.json`. |
 

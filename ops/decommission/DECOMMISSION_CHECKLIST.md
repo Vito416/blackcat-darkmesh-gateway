@@ -144,6 +144,7 @@ Manual evidence still required separately:
   - [x] emergency pause/unpause
   - [x] degraded mode behavior
   - [x] recovery from AO outage
+- [x] Fresh-machine bootstrap and strict release-drill operator path is documented in `ops/fresh-machine-production-bootstrap-runbook.md`.
 - [ ] WEDOS/shared-hosting limits are validated (resource and runtime model).
 - [ ] Recovery drill completed at least once in staging with timestamps captured in notes.
 - [ ] Key rotation drill completed at least once for each integrity role.
@@ -200,6 +201,7 @@ Use these files as the final operator-facing closeout records once the evidence 
 
 - `ops/decommission/FINAL_MIGRATION_SUMMARY.md` — canonical migration closeout summary with UTC fields, evidence links, rollback reference, approvals, and residual risk notes.
 - `ops/decommission/SIGNOFF_RECORD.md` — final approval record for the release/decommission decision trail.
+- `ops/fresh-machine-production-bootstrap-runbook.md` — production bootstrap path for fresh machines, strict preflight, and strict release-drill/decommission command order.
 - Keep both documents aligned with the archived drill bundle and the stable evidence links recorded in `ops/decommission/DECOMMISSION_CHECKLIST.md`.
 
 ## Recommended deletion sequence
