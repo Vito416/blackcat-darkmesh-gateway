@@ -50,13 +50,14 @@ This file defines the minimum removal gate for each `libs/legacy/<module>/` snap
   - `rg` no-import proof log
   - PR/commit link for config snapshot removal
 
-### `blackcat-core` (current: `in progress`)
+### `blackcat-core` (current: `extracted`)
 - Tests required: keep current groundwork tests (`tests/runtime-core-bytes.test.ts`, `tests/runtime-core-json.test.ts`, `tests/runtime-core-canonicalJson.test.ts`, `tests/template-api.test.ts`, `tests/validate-template-backend-contract.test.ts`) and add coverage for each additional primitive moved into `src/runtime/core/`.
 - Docs required: keep `kernel-migration/core-primitive-map.json` in sync with the gateway runtime, complete primitive-by-primitive mapping in `libs/legacy/MIGRATION_PLAN.md`, and record final target paths in `kernel-migration/LEGACY_MODULE_MAP.md`.
 - Proof required: no hidden direct dependency on `libs/legacy/blackcat-core` in request path and no backslide from runtime-core boundaries to legacy helpers.
 - Evidence to archive:
   - primitive replacement test log
   - core primitive map JSON snapshot
+  - core extraction gate output (`npm run ops:check-legacy-core-extraction-evidence -- --strict --json`)
   - `rg` no-import proof log
   - PR/commit link for core mapping completion
 

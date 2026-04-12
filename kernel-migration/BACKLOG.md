@@ -55,7 +55,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] `blackcat-config`: keep the gateway-owned config loader/profile contract aligned with request-path usage, then capture decommission proof once the removal evidence is archived.
   - Progress note: typed config loader with source metadata now lives in `src/runtime/config/loader.ts` and is covered by `tests/runtime-config-loader.test.ts`.
   - Progress note: loader wiring is active in request-path modules (`src/templateApi.ts`, `src/handler.ts`, `src/webhooks.ts`, `src/ratelimit.ts`, `src/replay.ts`).
-- [~] `blackcat-core`: partially extracted; byte, JSON, canonical JSON, hash, and template helpers now live in gateway-owned runtime code, and the remaining work is removal evidence.
+- [x] `blackcat-core`: extracted; byte, JSON, canonical JSON, hash, and template helpers now live in gateway-owned runtime code, and decommission evidence is machine-checkable via `check-legacy-core-extraction-evidence`.
   - Progress note: JSON-safe core parsing helpers landed in `src/runtime/core/json.ts` with focused tests in `tests/runtime-core-json.test.ts`.
   - Progress note: the canonical JSON primitive now has a gateway-owned implementation in `src/runtime/core/canonicalJson.ts`; keep primitive-by-primitive mapping notes aligned as coverage expands.
   - Progress note: deterministic SHA-256 helpers now live in `src/runtime/core/hash.ts` with focused coverage in `tests/runtime-core-hash.test.ts`.
@@ -90,7 +90,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] auth-js/crypto-js client boundaries:
   - Harden and merge the current client boundaries (`src/clients/auth-sdk/client.ts`, `src/clients/crypto-sdk/client.ts`) with explicit ownership notes and zero request-path runtime coupling.
   - Keep and expand boundary contract coverage (`tests/clients-auth-sdk.test.ts`, `tests/clients-crypto-sdk.test.ts`) before any legacy JS snapshot removal decision.
-  - Wire docs so map/plan/decommission files all point to the same boundary paths and status (`partially extracted` for core, `extracted` for crypto, `pending (do-not-port candidate)` for installer).
+  - Wire docs so map/plan/decommission files all point to the same boundary paths and status (`extracted` for core/crypto, `pending (do-not-port candidate)` for installer).
 - [~] mailing queue + transport progression:
   - Finalize the runtime queue/transport boundary (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`) and document the configuration contract (endpoint/token/timeout).
   - Keep and expand focused queue/transport coverage (`tests/runtime-mailing-transport.test.ts`) plus one delivery-path integration assertion.
