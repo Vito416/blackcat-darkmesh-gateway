@@ -43,4 +43,7 @@ npm run ops:check-template-variant-map -- --strict --json
 npm run ops:check-production-readiness -- --json
 ```
 
-If all checks are green, continue with release drill and final GO/NO-GO signoff.
+If all checks are green, continue with the live strict drill command set:
+
+- `ops/live-wedos/LIVE_STRICT_DRILL_COMMANDS.md`
+- one-shot runner: `npm run ops:run-live-strict-drill -- --dry-run` then `npm run ops:run-live-strict-drill`

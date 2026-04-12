@@ -50,6 +50,7 @@
     "ops:validate-signoff-record": "node scripts/validate-signoff-record.js",
     "ops:check-release-readiness": "node scripts/check-release-readiness.js",
     "ops:run-release-drill": "node scripts/run-release-drill.js",
+    "ops:run-live-strict-drill": "bash scripts/run-live-strict-drill.sh",
     "ops:bootstrap-prelive-decommission-artifacts": "node scripts/bootstrap-prelive-decommission-artifacts.js",
     "ops:bootstrap-prelive-decommission-artifacts:tmp": "node scripts/bootstrap-prelive-decommission-artifacts.js --dir tmp/decommission-prelive --ao-gate ops/decommission/ao-dependency-gate.json",
     "ops:validate-wedos-readiness": "node scripts/validate-wedos-readiness.js",
