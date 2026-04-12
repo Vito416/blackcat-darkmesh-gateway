@@ -63,16 +63,14 @@ This command generates:
 Use this when no gateway endpoints are live yet, but we still want a complete decommission artifact set and a clean split between automation and AO/manual blockers.
 
 ```bash
-npm run ops:bootstrap-prelive-decommission-artifacts -- \
-  --dir ops/decommission \
+npm run ops:bootstrap-prelive-decommission-artifacts:tmp -- \
   --release 1.4.0 \
-  --profile wedos_medium \
-  --mode pairwise
+  --profile wedos_medium
 ```
 
 Expected result:
-- `ops/decommission` contains the full strict artifact set (`release-evidence-pack*`, `release-readiness.json`, `release-drill-manifest*`, `release-drill-check.json`, `release-evidence-ledger*`, etc.).
-- `npm run ops:check-decommission-readiness -- --dir ops/decommission --ao-gate ops/decommission/ao-dependency-gate.json --json` reports `automationState=complete` with only AO/manual blockers still open.
+- `tmp/decommission-prelive` contains the full strict artifact set (`release-evidence-pack*`, `release-readiness.json`, `release-drill-manifest*`, `release-drill-check.json`, `release-evidence-ledger*`, etc.).
+- `npm run ops:check-decommission-readiness -- --dir tmp/decommission-prelive --ao-gate ops/decommission/ao-dependency-gate.json --json` reports `automationState=complete` with only AO/manual blockers still open.
 - This is **not** a GO signal by itself; final GO still requires AO gate closure plus a live strict drill.
 
 ## Prerequisites
