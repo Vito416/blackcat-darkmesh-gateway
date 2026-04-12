@@ -17,7 +17,7 @@ Describe what was migrated, stabilized, or decommissioned.
 
 - **Included systems:**
   - Gateway-owned runtime boundaries for config, core primitives, crypto verification, auth policy, session/replay controls, template guardrails, webhook hardening, mailing guards, telemetry policy, and payments validators.
-  - Legacy snapshot sources were removed; boundary tooling now guards against any `libs/legacy/**` reintroduction.
+  - Legacy source copies were removed; boundary tooling now guards against any `libs/legacy/**` reintroduction.
   - Operator diagnostics and release-drill ergonomics (`run-release-drill` auto output directory handling, worker map config examples, forget-forward example env).
 - **Excluded systems:**
   - AO-side authority lifecycle closeout (`publish/revoke/query/pause`, authority rotation completion, immutable audit commitments query surface).

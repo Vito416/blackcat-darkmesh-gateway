@@ -38,8 +38,8 @@ For each module below, require the same three proof types before marking it reti
 
 ## A. Knowledge preservation
 
-- [ ] Kernel source snapshot commit is recorded in this folder.
-- [ ] Critical docs copied into `ops/decommission/upstream/`.
+- [ ] Legacy source provenance (commit/release tag) is recorded in closeout artifacts.
+- [ ] Critical upstream docs are linked from `ops/decommission/KERNEL_PORT_SCOPE.md`.
 - [ ] Port scope mapping approved (`KERNEL_PORT_SCOPE.md`).
 - [ ] AO/Gateway target design approved (`AO_GATEWAY_DESIGN.md`).
 
