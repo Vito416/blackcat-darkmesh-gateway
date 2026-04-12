@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 
 const DEFAULT_MANIFEST = 'libs/legacy/MANIFEST.md'
 const DEFAULT_CORE_MAP = 'kernel-migration/core-primitive-map.json'
+const DEFAULT_MODULE_MAP = 'kernel-migration/LEGACY_MODULE_MAP.md'
 const DEFAULT_OUT = 'kernel-migration/legacy-libs-matrix.md'
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info', 'unknown']
 const RISK_ARRAY_KEYS = ['findings', 'risks', 'issues', 'entries', 'results', 'records', 'items']
@@ -21,6 +22,7 @@ function usage(exitCode = 0) {
       '  --manifest <FILE>  Legacy manifest path (default: libs/legacy/MANIFEST.md)',
       '  --risk <FILE>      Optional risk JSON from audit-legacy-risk output',
       '  --core-map <FILE>  Optional machine-readable blackcat-core primitive map',
+      '  --module-map <FILE> Optional module-status map from LEGACY_MODULE_MAP.md',
       '  --out <FILE>       Output markdown path (default: kernel-migration/legacy-libs-matrix.md)',
       '  --json             Print summary JSON to stdout',
       '  --help             Show this help',
@@ -55,6 +57,7 @@ function parseArgs(argv) {
     manifest: DEFAULT_MANIFEST,
     risk: '',
     coreMap: '',
+    moduleMap: '',
     out: DEFAULT_OUT,
     json: false,
   }
@@ -85,6 +88,9 @@ function parseArgs(argv) {
       case '--out':
         args.out = readValue()
         break
+      case '--module-map':
+        args.moduleMap = readValue()
+        break
       case '--json':
         args.json = true
         break
@@ -97,6 +103,7 @@ function parseArgs(argv) {
   if (!isNonEmptyString(args.manifest)) die('--manifest must not be blank', 64)
   if (args.risk && !isNonEmptyString(args.risk)) die('--risk must not be blank', 64)
   if (args.coreMap && !isNonEmptyString(args.coreMap)) die('--core-map must not be blank', 64)
+  if (args.moduleMap && !isNonEmptyString(args.moduleMap)) die('--module-map must not be blank', 64)
   if (!isNonEmptyString(args.out)) die('--out must not be blank', 64)
 
   return args
@@ -151,6 +158,63 @@ function parseMarkdownTableRows(markdown) {
   }
 
   return rows
+}
+
+function parseModuleStatusRows(markdown) {
+  const lines = String(markdown).split(/\r?\n/)
+  const rows = []
+  let inTable = false
+  let moduleIndex = -1
+  let statusIndex = -1
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('|')) {
+      if (inTable) break
+      continue
+    }
+
+    const cells = trimmed
+      .slice(1, -1)
+      .split('|')
+      .map((cell) => stripFormatting(cell))
+
+    if (!inTable) {
+      const normalized = cells.map(normalizeKey)
+      const maybeModuleIndex = normalized.indexOf('module')
+      const maybeStatusIndex = normalized.indexOf('current status')
+      if (maybeModuleIndex >= 0 && maybeStatusIndex >= 0) {
+        inTable = true
+        moduleIndex = maybeModuleIndex
+        statusIndex = maybeStatusIndex
+      }
+      continue
+    }
+
+    const isDivider = cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, '')))
+    if (isDivider) continue
+
+    const moduleName = cells[moduleIndex]
+    const status = cells[statusIndex]
+    if (!moduleName || normalizeKey(moduleName) === 'module') continue
+    rows.push({
+      module: moduleName,
+      status,
+    })
+  }
+
+  return rows
+}
+
+function buildModuleStatusMap(markdown) {
+  const statusMap = new Map()
+  for (const row of parseModuleStatusRows(markdown)) {
+    const moduleName = stripFormatting(row.module)
+    const status = stripFormatting(row.status)
+    if (!isNonEmptyString(moduleName) || !isNonEmptyString(status)) continue
+    statusMap.set(moduleName, status)
+  }
+  return statusMap
 }
 
 function isObject(value) {
@@ -341,14 +405,17 @@ function buildMarkdown(summary) {
     '',
     `- Generated at (UTC): \`${summary.generatedAt}\``,
     `- Manifest: \`${summary.manifestLabel ?? summary.manifestPath}\``,
+    summary.moduleMapPath
+      ? `- Module map: \`${summary.moduleMapLabel ?? summary.moduleMapPath}\``
+      : '- Module map: not provided',
     summary.riskPath ? `- Risk JSON: \`${summary.riskLabel ?? summary.riskPath}\`` : '- Risk JSON: not provided',
     summary.coreMapPath ? `- Core primitive map: \`${summary.coreMapLabel ?? summary.coreMapPath}\`` : '- Core primitive map: not provided',
     `- Module count: ${summary.modules.length}`,
     '',
     '## Modules',
     '',
-    '| Module | Source commit | Risk summary |',
-    '| --- | --- | --- |',
+    '| Module | Source commit | Migration status | Evidence summary |',
+    '| --- | --- | --- | --- |',
   ]
 
   for (const module of summary.modules) {
@@ -356,7 +423,7 @@ function buildMarkdown(summary) {
       module.module === 'blackcat-core' && summary.corePrimitiveSummary
         ? summary.corePrimitiveSummary.tableSummary
         : 'pending'
-    lines.push(`| \`${module.module}\` | \`${module.sourceCommit}\` | ${riskSummary} |`)
+    lines.push(`| \`${module.module}\` | \`${module.sourceCommit}\` | ${module.status} | ${riskSummary} |`)
   }
 
   lines.push('', '## Risk summary', '')
@@ -397,6 +464,9 @@ function buildMarkdown(summary) {
     '## Notes',
     '',
     '- The risk summary column is a placeholder until audit-legacy-risk findings are mapped into module-level review notes.',
+    summary.moduleMapPath
+      ? '- Migration status is sourced from the legacy module map table (`current status`).'
+      : '- Migration status falls back to `pending` when no module map is provided.',
     summary.corePrimitiveSummary
       ? '- The core primitive evidence section is machine-readable and mirrors the gateway-owned runtime/core and runtime/template boundaries.'
       : '- Add a machine-readable core primitive map to surface blackcat-core proof once the remaining groups are finalized.',
@@ -436,6 +506,11 @@ export async function buildLegacyMigrationMatrix(options = {}) {
   const outPath = resolve(options.outPath ?? DEFAULT_OUT)
   const generatedAt = (options.now ?? new Date()).toISOString()
   const manifestLabel = options.manifestLabel ?? options.manifestPath ?? DEFAULT_MANIFEST
+  const moduleMapLabel = isNonEmptyString(options.moduleMapLabel)
+    ? options.moduleMapLabel
+    : isNonEmptyString(options.moduleMapPath)
+      ? options.moduleMapPath
+      : DEFAULT_MODULE_MAP
   const riskLabel = options.riskLabel ?? options.riskPath ?? ''
   const coreMapPath = options.coreMapPath ? resolve(options.coreMapPath) : DEFAULT_CORE_MAP
   const coreMapLabel = isNonEmptyString(options.coreMapLabel)
@@ -454,6 +529,16 @@ export async function buildLegacyMigrationMatrix(options = {}) {
   const riskPath = options.riskPath ? resolve(options.riskPath) : ''
   const riskData = riskPath ? await readJson(riskPath) : null
   const riskSummary = summarizeRiskInput(riskData)
+  const moduleMapPath = options.moduleMapPath ? resolve(options.moduleMapPath) : DEFAULT_MODULE_MAP
+  const moduleMapText = await readFile(moduleMapPath, 'utf8').catch((error) => {
+    if (options.moduleMapPath) throw error
+    return ''
+  })
+  const moduleStatusMap = moduleMapText ? buildModuleStatusMap(moduleMapText) : new Map()
+  const modulesWithStatus = modules.map((module) => ({
+    ...module,
+    status: moduleStatusMap.get(module.module) ?? 'pending',
+  }))
   const coreMapData = await readOptionalJson(coreMapPath, { required: Boolean(options.coreMapPath) })
   const corePrimitiveSummary = coreMapData ? summarizeCorePrimitiveMap(coreMapData) : null
 
@@ -464,8 +549,10 @@ export async function buildLegacyMigrationMatrix(options = {}) {
     outPath,
     riskPath,
     riskLabel,
-    modules,
-    moduleCount: modules.length,
+    modules: modulesWithStatus,
+    moduleCount: modulesWithStatus.length,
+    moduleMapPath: moduleMapText ? moduleMapPath : '',
+    moduleMapLabel: moduleMapText ? moduleMapLabel : '',
     riskSummary,
     coreMapPath: coreMapData ? coreMapPath : '',
     coreMapLabel: coreMapData ? coreMapLabel : '',
@@ -510,6 +597,8 @@ export async function runCli(argv = process.argv.slice(2), options = {}) {
   const { summary, markdown } = await buildLegacyMigrationMatrix({
     manifestPath: args.manifest,
     manifestLabel: args.manifest,
+    moduleMapPath: args.moduleMap || undefined,
+    moduleMapLabel: args.moduleMap || undefined,
     riskPath: args.risk || '',
     riskLabel: args.risk || '',
     coreMapPath: args.coreMap || '',

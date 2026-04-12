@@ -1,26 +1,27 @@
 # Legacy Migration Matrix
 
-- Generated at (UTC): `2026-04-11T21:02:17.888Z`
+- Generated at (UTC): `2026-04-12T09:57:05.030Z`
 - Manifest: `libs/legacy/MANIFEST.md`
+- Module map: `kernel-migration/LEGACY_MODULE_MAP.md`
 - Risk JSON: not provided
 - Core primitive map: `kernel-migration/core-primitive-map.json`
 - Module count: 11
 
 ## Modules
 
-| Module | Source commit | Risk summary |
-| --- | --- | --- |
-| `blackcat-analytics` | `9f69f1d` | pending |
-| `blackcat-auth` | `14534b4` | pending |
-| `blackcat-auth-js` | `ff46aa7` | pending |
-| `blackcat-config` | `aea90d4` | pending |
-| `blackcat-core` | `f1c3dc7` | 5 primitive groups, 6 tests |
-| `blackcat-crypto` | `4f59c09` | partially extracted |
-| `blackcat-crypto-js` | `8df11f5` | pending |
-| `blackcat-gopay` | `1b75a60` | pending |
-| `blackcat-mailing` | `2e28e28` | pending |
-| `blackcat-sessions` | `5977072` | pending |
-| `blackcat-installer` | `a975d15` | pending (do-not-port candidate) |
+| Module | Source commit | Migration status | Evidence summary |
+| --- | --- | --- | --- |
+| `blackcat-analytics` | `9f69f1d` | extracted | pending |
+| `blackcat-auth` | `14534b4` | extracted | pending |
+| `blackcat-auth-js` | `ff46aa7` | extracted | pending |
+| `blackcat-config` | `aea90d4` | extracted | pending |
+| `blackcat-core` | `f1c3dc7` | extracted | 5 primitive groups, 6 tests |
+| `blackcat-crypto` | `4f59c09` | extracted | pending |
+| `blackcat-crypto-js` | `8df11f5` | extracted | pending |
+| `blackcat-gopay` | `1b75a60` | extracted | pending |
+| `blackcat-mailing` | `2e28e28` | extracted | pending |
+| `blackcat-sessions` | `5977072` | extracted | pending |
+| `blackcat-installer` | `a975d15` | pending (do-not-port candidate) | pending |
 
 ## Risk summary
 
@@ -45,4 +46,5 @@
 ## Notes
 
 - The risk summary column is a placeholder until audit-legacy-risk findings are mapped into module-level review notes.
+- Migration status is sourced from the legacy module map table (`current status`).
 - The core primitive evidence section is machine-readable and mirrors the gateway-owned runtime/core and runtime/template boundaries.

@@ -56,6 +56,17 @@ function seedWorkspace() {
   ].join('\n')
 
   writeFileSync(join(root, 'libs', 'legacy', 'MANIFEST.md'), `${manifest}\n`, 'utf8')
+  const moduleMap = [
+    '# Legacy Module Map',
+    '',
+    '| module | source commit | gateway target path | current status | owner/workstream | notes |',
+    '| --- | --- | --- | --- | --- | --- |',
+    '| `blackcat-analytics` | `9f69f1d` | `src/runtime/telemetry/analyticsEvent.ts` | `extracted` | `gateway-libs-consolidation:P2` | `ok` |',
+    '| `blackcat-auth` | `14534b4` | `src/runtime/auth/httpAuth.ts` | `extracted` | `gateway-libs-consolidation:P0` | `ok` |',
+    '| `blackcat-auth-js` | `ff46aa7` | `src/clients/auth-sdk/client.ts` | `extracted` | `gateway-libs-consolidation:P1` | `ok` |',
+    '| `blackcat-core` | `f1c3dc7` | `src/runtime/core/` | `extracted` | `gateway-libs-consolidation:P0` | `ok` |',
+  ].join('\n')
+  writeFileSync(join(root, 'kernel-migration', 'LEGACY_MODULE_MAP.md'), `${moduleMap}\n`, 'utf8')
   return root
 }
 
@@ -236,8 +247,9 @@ describe('build-legacy-migration-matrix.js', () => {
 
     const markdown = readFileSync(join(root, 'kernel-migration', 'legacy-libs-matrix.md'), 'utf8')
     expect(markdown).toContain('# Legacy Migration Matrix')
-    expect(markdown).toContain('| `blackcat-analytics` | `9f69f1d` | pending |')
-    expect(markdown).toContain('| `blackcat-core` | `f1c3dc7` | 2 primitive groups, 3 tests |')
+    expect(markdown).toContain('- Module map: `kernel-migration/LEGACY_MODULE_MAP.md`')
+    expect(markdown).toContain('| `blackcat-analytics` | `9f69f1d` | extracted | pending |')
+    expect(markdown).toContain('| `blackcat-core` | `f1c3dc7` | extracted | 2 primitive groups, 3 tests |')
     expect(markdown).toContain('## Core primitive evidence')
     expect(markdown).toContain('| byte helpers |')
     expect(markdown).toContain('- high: 2')
@@ -252,8 +264,8 @@ describe('build-legacy-migration-matrix.js', () => {
 
     const res = runMatrix(['--manifest', manifestPath, '--core-map', join(root, 'kernel-migration', 'core-primitive-map.json'), '--out', outPath], root)
     expect(res.status).toBe(0)
-    expect(readFileSync(outPath, 'utf8')).toContain('| `blackcat-auth-js` | `ff46aa7` | pending |')
-    expect(readFileSync(outPath, 'utf8')).toContain('| `blackcat-core` | `f1c3dc7` | 2 primitive groups, 3 tests |')
+    expect(readFileSync(outPath, 'utf8')).toContain('| `blackcat-auth-js` | `ff46aa7` | extracted | pending |')
+    expect(readFileSync(outPath, 'utf8')).toContain('| `blackcat-core` | `f1c3dc7` | extracted | 2 primitive groups, 3 tests |')
     expect(res.stdout).toContain('# Legacy Migration Matrix')
 
     const helpRes = runMatrix(['--help'], root)
@@ -261,6 +273,7 @@ describe('build-legacy-migration-matrix.js', () => {
     expect(helpRes.stdout).toContain('build-legacy-migration-matrix.js')
     expect(helpRes.stdout).toContain('--risk <FILE>')
     expect(helpRes.stdout).toContain('--core-map <FILE>')
+    expect(helpRes.stdout).toContain('--module-map <FILE>')
   })
 
   it('fails when an explicit core primitive map path is missing', () => {
