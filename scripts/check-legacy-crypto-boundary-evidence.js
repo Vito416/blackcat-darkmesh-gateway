@@ -70,7 +70,7 @@ export const FORBIDDEN_SIGNING_PATTERNS = [
 ]
 
 const DEFAULT_ROOT = '.'
-const LEGACY_CRYPTO_IMPORT_PATHS = ['libs/legacy/blackcat-crypto', 'ops/decommission/legacy-archive/snapshots/blackcat-crypto']
+const LEGACY_CRYPTO_IMPORT_PATHS = ['libs/legacy/blackcat-crypto']
 const IMPORT_LIKE_LINE_RE = /\b(?:import|export|require)\b|\bimport\s*\(/i
 
 class CliError extends Error {

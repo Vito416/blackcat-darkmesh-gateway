@@ -12,7 +12,7 @@ Purpose
 Consolidation status
 - Gateway is the active integration target for legacy backend modules.
 - Legacy library snapshots were fully retired from this repo; request-path runtime now uses gateway-owned modules only under `src/runtime/**` and `src/clients/**`.
-- Crypto manifest policy bundle is maintained in `security/crypto-manifests/` (gateway-owned, not a vendored snapshot).
+- Crypto manifest policy bundle is maintained in `security/crypto-policy/` (gateway-owned, not a vendored snapshot).
 - Template code remains intentionally separate in `blackcat-templates`; gateway enforces controlled backend access for deployed templates.
 
 Migration status

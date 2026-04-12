@@ -19,7 +19,7 @@ const DEFAULT_MODULES = [
   'blackcat-mailing',
   'blackcat-sessions',
 ]
-const LEGACY_IMPORT_ROOTS = ['libs/legacy', 'ops/decommission/legacy-archive/snapshots']
+const LEGACY_IMPORT_ROOTS = ['libs/legacy']
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx'])
 const URL_SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//
 const IMPORT_PATTERNS = [

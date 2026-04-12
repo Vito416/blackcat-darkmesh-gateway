@@ -1,4 +1,4 @@
-# BlackCat Crypto Manifests (Gateway Policy Bundle)
+# BlackCat Crypto Policy Bundle
 
 This directory is the gateway-owned crypto policy bundle used across the Blackcat stack.
 
@@ -8,7 +8,6 @@ It defines stable, auditable crypto context names and key requirements so gatewa
 
 - `contexts/*.json`: context maps for allowed crypto slots and rotation hints.
 - `bin/manifest-lint`: basic structural validator for context files.
-- `LICENSE`: licensing notice for this package content.
 
 ## Policy scope
 
@@ -27,7 +26,7 @@ Point runtime config to a manifest file:
 ```json
 {
   "crypto": {
-    "manifest": "../security/crypto-manifests/contexts/core.json"
+    "manifest": "../security/crypto-policy/contexts/core.json"
   }
 }
 ```
@@ -35,7 +34,7 @@ Point runtime config to a manifest file:
 Validate manifests:
 
 ```bash
-security/crypto-manifests/bin/manifest-lint [contexts-dir]
+security/crypto-policy/bin/manifest-lint [contexts-dir]
 ```
 
 ## Manifest shape
@@ -54,7 +53,7 @@ security/crypto-manifests/bin/manifest-lint [contexts-dir]
 
 ## Licensing
 
-This package is an official component of the Blackcat Covered System and follows `BFNL-1.0`.
+This policy bundle is an official component of the Blackcat Covered System and follows the repository root `LICENSE` (`BFNL-1.0`).
 
 Canonical licensing bundle:
 - BFNL 1.0: https://github.com/Vito416/blackcat-darkmesh-ao/blob/main/docs/BFNL-1.0.md

@@ -56,7 +56,7 @@
 
 ## Next TODO (crypto + worker alignment)
 - Adopt `blackcat-crypto` envelope/HMAC: browser/worker encrypt to admin pubkey; gateway stays secretless.
-- Integrate `security/crypto-manifests` to pin allowed keys/algos; verify manifest hash from Arweave.
+- Integrate `security/crypto-policy` to pin allowed keys/algos; verify manifest hash from Arweave.
 - Wire ForgetSubject hook to Worker (delete-on-download + TTL cache wipe).
 - Align webhook retry/breaker metrics with AO/Write (`write.webhook.*`, `write.psp.*`) and expose via Prom endpoint.
 - Add E2E test harness: fake PSP + worker + write ingest to validate encrypted checkout → AO state.

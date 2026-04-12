@@ -21,8 +21,7 @@ This folder contains the retained migration/decommission evidence after retiring
 ## Related artifacts
 
 - Integrity schema: `security/contracts/integrity-snapshot-v1.schema.json`
-- Legacy metadata-only archive notes: `ops/decommission/legacy-archive/`
-
+- 
 ## Purpose
 
 This package remains as the operational evidence trail for releases and audits while keeping legacy source snapshots out of the codebase.

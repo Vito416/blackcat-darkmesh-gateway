@@ -17,7 +17,7 @@ Describe what was migrated, stabilized, or decommissioned.
 
 - **Included systems:**
   - Gateway-owned runtime boundaries for config, core primitives, crypto verification, auth policy, session/replay controls, template guardrails, webhook hardening, mailing guards, telemetry policy, and payments validators.
-  - Legacy snapshot archive relocation from `libs/legacy/` to `ops/decommission/legacy-archive/snapshots/` with manifest + boundary tool updates.
+  - Legacy snapshot sources were removed; boundary tooling now guards against any `libs/legacy/**` reintroduction.
   - Operator diagnostics and release-drill ergonomics (`run-release-drill` auto output directory handling, worker map config examples, forget-forward example env).
 - **Excluded systems:**
   - AO-side authority lifecycle closeout (`publish/revoke/query/pause`, authority rotation completion, immutable audit commitments query surface).
@@ -26,7 +26,7 @@ Describe what was migrated, stabilized, or decommissioned.
 - **Key architecture changes:**
   - Runtime now fail-closes before request forwarding when template payloads include secret-smuggling patterns.
   - Worker signing path enforces signature-ref coherence across URL/token/signature maps.
-  - Legacy modules are retained as immutable archive snapshots, not request-path dependencies.
+  - Legacy modules are no longer present in-repo and remain blocked from request-path dependencies.
 - **User-facing changes:**
   - `/template/call` now provides stricter upstream safety checks and deterministic rejection reasons for unsafe payloads.
   - `/cache/forget` keeps local purge availability even when optional worker forwarding fails or times out.

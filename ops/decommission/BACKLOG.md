@@ -34,10 +34,10 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 
 ### Gateway libs consolidation workstream
 
-This workstream is gateway-owned and can progress against the snapshot inventory now; it does not depend on AO closeout being finished first.
+This workstream is gateway-owned and can progress against the legacy module inventory now; it does not depend on AO closeout being finished first.
 
-- [x] Keep `ops/decommission/legacy-archive/MIGRATION_PLAN.md` current for every imported snapshot module (includes target path, status, and explicit decommission condition per module).
-- [x] Map runtime usage away from direct legacy imports (`rg -n "(?:libs/legacy|ops/decommission/legacy-archive/snapshots)" src` -> no matches).
+- [x] Keep `ops/decommission/LEGACY_INTEGRATION_AUDIT.md` current for every imported snapshot module (includes target path, status, and explicit decommission condition per module).
+- [x] Map runtime usage away from direct legacy imports (`rg -n "libs/legacy" src` -> no matches).
 - [x] Runtime config boundary enforcement exists and is CI-gated (`npm run ops:check-config-loader-runtime-boundary -- --strict`, covered by `tests/check-config-loader-runtime-boundary.test.ts`).
 - [x] Legacy no-import evidence checker exists and is CI-gated (`npm run ops:check-legacy-no-import-evidence -- --strict --json`, covered by `tests/check-legacy-no-import-evidence.test.ts`).
 - [x] Initial request-path extraction landed for runtime helpers:
@@ -50,8 +50,8 @@ This workstream is gateway-owned and can progress against the snapshot inventory
   - `src/runtime/mailing/payloadPolicy.ts` + `src/runtime/mailing/sanitizer.ts`
   - `src/runtime/payments/providers.ts` + `src/runtime/payments/validators.ts`
   - `src/runtime/telemetry/analyticsEvent.ts` + `src/runtime/telemetry/analyticsPolicy.ts`
-- [x] Do-not-port rules are documented for runtime in `ops/decommission/legacy-archive/MIGRATION_PLAN.md`.
-- [x] Decommission conditions are now tracked per module in `ops/decommission/legacy-archive/MIGRATION_PLAN.md`.
+- [x] Do-not-port rules are documented for runtime in `ops/decommission/LEGACY_INTEGRATION_AUDIT.md`.
+- [x] Decommission conditions are now tracked per module in `ops/decommission/LEGACY_INTEGRATION_AUDIT.md`.
 - [~] `blackcat-config`: keep the gateway-owned config loader/profile contract aligned with request-path usage, then capture decommission proof once the removal evidence is archived.
   - Progress note: typed config loader with source metadata now lives in `src/runtime/config/loader.ts` and is covered by `tests/runtime-config-loader.test.ts`.
   - Progress note: loader wiring is active in request-path modules (`src/templateApi.ts`, `src/handler.ts`, `src/webhooks.ts`, `src/ratelimit.ts`, `src/replay.ts`).
@@ -62,9 +62,9 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [x] `blackcat-crypto`: extracted; signature comparison, HMAC, and signature-ref helpers now live in gateway-owned runtime code, and decommission evidence now includes a machine-checkable verification-only boundary gate (`check-legacy-crypto-boundary-evidence`).
   - Progress note: signature-ref normalization/validation helpers now live in `src/runtime/crypto/signatureRefs.ts` with focused coverage in `tests/runtime-crypto-signatureRefs.test.ts`; the verification boundary stays independent from wallet/private-key logic.
   - Progress note: HMAC verification now has a gateway-owned helper in `src/runtime/crypto/hmac.ts` with focused coverage in `tests/runtime-crypto-hmac.test.ts`.
-- [~] `blackcat-auth`: keep the HTTP auth and role/signature policy helpers aligned with request-path modules, then capture the removal proof once the snapshot stays unused.
+- [~] `blackcat-auth`: keep the HTTP auth and role/signature policy helpers aligned with request-path modules, then capture the removal proof once the legacy path stays unused.
   - Progress note: shared role/signature-ref policy helpers now live in `src/runtime/auth/policy.ts` and are reused by template + integrity paths.
-- [~] `blackcat-sessions`: keep the replay store and session lifecycle boundary aligned with request-path usage, then capture removal proof once the snapshot is unused.
+- [~] `blackcat-sessions`: keep the replay store and session lifecycle boundary aligned with request-path usage, then capture removal proof once the legacy path is unused.
   - Progress note: lifecycle helper is now available in `src/runtime/sessions/lifecycle.ts` with create/read/rotate/revoke semantics and focused tests.
 - [~] `blackcat-auth-js`: client boundary exists under `src/clients/auth-sdk/client.ts` with focused tests (`tests/clients-auth-sdk.test.ts`); next is ownership documentation and removal evidence before any decommission status change.
   - Progress note: client hardening enforces URL safety + optional host allowlist and deterministic response parsing behavior.
@@ -76,7 +76,7 @@ This workstream is gateway-owned and can progress against the snapshot inventory
   - Progress note: ownership is now fixed to gateway public queue/transport + worker-owned secret credentials (`ops/worker-secrets-trust-model.md`), with machine enforcement via `scripts/check-mailing-secret-boundary.js` and `tests/check-mailing-secret-boundary.test.ts`.
 - [~] `blackcat-gopay`: provider/validator helpers now have webhook verification and idempotency groundwork (`src/runtime/payments/gopayWebhook.ts`, `src/runtime/payments/webhookIdempotency.ts`, `/webhook/gopay` in `src/handler.ts`, `tests/handler-gopay-webhook.test.ts`); the remaining open item is the final payment-boundary decommission evidence.
 - [~] `blackcat-analytics`: sink/export boundary now has a runtime retention/drop helper and coverage; keep the final destination decision and decommission evidence aligned once accepted/dropped paths stay deterministic.
-- [~] `blackcat-installer`: do-not-port candidate; keep installer logic ops-only (`ops/` + `scripts/`), and enforce zero request-path imports from installer snapshot.
+- [~] `blackcat-installer`: do-not-port candidate; keep installer logic ops-only (`ops/` + `scripts/`), and enforce zero request-path imports from installer legacy paths.
   - Progress note: runtime boundary check exists via `scripts/check-installer-runtime-boundary.js` with coverage in `tests/check-installer-runtime-boundary.test.ts`.
 
 ### Current wave next actions (core + client boundaries + mailing/GoPay)
@@ -84,12 +84,12 @@ This workstream is gateway-owned and can progress against the snapshot inventory
 - [~] `src/runtime/core/` extraction:
   - Commit the core helper boundary shape (`src/runtime/core/bytes.ts` + `src/runtime/core/index.ts`) and keep call sites on runtime-core imports only.
   - Progress note: JSON-safe parsing helpers now landed under `src/runtime/core/json.ts` and are exported via `src/runtime/core/index.ts`.
-  - Progress note: the canonical JSON primitive is now represented by `src/runtime/core/canonicalJson.ts`; update the primitive mapping notes before marking any core snapshot decommissionable.
+  - Progress note: the canonical JSON primitive is now represented by `src/runtime/core/canonicalJson.ts`; update the primitive mapping notes before marking any core legacy mapping complete.
   - Add/retain focused tests for core byte helpers (`tests/runtime-core-bytes.test.ts`) and ensure template body-limit behavior stays covered in `tests/template-api.test.ts`.
-  - Extend `ops/decommission/legacy-archive/MIGRATION_PLAN.md` primitive mapping notes for every newly extracted core helper before decommission state changes.
+  - Extend `ops/decommission/LEGACY_INTEGRATION_AUDIT.md` primitive mapping notes for every newly extracted core helper before decommission state changes.
 - [~] auth-js/crypto-js client boundaries:
   - Harden and merge the current client boundaries (`src/clients/auth-sdk/client.ts`, `src/clients/crypto-sdk/client.ts`) with explicit ownership notes and zero request-path runtime coupling.
-  - Keep and expand boundary contract coverage (`tests/clients-auth-sdk.test.ts`, `tests/clients-crypto-sdk.test.ts`) before any legacy JS snapshot removal decision.
+  - Keep and expand boundary contract coverage (`tests/clients-auth-sdk.test.ts`, `tests/clients-crypto-sdk.test.ts`) before any legacy JS removal decision.
   - Wire docs so map/plan/decommission files all point to the same boundary paths and status (`extracted` for core/crypto, `pending (do-not-port candidate)` for installer).
 - [~] mailing queue + transport progression:
   - Finalize the runtime queue/transport boundary (`src/runtime/mailing/queue.ts`, `src/runtime/mailing/transport.ts`) and document the configuration contract (endpoint/token/timeout).

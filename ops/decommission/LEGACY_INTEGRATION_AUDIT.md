@@ -50,6 +50,6 @@ Result summary:
 
 - Legacy runtime snapshots are removed from the repository.
 - `kernel-migration/` is retired; active evidence now lives in `ops/decommission/`.
-- Runtime boundary scripts now track only active legacy import roots (`libs/legacy/**` and `ops/decommission/legacy-archive/snapshots/**`), with old `kernel-migration` import roots removed.
-- `security/crypto-manifests/` has been normalized as a gateway-owned policy bundle (snapshot metadata removed, legacy context names removed).
+- Runtime boundary scripts now track only the active legacy import root (`libs/legacy/**`), with old `kernel-migration` import roots removed.
+- `security/crypto-policy/` has been normalized as a gateway-owned policy bundle (snapshot metadata removed, legacy context names removed).
 - Remaining blockers are release closeout blockers (AO gate + drill artifacts), not legacy integration blockers.
