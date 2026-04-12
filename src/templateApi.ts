@@ -217,6 +217,7 @@ function resolveExpectedSignatureRef(siteId: string): ResolveResult {
 
   const parsed = parseStringMap(mapRaw, 'GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP')
   if (!parsed.ok) {
+    inc('gateway_template_signer_ref_map_invalid')
     return {
       ok: false,
       status: 500,
@@ -409,6 +410,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   const secretGuard = inspectTemplateSecretPayload(input.payload)
   if (!secretGuard.ok) {
     const blocked = secretGuard as Extract<TemplateSecretGuardResult, { ok: false }>
+    inc('gateway_template_secret_guard_blocked')
     return jsonError(blocked.status, blocked.error, blocked.detail)
   }
 
@@ -473,6 +475,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     }
 
     if (expectedSignatureRef.value && signed.signatureRef !== expectedSignatureRef.value) {
+      inc('gateway_template_signer_ref_mismatch')
       return jsonError(502, 'worker_sign_signature_ref_mismatch', {
         siteId: resolvedSiteId,
         expectedSignatureRef: expectedSignatureRef.value,

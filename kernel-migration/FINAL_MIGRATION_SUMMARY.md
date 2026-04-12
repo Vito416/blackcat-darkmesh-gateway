@@ -30,6 +30,9 @@ Describe what was migrated, stabilized, or decommissioned.
 - The local forget path remains `200` even when optional per-site worker forwarding times out or fails, so public purge stays available without coupling it to the worker relay.
 - The gateway-owned core hash primitive is now documented and tested via `src/runtime/core/hash.ts` and `tests/runtime-core-hash.test.ts`.
 - `tsconfig.json` has moved to `NodeNext`, which removes the `moduleResolution=node10` deprecation warning path and keeps the editor/build toolchain aligned for the next TypeScript line.
+- Template worker routes now enforce `signatureRef` pinning where a site map exists, and the URL/token/signatureRef map-coherence validator keeps release routing inputs aligned before publish.
+- The forget-forward config validator keeps the optional worker relay explicit and bounded, so the local purge path and the worker relay can be audited independently.
+- Release-drill evidence now includes the expanded metadata pack (`release-drill-manifest.json`, strict manifest validation output, `release-drill-check.json`, `release-drill-checks.json`) for machine-auditable closeout.
 - AO registry/authority lifecycle blockers remain open and should still be tracked separately in the decommission evidence bundle.
 
 ## Evidence pack

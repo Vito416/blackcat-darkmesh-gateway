@@ -7,6 +7,7 @@
 - Split CI into build/tests and the dedicated integrity gate for faster diagnosis.
 - Tuned integrity fetch cadence and alert profiles for WEDOS-style hosting limits.
 - Documented the template secret-smuggling guard, the optional forget-forward relay semantics, the gateway-owned core hash primitive evidence, and the TS `NodeNext` migration so operator docs match the current runtime shape.
+- Added runtime `signatureRef` pinning for mapped template workers, the routing-map coherence validator, the forget-forward config validator, and the expanded release-drill evidence metadata so release checks stay machine-auditable.
 
 ## Phase 1 – MVP (parity with current AO/Write/Worker)
 - Serve Arweave template (hash-verified) + cache with TTL.
@@ -28,6 +29,7 @@
 - [gateway] Wire the AO audit commitment query path so gateway metrics map to immutable AO entries.
 - [gateway] Port the remaining parity scenarios into CI: upgrade activation/cancel, compatibility rollback, revoked root, stale state.
 - [ops] Close the last decommission evidence gaps: recovery drill timestamps, AO outage fallback drill, rollback proof.
+- [gateway/ops] Keep the routing-map coherence validator and forget-forward validator in the release gate so the runtime secret boundaries stay explicit.
 - [gateway/ops] Keep the incident/control-path smoke in the CI gate and update the `1.4.0` migration release notes before retirement.
 - [gateway/ops] Institutionalize the evidence-bundle cadence: compare output, attestation JSON, validation result, and workflow link should ship together for every P3 check.
 

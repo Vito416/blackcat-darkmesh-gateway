@@ -36,6 +36,9 @@ describe('metrics exporter', () => {
     expect(prom).toContain('# HELP gateway_cache_forget_forward_failed_total Cache forget events that failed worker forwarding')
     expect(prom).toContain('# HELP gateway_cache_forget_forward_timeout_total Cache forget events that timed out during worker forwarding')
     expect(prom).toContain('# HELP gateway_cache_forget_forward_skipped_total Cache forget events skipped because forwarding is not configured')
+    expect(prom).toContain('# HELP gateway_template_secret_guard_blocked_total Template API calls blocked by secret guard')
+    expect(prom).toContain('# HELP gateway_template_signer_ref_mismatch_total Template API calls blocked by signer signatureRef mismatch')
+    expect(prom).toContain('# HELP gateway_template_signer_ref_map_invalid_total Template API calls blocked by invalid signer signatureRef map')
     expect(prom).toContain(
       '# HELP gateway_integrity_checkpoint_age_seconds Age of the last integrity checkpoint/snapshot audit in seconds',
     )

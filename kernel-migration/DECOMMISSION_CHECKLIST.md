@@ -12,6 +12,9 @@ Latest hardening wave notes to keep visible during closeout:
 - `/cache/forget` still returns `200` for the local purge path even if the optional worker forward skips, times out, or fails.
 - Gateway-owned hash evidence for `blackcat-core` is now anchored by `src/runtime/core/hash.ts` and `tests/runtime-core-hash.test.ts`.
 - `tsconfig.json` has moved to `NodeNext`, which removes the old `moduleResolution=node10` deprecation warning path at the source.
+- Template worker routing now enforces `signatureRef` pinning at runtime when a site is mapped, and the map-coherence validator keeps the URL/token/signatureRef entries aligned before publish.
+- `check-forget-forward-config` makes the optional forget relay explicit, bounded, and fail-closed on malformed config without changing the local purge path semantics.
+- Release-drill evidence now captures expanded metadata (`release-drill-manifest.json`, strict manifest validation output, `release-drill-check.json`, `release-drill-checks.json`) so the bundle stays machine-auditable.
 
 These hardening notes are operational evidence only; they do not close the AO/manual blockers below.
 
@@ -60,8 +63,10 @@ For each module below, require the same three proof types before marking it reti
 ### C.1 Worker-routing and trust-model boundary
 
 - `check-template-worker-routing-config` validates the published tenant URL/token map before routing is published.
+- `check-template-signature-ref-map` and the routing-map coherence checks keep the URL/token/signatureRef maps in sync before release artifacts are published.
 - `init-template-worker-routing` is scaffold-only and prepares a routing set without changing trust policy.
 - `validate-worker-secrets-trust-model` is the machine companion to `ops/worker-secrets-trust-model.md` and should remain a strict gate once wired into release checks.
+- `check-forget-forward-config` documents the optional forget relay contract and should stay separate from the local forget-path proof.
 - Before final decommission, archive the final routing map/token map, the trust-model validation log, and proof that worker secrets stayed out of request-path runtime.
 
 ## D. Observability
@@ -103,6 +108,7 @@ Fail criteria:
 
 - Preferred operator path is `scripts/run-release-drill.js`; it produces and archives the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, drill artifact-check output, and release evidence ledger as the canonical drill bundle.
 - The archived drill bundle must include `release-drill-manifest.json`, strict manifest validation output, `release-drill-check.json`, and `release-evidence-ledger.md/.json`.
+- The drill bundle also records the expanded metadata pack (`release-drill-checks.json`) so follow-up audits can verify what was checked without re-running the drill.
 - The release pack should be built with `npm run ops:build-release-evidence-pack` (or `node scripts/build-release-evidence-pack.js`) and archived as `release-evidence-pack.md` plus `release-evidence-pack.json`.
 - The AO dependency gate should be validated with `node scripts/validate-ao-dependency-gate.js --file kernel-migration/ao-dependency-gate.json` and archived as `ao-dependency-gate.validation.txt`; this proves the JSON is well formed, but it does not mean the AO lifecycle work is done.
 - The release sign-off checklist should be generated with `node scripts/build-release-signoff-checklist.js --pack <release-evidence-pack.json> [--strict]` so the pack status and blockers are machine summarized.

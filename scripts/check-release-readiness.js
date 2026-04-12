@@ -34,6 +34,10 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 function parseArgs(argv) {
   const args = {
     pack: '',
@@ -90,7 +94,7 @@ function normalizeStringList(value, fieldName) {
 
 function normalizeOptionalSection(value, fieldName) {
   if (typeof value === 'undefined' || value === null) return null
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw new Error(`${fieldName} must be a JSON object`)
   }
 
@@ -107,6 +111,78 @@ function normalizeOptionalSection(value, fieldName) {
     status,
     reason,
     findingCount,
+  }
+}
+
+const OPTIONAL_EVIDENCE_SECTION_LABELS = {
+  coreExtraction: 'core extraction evidence',
+  templateSignatureRefMap: 'template signature-ref map evidence',
+  templateWorkerMapCoherence: 'template worker map coherence evidence',
+  forgetForwardConfig: 'forget-forward config evidence',
+}
+
+function normalizeOptionalEvidenceSection(value, fieldName) {
+  if (typeof value === 'undefined' || value === null) return null
+  if (!isPlainObject(value)) {
+    return {
+      present: true,
+      status: 'invalid',
+      reason: `${fieldName} must be a JSON object`,
+    }
+  }
+
+  if (!isNonEmptyString(value.status)) {
+    return {
+      present: true,
+      status: 'missing-required',
+      reason: `${fieldName}.status must be a non-empty string`,
+    }
+  }
+
+  return {
+    present: true,
+    status: value.status.trim().toLowerCase(),
+    reason: isNonEmptyString(value.reason) ? value.reason.trim() : '',
+  }
+}
+
+function collectOptionalEvidenceSource(raw) {
+  if (typeof raw.optionalEvidence !== 'undefined' && raw.optionalEvidence !== null) {
+    if (!isPlainObject(raw.optionalEvidence)) {
+      throw new Error('release pack.optionalEvidence must be a JSON object')
+    }
+    return raw.optionalEvidence
+  }
+
+  const source = {}
+  let found = false
+  for (const key of Object.keys(OPTIONAL_EVIDENCE_SECTION_LABELS)) {
+    if (Object.prototype.hasOwnProperty.call(raw, key)) {
+      source[key] = raw[key]
+      found = true
+    }
+  }
+  return found ? source : null
+}
+
+function normalizeOptionalEvidenceGroup(raw) {
+  const source = collectOptionalEvidenceSource(raw)
+  if (!source) return null
+
+  return {
+    coreExtraction: normalizeOptionalEvidenceSection(source.coreExtraction, 'release pack.optionalEvidence.coreExtraction'),
+    templateSignatureRefMap: normalizeOptionalEvidenceSection(
+      source.templateSignatureRefMap,
+      'release pack.optionalEvidence.templateSignatureRefMap',
+    ),
+    templateWorkerMapCoherence: normalizeOptionalEvidenceSection(
+      source.templateWorkerMapCoherence,
+      'release pack.optionalEvidence.templateWorkerMapCoherence',
+    ),
+    forgetForwardConfig: normalizeOptionalEvidenceSection(
+      source.forgetForwardConfig,
+      'release pack.optionalEvidence.forgetForwardConfig',
+    ),
   }
 }
 
@@ -146,6 +222,7 @@ export async function readReleasePack(path) {
       raw.installerRuntimeBoundary ?? raw.installerBoundary,
       'release pack.installerRuntimeBoundary',
     ),
+    optionalEvidence: normalizeOptionalEvidenceGroup(raw),
   }
 }
 
@@ -159,6 +236,25 @@ export function assessReleaseReadiness(pack) {
       warnings.push(formatBoundaryMessage('installer runtime boundary', section))
     } else if (section.status !== 'pass' && section.status !== 'ok' && section.status !== 'closed') {
       blockers.push(formatBoundaryMessage('installer runtime boundary', section))
+    }
+  }
+
+  if (pack.optionalEvidence) {
+    for (const [key, section] of Object.entries(pack.optionalEvidence)) {
+      if (!section || section.present !== true) continue
+      const label = OPTIONAL_EVIDENCE_SECTION_LABELS[key]
+      if (!label) continue
+
+      if (section.status === 'pass' || section.status === 'ok' || section.status === 'closed') {
+        continue
+      }
+
+      const reason = isNonEmptyString(section.reason) ? section.reason : `status=${section.status}`
+      if (section.status === 'warn' || section.status === 'warning' || section.status === 'degraded' || section.status === 'pending') {
+        warnings.push(`${label} warning: ${reason}`)
+      } else {
+        blockers.push(`${label} blocker: status=${section.status}: ${reason}`)
+      }
     }
   }
 

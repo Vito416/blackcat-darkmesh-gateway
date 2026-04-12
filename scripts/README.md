@@ -6,6 +6,7 @@ Operator and test helpers live here. Keep them dependency-light, explicit, and s
 
 - `scripts/check-template-worker-routing-config.js` validates tenant URL/token routing maps before they are published.
 - `scripts/init-template-worker-routing.js` scaffolds a new routing map for a site set.
+- `scripts/check-template-worker-map-coherence.js` cross-checks the URL, token, and signature-ref maps so missing or extra keys are visible before publish; use `--require-token-map` / `--require-signature-map` when you want those gaps to fail closed.
 - `scripts/check-template-signature-ref-map.js` validates `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` before release signoff so every required site has a non-empty signature ref.
 - `scripts/check-forget-forward-config.js` validates the optional forget-forward relay boundary (`GATEWAY_FORGET_FORWARD_URL`, `GATEWAY_FORGET_FORWARD_TOKEN`, `GATEWAY_FORGET_FORWARD_TIMEOUT_MS`) before enabling per-site forwarding.
 - `npm run ops:validate-worker-secrets-trust-model` is the machine-check companion for `ops/worker-secrets-trust-model.md`; keep it CI-gated once the script is wired in.
@@ -16,6 +17,13 @@ npm run ops:check-template-signature-ref-map -- --json
 npm run ops:check-template-signature-ref-map -- --require-sites alpha,beta --strict
 GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP='{"alpha":"sig-alpha","beta":"sig-beta"}' \
   node scripts/check-template-signature-ref-map.js --require-sites alpha,beta --json
+
+npm run ops:check-template-worker-map-coherence -- --json
+npm run ops:check-template-worker-map-coherence -- --require-sites alpha,beta --strict --require-token-map --require-signature-map
+GATEWAY_TEMPLATE_WORKER_URL_MAP='{"alpha":"https://worker-a.example/sign","beta":"https://worker-b.example/sign"}' \
+GATEWAY_TEMPLATE_WORKER_TOKEN_MAP='{"alpha":"token-alpha","beta":"token-beta"}' \
+GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP='{"alpha":"sig-alpha","beta":"sig-beta"}' \
+  node scripts/check-template-worker-map-coherence.js --json
 
 npm run ops:check-forget-forward-config -- --json
 GATEWAY_FORGET_FORWARD_URL='https://worker.example/cache/forget' \

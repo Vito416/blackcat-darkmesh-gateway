@@ -174,7 +174,12 @@ jobs:
     name: Ops evidence validators
     runs-on: ubuntu-24.04
     env:
+      GATEWAY_TEMPLATE_WORKER_URL_MAP: ${{ vars.GATEWAY_TEMPLATE_WORKER_URL_MAP || secrets.GATEWAY_TEMPLATE_WORKER_URL_MAP || '' }}
+      GATEWAY_TEMPLATE_WORKER_TOKEN_MAP: ${{ vars.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP || secrets.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP || '' }}
       GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP: ${{ vars.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || secrets.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || '' }}
+      GATEWAY_FORGET_FORWARD_URL: ${{ vars.GATEWAY_FORGET_FORWARD_URL || secrets.GATEWAY_FORGET_FORWARD_URL || '' }}
+      GATEWAY_FORGET_FORWARD_TOKEN: ${{ vars.GATEWAY_FORGET_FORWARD_TOKEN || secrets.GATEWAY_FORGET_FORWARD_TOKEN || '' }}
+      GATEWAY_FORGET_FORWARD_TIMEOUT_MS: ${{ vars.GATEWAY_FORGET_FORWARD_TIMEOUT_MS || secrets.GATEWAY_FORGET_FORWARD_TIMEOUT_MS || '' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -188,8 +193,18 @@ jobs:
         run: npm ci
       - name: Check legacy core extraction evidence
         run: npm run ops:check-legacy-core-extraction-evidence -- --strict --json
+      - name: Check template worker routing map coherence
+        run: |
+          set -euo pipefail
+          args=(npm run ops:check-template-worker-routing-config -- --strict --json --url-map "$GATEWAY_TEMPLATE_WORKER_URL_MAP")
+          if [ -n "${GATEWAY_TEMPLATE_WORKER_TOKEN_MAP:-}" ]; then
+            args+=(--token-map "$GATEWAY_TEMPLATE_WORKER_TOKEN_MAP")
+          fi
+          "${args[@]}"
       - name: Check template signature-ref map
         run: npm run ops:check-template-signature-ref-map -- --strict --json
+      - name: Check forget-forward config
+        run: npm run ops:check-forget-forward-config -- --json
 
   smoke:
     name: Smoke checks

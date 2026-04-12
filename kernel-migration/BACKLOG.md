@@ -11,6 +11,9 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, strict manifest validation log, and drill artifact check JSON as one drill bundle.
 - Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-manual-proofs`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness`, but the final state is still split as `automation-complete` plus `ao-manual-pending` until the AO/manual proofs land.
 - Worker-routing and secrets-boundary tooling is now being tracked alongside the gateway libs workstream: `check-template-worker-routing-config`, `init-template-worker-routing`, and `validate-worker-secrets-trust-model` form the public-template/worker boundary checks, but they are guardrails only and do not change AO blocker status.
+- SignatureRef pinning is now enforced at runtime for template workers, and the routing-map coherence validators keep the URL/token/signatureRef maps aligned before release artifacts are published; these remain gateway-side guardrails and do not alter the AO blocker state.
+- The forget-forward path now has a dedicated config validator so the optional forward relay stays explicit, bounded, and fail-closed on malformed config while the local purge path remains available.
+- Release-drill evidence now carries expanded metadata (`release-drill-manifest.json`, strict manifest validation output, `release-drill-check.json`, and `release-drill-checks.json`) so the closeout bundle can be audited without re-running the drill.
 - Latest hardening notes: `/template/call` now fail-closes on recursive secret-smuggling fields, `/cache/forget` stays local-200 even when optional worker forwarding times out, the gateway-owned core hash primitive is backed by `src/runtime/core/hash.ts` and `tests/runtime-core-hash.test.ts`, and `tsconfig.json` has moved to `NodeNext` so the old `moduleResolution=node10` deprecation path is gone.
 - Treat that output as machine-checked evidence only; AO gate closure and manual evidence still need separate drill logs, rollback proof, and human sign-off before decommission.
 - Validator ordering for operator drills is now fixed: build the drill bundle, validate the drill manifest, check drill artifacts, build the evidence ledger/log, then run closeout readiness and AO gate evidence checks before any sign-off is recorded.
@@ -20,8 +23,11 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 ### Worker-routing and trust-model enforcement
 
 - `check-template-worker-routing-config` validates the published tenant URL/token map before routing is published.
+- `check-template-signature-ref-map` and the routing-map coherence checks keep the URL/token/signatureRef maps in sync before release artifacts are published.
 - `init-template-worker-routing` is scaffold-only and exists to prepare a new routing set without granting extra privileges.
 - `validate-worker-secrets-trust-model` documents the public-template/gateway/worker split and should be treated as the machine companion to `ops/worker-secrets-trust-model.md`.
+- `check-forget-forward-config` keeps the optional forget-forward relay explicit and bounded, without changing the local forget-path behavior.
+- `run-release-drill` now records the expanded drill metadata set alongside the standard evidence bundle so closeout artifacts stay machine-auditable.
 - Final decommission still needs the archived routing map/token map, the trust-model validation log, and the closeout bundle that proves worker secrets stayed out of request-path runtime.
 
 ### Gateway libs consolidation workstream

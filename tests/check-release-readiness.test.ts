@@ -130,6 +130,87 @@ describe('check-release-readiness.js', () => {
     })
   })
 
+  it('adds optional evidence warnings from warn-like section statuses', () => {
+    const packPath = writePack({
+      release: '1.4.0',
+      status: 'ready',
+      blockers: [],
+      warnings: [],
+      optionalEvidence: {
+        coreExtraction: {
+          present: true,
+          status: 'pass',
+          reason: 'core extraction fully covered',
+        },
+        templateSignatureRefMap: {
+          present: true,
+          status: 'closed',
+          reason: 'signature refs are pinned',
+        },
+        templateWorkerMapCoherence: {
+          present: true,
+          status: 'pending',
+          reason: 'worker map still under review',
+        },
+        forgetForwardConfig: {
+          present: true,
+          status: 'ok',
+          reason: 'forget-forward relay is configured',
+        },
+      },
+    })
+
+    const res = runCheck(['--pack', packPath])
+
+    expect(res.status).toBe(0)
+    expect(res.stdout).toContain('Status: `warning`')
+    expect(res.stdout).toContain('Blockers: 0')
+    expect(res.stdout).toContain('Warnings: 1')
+    expect(res.stdout).toContain(
+      'template worker map coherence evidence warning: worker map still under review',
+    )
+  })
+
+  it('adds optional evidence blockers from failing section statuses', () => {
+    const packPath = writePack({
+      release: '1.4.0',
+      status: 'ready',
+      blockers: [],
+      warnings: [],
+      optionalEvidence: {
+        coreExtraction: {
+          present: true,
+          status: 'pass',
+          reason: 'core extraction fully covered',
+        },
+        templateSignatureRefMap: {
+          present: true,
+          status: 'ok',
+          reason: 'signature refs are pinned',
+        },
+        templateWorkerMapCoherence: {
+          present: true,
+          status: 'closed',
+          reason: 'worker map coherence is closed',
+        },
+        forgetForwardConfig: {
+          present: true,
+          reason: 'forget-forward config was not emitted',
+        },
+      },
+    })
+
+    const res = runCheck(['--pack', packPath])
+
+    expect(res.status).toBe(3)
+    expect(res.stderr).toBe('')
+    expect(res.stdout).toContain('Status: `blocked`')
+    expect(res.stdout).toContain('Blockers: 1')
+    expect(res.stdout).toContain('Warnings: 0')
+    expect(res.stdout).toContain('forget-forward config evidence blocker: status=missing-required')
+    expect(res.stdout).toContain('status must be a non-empty string')
+  })
+
   it('exits 3 in strict mode when the pack is not ready', () => {
     const packPath = writePack({
       release: '1.4.0',

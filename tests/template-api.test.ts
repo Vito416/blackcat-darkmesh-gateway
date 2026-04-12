@@ -296,6 +296,7 @@ describe('template api policy gateway', () => {
     expect(res.status).toBe(400)
     await expect(res.text()).resolves.toContain('payload_contains_forbidden_secret_fields')
     expect(spy).not.toHaveBeenCalled()
+    expect(snapshot().counters.gateway_template_secret_guard_blocked).toBe(1)
   })
 
   it('blocks write actions unless explicitly enabled', async () => {
@@ -354,6 +355,7 @@ describe('template api policy gateway', () => {
     expect(writeBody.signature).toBe('deadbeef')
     expect(writeBody.signatureRef).toBe('worker-ed25519')
     expect(writeBody.templateAction).toBe('checkout.create-order')
+    expect(snapshot().counters.gateway_template_secret_guard_blocked).toBeUndefined()
   })
 
   it('requires role for non-public write actions', async () => {

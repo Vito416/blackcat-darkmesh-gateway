@@ -6,32 +6,47 @@ import { basename, join } from 'node:path'
 import { runCli, runReleaseDrill } from '../scripts/run-release-drill.js'
 
 const tempDirs: string[] = []
+const TEMPLATE_URL_MAP_ENV = 'GATEWAY_TEMPLATE_WORKER_URL_MAP'
+const TEMPLATE_TOKEN_MAP_ENV = 'GATEWAY_TEMPLATE_WORKER_TOKEN_MAP'
 const TEMPLATE_SIGNATURE_REF_MAP_ENV = 'GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP'
+const FORGET_FORWARD_URL_ENV = 'GATEWAY_FORGET_FORWARD_URL'
+const FORGET_FORWARD_TOKEN_ENV = 'GATEWAY_FORGET_FORWARD_TOKEN'
+const FORGET_FORWARD_TIMEOUT_ENV = 'GATEWAY_FORGET_FORWARD_TIMEOUT_MS'
 
 afterEach(() => {
   vi.restoreAllMocks()
+  delete process.env[TEMPLATE_URL_MAP_ENV]
+  delete process.env[TEMPLATE_TOKEN_MAP_ENV]
   delete process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV]
+  delete process.env[FORGET_FORWARD_URL_ENV]
+  delete process.env[FORGET_FORWARD_TOKEN_ENV]
+  delete process.env[FORGET_FORWARD_TIMEOUT_ENV]
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop()
     if (dir) rmSync(dir, { recursive: true, force: true })
   }
 })
 
-function withTemplateSignatureRefMapEnv(value: string | undefined, fn: () => void) {
-  const previous = process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV]
-  if (typeof value === 'undefined') {
-    delete process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV]
-  } else {
-    process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV] = value
+function withEnvVars(values: Record<string, string | undefined>, fn: () => void) {
+  const previous = new Map<string, string | undefined>()
+  for (const [key, value] of Object.entries(values)) {
+    previous.set(key, process.env[key])
+    if (typeof value === 'undefined') {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
   }
 
   try {
     fn()
   } finally {
-    if (typeof previous === 'undefined') {
-      delete process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV]
-    } else {
-      process.env[TEMPLATE_SIGNATURE_REF_MAP_ENV] = previous
+    for (const [key, value] of previous.entries()) {
+      if (typeof value === 'undefined') {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
     }
   }
 }
@@ -65,23 +80,33 @@ describe('run-release-drill.js', () => {
 
   it('prints a dry-run plan without executing child steps', () => {
     let result
-    withTemplateSignatureRefMapEnv(undefined, () => {
-      result = runCli([
-        '--urls',
-        'https://gw-a.example/integrity/state,https://gw-b.example/integrity/state',
-        '--out-dir',
-        './tmp/release-drill',
-        '--profile',
-        'diskless',
-        '--mode',
-        'all',
-        '--allow-anon',
-        '--release',
-        '2.0.0',
-        '--strict',
-        '--dry-run',
-      ])
-    })
+    withEnvVars(
+      {
+        [TEMPLATE_URL_MAP_ENV]: undefined,
+        [TEMPLATE_TOKEN_MAP_ENV]: undefined,
+        [TEMPLATE_SIGNATURE_REF_MAP_ENV]: undefined,
+        [FORGET_FORWARD_URL_ENV]: undefined,
+        [FORGET_FORWARD_TOKEN_ENV]: undefined,
+        [FORGET_FORWARD_TIMEOUT_ENV]: undefined,
+      },
+      () => {
+        result = runCli([
+          '--urls',
+          'https://gw-a.example/integrity/state,https://gw-b.example/integrity/state',
+          '--out-dir',
+          './tmp/release-drill',
+          '--profile',
+          'diskless',
+          '--mode',
+          'all',
+          '--allow-anon',
+          '--release',
+          '2.0.0',
+          '--strict',
+          '--dry-run',
+        ])
+      },
+    )
 
     expect(result?.exitCode).toBe(0)
     expect(result?.stdout).toContain('Dry run: release drill')
@@ -91,7 +116,11 @@ describe('run-release-drill.js', () => {
     expect(result?.stdout).toContain('scripts/latest-evidence-bundle.js')
     expect(result?.stdout).toContain('scripts/check-evidence-bundle.js')
     expect(result?.stdout).toContain('scripts/check-legacy-core-extraction-evidence.js')
+    expect(result?.stdout).toContain('scripts/check-template-worker-routing-config.js --url-map "{}" --json')
+    expect(result?.stdout).toContain('scripts/check-forget-forward-config.js --json')
     expect(result?.stdout).toContain('scripts/check-template-signature-ref-map.js --json')
+    expect(result?.stdout).toContain('template-worker-map-coherence.json')
+    expect(result?.stdout).toContain('forget-forward-config.json')
     expect(result?.stdout).toContain('release-drill-checks.json')
     expect(result?.stdout).toContain('release-evidence-pack.json')
     expect(result?.stdout).toContain('release-readiness.json')
@@ -207,6 +236,64 @@ describe('run-release-drill.js', () => {
               issues: [],
               warnings: [],
               findings: [],
+            },
+            null,
+            2,
+          ),
+        )
+      }
+
+      if (scriptName === 'check-template-worker-routing-config.js') {
+        return makeSpawnResult(
+          JSON.stringify(
+            {
+              status: 'complete',
+              issues: [],
+              warnings: [],
+              counts: {
+                urlMapCount: 2,
+                tokenMapCount: 2,
+                coveredCount: 2,
+                missingTokenCount: 0,
+                extraTokenCount: 0,
+              },
+            },
+            null,
+            2,
+          ),
+        )
+      }
+
+      if (scriptName === 'check-forget-forward-config.js') {
+        return makeSpawnResult(
+          JSON.stringify(
+            {
+              ok: true,
+              strict: false,
+              status: 'complete',
+              envVars: {
+                url: 'GATEWAY_FORGET_FORWARD_URL',
+                token: 'GATEWAY_FORGET_FORWARD_TOKEN',
+                timeoutMs: 'GATEWAY_FORGET_FORWARD_TIMEOUT_MS',
+              },
+              values: {
+                url: 'https://forward.example/forget',
+                token: 'relay-token',
+                timeoutMs: 5000,
+                timeoutSource: 'env',
+              },
+              present: {
+                url: true,
+                token: true,
+                timeoutMs: true,
+              },
+              counts: {
+                configuredCount: 3,
+                issueCount: 0,
+                warningCount: 0,
+              },
+              issues: [],
+              warnings: [],
             },
             null,
             2,
@@ -352,11 +439,24 @@ describe('run-release-drill.js', () => {
     })
 
     let result
-    withTemplateSignatureRefMapEnv(
-      JSON.stringify({
-        alpha: 'sig-alpha',
-        beta: 'sig-beta',
-      }),
+    withEnvVars(
+      {
+        [TEMPLATE_URL_MAP_ENV]: JSON.stringify({
+          alpha: 'https://gw-a.example/template',
+          beta: 'https://gw-b.example/template',
+        }),
+        [TEMPLATE_TOKEN_MAP_ENV]: JSON.stringify({
+          alpha: 'token-alpha',
+          beta: 'token-beta',
+        }),
+        [TEMPLATE_SIGNATURE_REF_MAP_ENV]: JSON.stringify({
+          alpha: 'sig-alpha',
+          beta: 'sig-beta',
+        }),
+        [FORGET_FORWARD_URL_ENV]: 'https://forward.example/forget',
+        [FORGET_FORWARD_TOKEN_ENV]: 'relay-token',
+        [FORGET_FORWARD_TIMEOUT_ENV]: '5000',
+      },
       () => {
         result = runReleaseDrill(
           {
@@ -375,7 +475,7 @@ describe('run-release-drill.js', () => {
     )
 
     expect(result?.exitCode).toBe(0)
-    expect(spawnSyncFn).toHaveBeenCalledTimes(16)
+    expect(spawnSyncFn).toHaveBeenCalledTimes(18)
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'validate-consistency-preflight.js',
       'compare-integrity-matrix.js',
@@ -385,6 +485,8 @@ describe('run-release-drill.js', () => {
       'check-evidence-bundle.js',
       'validate-ao-dependency-gate.js',
       'check-legacy-core-extraction-evidence.js',
+      'check-template-worker-routing-config.js',
+      'check-forget-forward-config.js',
       'check-template-signature-ref-map.js',
       'build-release-evidence-pack.js',
       'build-release-signoff-checklist.js',
@@ -394,7 +496,7 @@ describe('run-release-drill.js', () => {
       'check-release-drill-artifacts.js',
       'build-release-evidence-ledger.js',
     ])
-    expect(result?.stdout).toContain('[1/16] validate consistency preflight')
+    expect(result?.stdout).toContain('[1/18] validate consistency preflight')
     expect(result?.stdout).toContain('# Release Evidence Pack')
     expect(result?.stdout).toContain('# Release Sign-off Checklist')
     expect(result?.stdout).toContain('# Release Evidence Ledger')
@@ -403,6 +505,8 @@ describe('run-release-drill.js', () => {
 
     const matrix = JSON.parse(readFileSync(join(outDir, 'consistency-matrix.json'), 'utf8'))
     const legacyCoreEvidence = JSON.parse(readFileSync(join(outDir, 'legacy-core-extraction-evidence.json'), 'utf8'))
+    const templateWorkerMapCoherence = JSON.parse(readFileSync(join(outDir, 'template-worker-map-coherence.json'), 'utf8'))
+    const forgetForwardConfig = JSON.parse(readFileSync(join(outDir, 'forget-forward-config.json'), 'utf8'))
     const signatureRefMap = JSON.parse(readFileSync(join(outDir, 'template-signature-ref-map.json'), 'utf8'))
     const drillChecks = JSON.parse(readFileSync(join(outDir, 'release-drill-checks.json'), 'utf8'))
     const pack = JSON.parse(readFileSync(join(outDir, 'release-evidence-pack.json'), 'utf8'))
@@ -415,9 +519,15 @@ describe('run-release-drill.js', () => {
     const ledgerMd = readFileSync(join(outDir, 'release-evidence-ledger.md'), 'utf8')
     const aoGateValidation = readFileSync(join(outDir, 'ao-dependency-gate.validation.txt'), 'utf8')
     expect(legacyCoreEvidence.ok).toBe(true)
+    expect(templateWorkerMapCoherence.status).toBe('complete')
+    expect(templateWorkerMapCoherence.configured).toBe(true)
+    expect(forgetForwardConfig.status).toBe('complete')
+    expect(forgetForwardConfig.present.url).toBe(true)
     expect(signatureRefMap.ok).toBe(true)
     expect(signatureRefMap.requiredSites).toEqual(['alpha', 'beta'])
     expect(drillChecks.legacyCoreExtractionEvidence.status).toBe('complete')
+    expect(drillChecks.templateWorkerMapCoherence.status).toBe('complete')
+    expect(drillChecks.forgetForwardConfig.status).toBe('complete')
     expect(drillChecks.templateSignatureRefMap.configured).toBe(true)
     expect(drillChecks.templateSignatureRefMap.requiredSites).toEqual(['alpha', 'beta'])
     expect(matrix.counts.total).toBe(1)

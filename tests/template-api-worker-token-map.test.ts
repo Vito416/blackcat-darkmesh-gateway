@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleRequest } from '../src/handler.js'
 import { resetTemplateContractCacheForTests } from '../src/templateContract.js'
-import { reset } from '../src/metrics.js'
+import { reset, snapshot } from '../src/metrics.js'
 
 describe('template api worker token map', () => {
   const originalEnv = { ...process.env }
@@ -49,6 +49,7 @@ describe('template api worker token map', () => {
     expect(res.status).toBe(500)
     await expect(res.text()).resolves.toContain('worker_token_map_invalid')
     expect(fetchSpy).not.toHaveBeenCalled()
+    expect(snapshot().counters.gateway_template_signer_ref_map_invalid).toBeUndefined()
   })
 
   it('fails closed when the worker signature ref map is invalid', async () => {
@@ -70,6 +71,7 @@ describe('template api worker token map', () => {
     expect(res.status).toBe(500)
     await expect(res.text()).resolves.toContain('worker_signature_ref_map_invalid')
     expect(fetchSpy).not.toHaveBeenCalled()
+    expect(snapshot().counters.gateway_template_signer_ref_map_invalid).toBe(1)
   })
 
   it('prefers the mapped site token over the global fallback token', async () => {
@@ -103,6 +105,7 @@ describe('template api worker token map', () => {
 
     expect(res.status).toBe(200)
     expect(fetchSpy).toHaveBeenCalledTimes(2)
+    expect(snapshot().counters.gateway_template_signer_ref_mismatch).toBeUndefined()
   })
 
   it('blocks write calls when the signer returns the wrong signature ref', async () => {
@@ -140,6 +143,7 @@ describe('template api worker token map', () => {
     expect(res.status).toBe(502)
     await expect(res.text()).resolves.toContain('worker_sign_signature_ref_mismatch')
     expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(snapshot().counters.gateway_template_signer_ref_mismatch).toBe(1)
   })
 
   it('allows write calls when the signer returns the expected signature ref', async () => {
@@ -179,6 +183,7 @@ describe('template api worker token map', () => {
 
     expect(res.status).toBe(200)
     expect(fetchSpy).toHaveBeenCalledTimes(2)
+    expect(snapshot().counters.gateway_template_signer_ref_mismatch).toBeUndefined()
   })
 
   it('falls back to the global token when the site is missing from the valid map', async () => {
@@ -215,5 +220,7 @@ describe('template api worker token map', () => {
 
     expect(res.status).toBe(200)
     expect(fetchSpy).toHaveBeenCalledTimes(2)
+    expect(snapshot().counters.gateway_template_signer_ref_map_invalid).toBeUndefined()
+    expect(snapshot().counters.gateway_template_signer_ref_mismatch).toBeUndefined()
   })
 })
