@@ -17,6 +17,7 @@ const MAX_STRIPE_SIGNATURE_PARTS = 32
 const DEFAULT_PAYPAL_HTTP_TIMEOUT_MS = 7000
 const MIN_PAYPAL_HTTP_TIMEOUT_MS = 1000
 const MAX_PAYPAL_HTTP_TIMEOUT_MS = 60000
+const SAFE_TRACE_ID_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/
 
 function readStringEnv(name: string): string | undefined {
   const loaded = loadStringConfig(name)
@@ -109,6 +110,11 @@ function readRequiredHeaderValue(headers: Headers, name: string): string | null 
   return value.length > 0 ? value : null
 }
 
+function resolveTraceId(rawTraceId: string | undefined): string | undefined {
+  const traceId = typeof rawTraceId === 'string' ? rawTraceId.trim() : ''
+  return SAFE_TRACE_ID_RE.test(traceId) ? traceId : undefined
+}
+
 function buildPayPalHmacPayload(transmissionId: string, transmissionTime: string, body: string): string {
   return `${transmissionId}.${transmissionTime}.${body}`
 }
@@ -129,10 +135,11 @@ export function verifyStripe(body: string, sigHeader: string | null, secret: str
 }
 
 // PayPal webhook verification (HMAC fallback + RSA remote)
-export async function verifyPayPal(body: string, headers: Headers, secret?: string): Promise<boolean> {
+export async function verifyPayPal(body: string, headers: Headers, secret?: string, traceId?: string): Promise<boolean> {
   if (!body) return false
   const parsedBody = parsePayPalBody(body)
   if (!parsedBody) return false
+  const resolvedTraceId = resolveTraceId(traceId) || crypto.randomUUID()
   // HMAC mode: require transmission metadata and bind it to the signature input.
   if (secret) {
     const sig = readRequiredHeaderValue(headers, 'PayPal-Transmission-Sig') || readRequiredHeaderValue(headers, 'PP-Signature')
@@ -153,7 +160,7 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
   const base = resolvePaypalApiBase()
   if (!base) return false
   const timeoutMs = getPaypalHttpTimeoutMs()
-  const token = await paypalToken(base, timeoutMs)
+  const token = await paypalToken(base, timeoutMs, resolvedTraceId)
   if (!token) return false
   try {
     const payload = {
@@ -169,12 +176,14 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let resp: Response
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      }
+      if (resolvedTraceId) headers['x-trace-id'] = resolvedTraceId
       resp = await fetch(`${base.toString()}/v1/notifications/verify-webhook-signature`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify(payload),
         signal: controller.signal,
       })
@@ -191,7 +200,7 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
   }
 }
 
-async function paypalToken(base: URL, timeoutMs: number): Promise<string | null> {
+async function paypalToken(base: URL, timeoutMs: number, traceId?: string): Promise<string | null> {
   const cid = readStringEnv('PAYPAL_CLIENT_ID')
   const sec = readStringEnv('PAYPAL_CLIENT_SECRET')
   if (!cid || !sec) return null
@@ -202,12 +211,15 @@ async function paypalToken(base: URL, timeoutMs: number): Promise<string | null>
     controller.abort()
   }, timeoutMs)
   try {
+    const headers: Record<string, string> = {
+      Authorization: `Basic ${Buffer.from(`${cid}:${sec}`).toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    }
+    const resolvedTraceId = resolveTraceId(traceId)
+    if (resolvedTraceId) headers['x-trace-id'] = resolvedTraceId
     const resp = await fetch(`${base.toString()}/v1/oauth2/token`, {
       method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${cid}:${sec}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+      headers,
       body: 'grant_type=client_credentials',
       signal: controller.signal,
     })

@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer'
 import crypto from 'crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { fetchEntry, put, sweep, forgetSubject, dropKey } from './cache.js'
 import { inc, gauge, toProm } from './metrics.js'
 import { check as rateCheck } from './ratelimit.js'
@@ -76,6 +77,8 @@ const incidentActionRoles: Record<string, IntegrityRole[]> = {
 const integrityIncidentReplay = new Map<string, IntegrityIncidentReplayRecord>()
 const INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS = 30 * 60 * 1000
 const INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP = 256
+const traceContext = new AsyncLocalStorage<string>()
+const SAFE_TRACE_ID_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/
 
 type IntegrityRuntimeCache = {
   expiresAt: number
@@ -90,22 +93,48 @@ const integrityRuntime: IntegrityRuntimeCache = {
 }
 
 function respond(body?: BodyInit | null, init?: ResponseInit): Response {
-  return applySecurityHeaders(new Response(body, init))
+  const headers = new Headers(init?.headers)
+  const traceId = traceContext.getStore()
+  if (traceId) headers.set('x-trace-id', traceId)
+  return applySecurityHeaders(new Response(body, { ...init, headers }))
 }
 
 function secureResponse(response: Response): Response {
-  return applySecurityHeaders(response)
+  const headers = new Headers(response.headers)
+  const traceId = traceContext.getStore()
+  if (traceId) headers.set('x-trace-id', traceId)
+  return applySecurityHeaders(
+    new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    }),
+  )
 }
 
 function applyNoStoreCacheControl(response: Response): Response {
-  if (response.headers.has('cache-control')) return response
   const headers = new Headers(response.headers)
+  const traceId = traceContext.getStore()
+  if (traceId) headers.set('x-trace-id', traceId)
+  if (headers.has('cache-control')) {
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  }
   headers.set('cache-control', 'no-store')
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   })
+}
+
+function resolveTraceId(rawTraceId: string | null): string {
+  const traceId = typeof rawTraceId === 'string' ? rawTraceId.trim() : ''
+  if (SAFE_TRACE_ID_RE.test(traceId)) return traceId
+  return crypto.randomUUID()
 }
 
 function updateIntegrityAuditGauges(snapshot: IntegritySnapshot | null) {
@@ -623,6 +652,7 @@ async function handleTemplateCall(req: Request, paused: boolean, requestHost: st
     siteId: mappedSiteId || bodySiteId || undefined,
     actor: typeof (body as any).actor === 'string' ? (body as any).actor : undefined,
     role: typeof (body as any).role === 'string' ? (body as any).role : undefined,
+    traceId: traceContext.getStore(),
   })
 
   if (res.status >= 200 && res.status < 300) {
@@ -839,6 +869,8 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
     const headers: Record<string, string> = {
       'content-type': 'application/json',
     }
+    const currentTraceId = traceContext.getStore()
+    if (currentTraceId) headers['x-trace-id'] = currentTraceId
     if (notifyToken) headers.authorization = `Bearer ${notifyToken}`
     if (notifyHmac) {
       headers['x-signature'] = crypto.createHmac('sha256', notifyHmac).update(bodyRaw).digest('hex')
@@ -871,260 +903,271 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
 
 export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
+  const traceId = resolveTraceId(request.headers.get('x-trace-id'))
 
-  if (url.pathname === '/health' || url.pathname === '/healthz') {
-    return applyNoStoreCacheControl(
-      respond(
-        JSON.stringify({
-          ok: true,
-          service: 'blackcat-darkmesh-gateway',
-          ts: new Date().toISOString(),
-        }),
-        {
-          status: 200,
-          headers: {
-            'content-type': 'application/json',
+  return traceContext.run(traceId, async () => {
+    if (url.pathname === '/health' || url.pathname === '/healthz') {
+      return applyNoStoreCacheControl(
+        respond(
+          JSON.stringify({
+            ok: true,
+            service: 'blackcat-darkmesh-gateway',
+            ts: new Date().toISOString(),
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+            },
           },
-        },
-      ),
-    )
-  }
-
-  const integrity = await resolveIntegrityContext()
-  const integrityPaused = integrity.state.paused
-
-  if (url.pathname === '/integrity/state') {
-    markReadonlyFallback(integrityPaused)
-    return applyNoStoreCacheControl(await handleIntegrityState(request, integrity))
-  }
-  if (url.pathname === '/integrity/incident') {
-    return applyNoStoreCacheControl(await handleIntegrityIncident(request, integrity))
-  }
-
-  if (url.pathname.startsWith('/cache/forget')) {
-    if (request.method !== 'POST') return applyNoStoreCacheControl(respond('method', { status: 405 }))
-    if (integrityPaused) return applyNoStoreCacheControl(policyPausedResponse())
-    const token = readForgetToken()
-    if (token) {
-      const auth = request.headers.get('authorization') || ''
-      const bearer = readBearerToken(request)
-      const header = readHeaderToken(request, 'x-forget-token')
-      if (!tokenEquals(token, bearer) && !tokenEquals(token, auth.trim()) && !tokenEquals(token, header)) {
-        return applyNoStoreCacheControl(respond('unauthorized', { status: 401 }))
-      }
+        ),
+      )
     }
-    const body = await request.json().catch(() => ({}))
-    const subject = body.subject as string | undefined
-    const key = body.key as string | undefined
-    let removed = 0
-    if (subject) removed = forgetSubject(subject)
-    if (key) removed = dropKey(key) ? 1 : removed
-    const forwardConfig = readForgetForwardConfig()
-    const forwardResult = await forwardForgetEvent(
-      {
-        ...(subject ? { subject } : {}),
-        ...(key ? { key } : {}),
-        removed,
-        ts: new Date().toISOString(),
-      },
-      forwardConfig,
-    )
-    return applyNoStoreCacheControl(
-      respond(
-        JSON.stringify({
+
+    const integrity = await resolveIntegrityContext()
+    const integrityPaused = integrity.state.paused
+
+    if (url.pathname === '/integrity/state') {
+      markReadonlyFallback(integrityPaused)
+      return applyNoStoreCacheControl(await handleIntegrityState(request, integrity))
+    }
+    if (url.pathname === '/integrity/incident') {
+      return applyNoStoreCacheControl(await handleIntegrityIncident(request, integrity))
+    }
+
+    if (url.pathname.startsWith('/cache/forget')) {
+      if (request.method !== 'POST') return applyNoStoreCacheControl(respond('method', { status: 405 }))
+      if (integrityPaused) return applyNoStoreCacheControl(policyPausedResponse())
+      const token = readForgetToken()
+      if (token) {
+        const auth = request.headers.get('authorization') || ''
+        const bearer = readBearerToken(request)
+        const header = readHeaderToken(request, 'x-forget-token')
+        if (!tokenEquals(token, bearer) && !tokenEquals(token, auth.trim()) && !tokenEquals(token, header)) {
+          return applyNoStoreCacheControl(respond('unauthorized', { status: 401 }))
+        }
+      }
+      const body = await request.json().catch(() => ({}))
+      const subject = body.subject as string | undefined
+      const key = body.key as string | undefined
+      let removed = 0
+      if (subject) removed = forgetSubject(subject)
+      if (key) removed = dropKey(key) ? 1 : removed
+      const forwardConfig = readForgetForwardConfig()
+      const currentTraceId = traceContext.getStore()
+      const forwardResult = await forwardForgetEvent(
+        {
+          ...(subject ? { subject } : {}),
+          ...(key ? { key } : {}),
           removed,
-          forwarded: forwardResult.forwarded,
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
-    )
-  }
-  if (url.pathname.startsWith('/cache/')) {
-    const key = url.pathname.replace('/cache/', '')
-    return handleCache(request, key, integrityPaused, integrity.snapshot)
-  }
-  if (url.pathname === '/inbox') {
-    if (integrityPaused) return policyPausedResponse()
-    return handleInbox(request)
-  }
-  if (url.pathname === '/template/call') {
-    if (url.searchParams.size > 0) {
-      return jsonErrorResponse(400, 'query_not_allowed')
+          ts: new Date().toISOString(),
+        },
+        forwardConfig,
+        (input, init) => {
+          const headers = Object.fromEntries(new Headers(init?.headers).entries())
+          if (currentTraceId) headers['x-trace-id'] = currentTraceId
+          return fetch(input, { ...init, headers })
+        },
+      )
+      return applyNoStoreCacheControl(
+        respond(
+          JSON.stringify({
+            removed,
+            forwarded: forwardResult.forwarded,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
     }
-    return handleTemplateCall(request, integrityPaused, url.host)
-  }
-  if (url.pathname === '/template/config') {
-    if (url.searchParams.size > 0) {
-      return jsonErrorResponse(400, 'query_not_allowed')
+    if (url.pathname.startsWith('/cache/')) {
+      const key = url.pathname.replace('/cache/', '')
+      return handleCache(request, key, integrityPaused, integrity.snapshot)
     }
-    return handleTemplateConfig(request, integrityPaused)
-  }
-  if (url.pathname === '/metrics') {
-    markReadonlyFallback(integrityPaused)
-    const metricsAuth = readMetricsAuthConfig()
-    if (!metricsAuth.needBasic && !metricsAuth.needBearer && metricsAuth.mustGuard) {
-      return applyNoStoreCacheControl(respond('metrics_auth_not_configured', { status: 500 }))
+    if (url.pathname === '/inbox') {
+      if (integrityPaused) return policyPausedResponse()
+      return handleInbox(request)
     }
-    if (metricsAuth.needBasic || metricsAuth.needBearer || metricsAuth.mustGuard) {
-      const auth = request.headers.get('authorization') || ''
-      const bearer = readBearerToken(request)
-      const alt = readHeaderToken(request, 'x-metrics-token')
-      let authed = false
-      if (metricsAuth.needBearer && auth) {
-        authed = tokenEquals(metricsAuth.bearerToken, bearer)
+    if (url.pathname === '/template/call') {
+      if (url.searchParams.size > 0) {
+        return jsonErrorResponse(400, 'query_not_allowed')
       }
-      if (metricsAuth.needBearer && !authed && alt) {
-        authed = tokenEquals(metricsAuth.bearerToken, alt)
-      }
-      if (!authed && metricsAuth.needBasic) {
-        authed = basicCredentialsMatch(metricsAuth.basicUser, metricsAuth.basicPass, auth)
-      }
-      if (!authed) {
-        inc('gateway_metrics_auth_blocked')
-        return applyNoStoreCacheControl(
-          respond('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } }),
-        )
-      }
+      return handleTemplateCall(request, integrityPaused, url.host)
     }
-    const prom = toProm()
-    return applyNoStoreCacheControl(
-      respond(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } }),
-    )
-  }
-  if (url.pathname === '/webhook/stripe') {
-    if (integrityPaused) return policyPausedResponse()
-    const limited = rateLimitResponse(`webhook:stripe:${requestIp(request)}`)
-    if (limited) return limited
-    return wrapWebhook('stripe', async () => {
-      const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
-      const body = await request.text()
-      if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
-        return webhookBodyTooLargeResponse()
+    if (url.pathname === '/template/config') {
+      if (url.searchParams.size > 0) {
+        return jsonErrorResponse(400, 'query_not_allowed')
       }
-      const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), webhookConfig.stripeSecret, webhookConfig.stripeToleranceMs)
-      if (!ok) {
-        inc('gateway_webhook_stripe_verify_fail')
-        return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+      return handleTemplateConfig(request, integrityPaused)
+    }
+    if (url.pathname === '/metrics') {
+      markReadonlyFallback(integrityPaused)
+      const metricsAuth = readMetricsAuthConfig()
+      if (!metricsAuth.needBasic && !metricsAuth.needBearer && metricsAuth.mustGuard) {
+        return applyNoStoreCacheControl(respond('metrics_auth_not_configured', { status: 500 }))
       }
-      const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
-      if (id && markAndCheck(`stripe:${id}`)) return respond('replay', { status: 200 })
-      inc('gateway_webhook_stripe_ok')
-      return respond('ok', { status: 200 })
-    })
-  }
-  if (url.pathname === '/webhook/paypal') {
-    if (integrityPaused) return policyPausedResponse()
-    const limited = rateLimitResponse(`webhook:paypal:${requestIp(request)}`)
-    if (limited) return limited
-    return wrapWebhook('paypal', async () => {
-      const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
-      const body = await request.text()
-      if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
-        return webhookBodyTooLargeResponse()
+      if (metricsAuth.needBasic || metricsAuth.needBearer || metricsAuth.mustGuard) {
+        const auth = request.headers.get('authorization') || ''
+        const bearer = readBearerToken(request)
+        const alt = readHeaderToken(request, 'x-metrics-token')
+        let authed = false
+        if (metricsAuth.needBearer && auth) {
+          authed = tokenEquals(metricsAuth.bearerToken, bearer)
+        }
+        if (metricsAuth.needBearer && !authed && alt) {
+          authed = tokenEquals(metricsAuth.bearerToken, alt)
+        }
+        if (!authed && metricsAuth.needBasic) {
+          authed = basicCredentialsMatch(metricsAuth.basicUser, metricsAuth.basicPass, auth)
+        }
+        if (!authed) {
+          inc('gateway_metrics_auth_blocked')
+          return applyNoStoreCacheControl(
+            respond('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } }),
+          )
+        }
       }
-      const headers = request.headers
-      const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
-      if (!certOk) {
-        inc('gateway_webhook_paypal_verify_fail')
-        return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
-      }
-      const ok = await verifyPayPal(body, headers, webhookConfig.paypalWebhookSecret)
-      if (!ok) {
-        inc('gateway_webhook_paypal_verify_fail')
-        return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
-      }
-      const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
-      if (replayKey && markAndCheck(`paypal:${replayKey}`)) return respond('replay', { status: 200 })
-      inc('gateway_webhook_paypal_ok')
-      return respond('ok', { status: 200 })
-    })
-  }
-  if (url.pathname === '/webhook/gopay') {
-    if (integrityPaused) return policyPausedResponse()
-    const limited = rateLimitResponse(`webhook:gopay:${requestIp(request)}`)
-    if (limited) return limited
-    return wrapWebhook('gopay', async () => {
-      const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
-      const body = await request.text()
-      if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
-        return webhookBodyTooLargeResponse()
-      }
-      const signatureHeader = request.headers.get('x-gopay-signature') || request.headers.get('gopay-signature')
-      const ok = verifyGoPayWebhook(body, signatureHeader, webhookConfig.gopayWebhookSecret)
-      if (!ok) {
-        inc('gateway_webhook_gopay_verify_fail')
-        return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
-      }
-      const replayMode = getGoPayWebhookIdempotencyPolicy()
-      const idempotency = classifyGoPayWebhookIdempotency(request.headers.get('x-gopay-event-id'), body, replayMode)
-      if (idempotency.status === 'missing-id' || idempotency.status === 'conflict') {
+      const prom = toProm()
+      return applyNoStoreCacheControl(
+        respond(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } }),
+      )
+    }
+    if (url.pathname === '/webhook/stripe') {
+      if (integrityPaused) return policyPausedResponse()
+      const limited = rateLimitResponse(`webhook:stripe:${requestIp(request)}`)
+      if (limited) return limited
+      return wrapWebhook('stripe', async () => {
+        const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
+        const body = await request.text()
+        if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
+          return webhookBodyTooLargeResponse()
+        }
+        const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), webhookConfig.stripeSecret, webhookConfig.stripeToleranceMs)
+        if (!ok) {
+          inc('gateway_webhook_stripe_verify_fail')
+          return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+        }
+        const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
+        if (id && markAndCheck(`stripe:${id}`)) return respond('replay', { status: 200 })
+        inc('gateway_webhook_stripe_ok')
+        return respond('ok', { status: 200 })
+      })
+    }
+    if (url.pathname === '/webhook/paypal') {
+      if (integrityPaused) return policyPausedResponse()
+      const limited = rateLimitResponse(`webhook:paypal:${requestIp(request)}`)
+      if (limited) return limited
+      return wrapWebhook('paypal', async () => {
+        const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
+        const body = await request.text()
+        if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
+          return webhookBodyTooLargeResponse()
+        }
+        const headers = request.headers
+        const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
+        if (!certOk) {
+          inc('gateway_webhook_paypal_verify_fail')
+          return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+        }
+        const ok = await verifyPayPal(body, headers, webhookConfig.paypalWebhookSecret, traceContext.getStore())
+        if (!ok) {
+          inc('gateway_webhook_paypal_verify_fail')
+          return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+        }
+        const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
+        if (replayKey && markAndCheck(`paypal:${replayKey}`)) return respond('replay', { status: 200 })
+        inc('gateway_webhook_paypal_ok')
+        return respond('ok', { status: 200 })
+      })
+    }
+    if (url.pathname === '/webhook/gopay') {
+      if (integrityPaused) return policyPausedResponse()
+      const limited = rateLimitResponse(`webhook:gopay:${requestIp(request)}`)
+      if (limited) return limited
+      return wrapWebhook('gopay', async () => {
+        const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
+        const body = await request.text()
+        if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
+          return webhookBodyTooLargeResponse()
+        }
+        const signatureHeader = request.headers.get('x-gopay-signature') || request.headers.get('gopay-signature')
+        const ok = verifyGoPayWebhook(body, signatureHeader, webhookConfig.gopayWebhookSecret)
+        if (!ok) {
+          inc('gateway_webhook_gopay_verify_fail')
+          return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+        }
+        const replayMode = getGoPayWebhookIdempotencyPolicy()
+        const idempotency = classifyGoPayWebhookIdempotency(request.headers.get('x-gopay-event-id'), body, replayMode)
+        if (idempotency.status === 'missing-id' || idempotency.status === 'conflict') {
+          return respond(idempotency.body, { status: idempotency.httpStatus })
+        }
+        if (idempotency.status === 'duplicate') {
+          inc('gateway_webhook_replay')
+          return respond(idempotency.body, { status: idempotency.httpStatus })
+        }
+        inc('gateway_webhook_gopay_ok')
         return respond(idempotency.body, { status: idempotency.httpStatus })
+      })
+    }
+
+    if (url.pathname === '/webhook/demo-forward') {
+      if (integrityPaused) return policyPausedResponse()
+      if (!readHandlerStrictEnabledFlag('GATEWAY_DEMO_FORWARD_ENABLED')) {
+        return respond('not found', { status: 404 })
       }
-      if (idempotency.status === 'duplicate') {
-        inc('gateway_webhook_replay')
-        return respond(idempotency.body, { status: idempotency.httpStatus })
+      const demoForwardToken = readHandlerEnvString('GATEWAY_DEMO_FORWARD_TOKEN')
+      if (!demoForwardToken) {
+        return respond('demo_forward_auth_not_configured', { status: 500 })
       }
-      inc('gateway_webhook_gopay_ok')
-      return respond(idempotency.body, { status: idempotency.httpStatus })
-    })
-  }
+      if (!checkToken(request, demoForwardToken, 'x-demo-forward-token')) {
+        return respond('unauthorized', { status: 401 })
+      }
+      const limited = rateLimitResponse(`demo-forward:${requestIp(request)}`)
+      if (limited) return limited
+      const workerNotify = readWorkerNotifyConfig()
+      const body = await request.text()
+      if (bodyExceedsLimit(body, WEBHOOK_MAX_BODY_DEFAULT_BYTES)) {
+        return webhookBodyTooLargeResponse()
+      }
+      if (!workerNotify.token) {
+        return respond('worker_notify_auth_not_configured', { status: 500 })
+      }
 
-  if (url.pathname === '/webhook/demo-forward') {
-    if (integrityPaused) return policyPausedResponse()
-    if (!readHandlerStrictEnabledFlag('GATEWAY_DEMO_FORWARD_ENABLED')) {
-      return respond('not found', { status: 404 })
-    }
-    const demoForwardToken = readHandlerEnvString('GATEWAY_DEMO_FORWARD_TOKEN')
-    if (!demoForwardToken) {
-      return respond('demo_forward_auth_not_configured', { status: 500 })
-    }
-    if (!checkToken(request, demoForwardToken, 'x-demo-forward-token')) {
-      return respond('unauthorized', { status: 401 })
-    }
-    const limited = rateLimitResponse(`demo-forward:${requestIp(request)}`)
-    if (limited) return limited
-    const workerNotify = readWorkerNotifyConfig()
-    const body = await request.text()
-    if (bodyExceedsLimit(body, WEBHOOK_MAX_BODY_DEFAULT_BYTES)) {
-      return webhookBodyTooLargeResponse()
-    }
-    if (!workerNotify.token) {
-      return respond('worker_notify_auth_not_configured', { status: 500 })
-    }
+      // Pick breaker key by provider (query/header/body) with per-PSP overrides, fallback to generic.
+      const provider = (() => {
+        const q = url.searchParams.get('provider')
+        if (q) return q.toLowerCase()
+        const hdr = request.headers.get('x-provider')
+        if (hdr) return hdr.toLowerCase()
+        try {
+          const parsed = JSON.parse(body)
+          if (parsed?.provider) return String(parsed.provider).toLowerCase()
+        } catch {}
+        return undefined
+      })()
 
-    // Pick breaker key by provider (query/header/body) with per-PSP overrides, fallback to generic.
-    const provider = (() => {
-      const q = url.searchParams.get('provider')
-      if (q) return q.toLowerCase()
-      const hdr = request.headers.get('x-provider')
-      if (hdr) return hdr.toLowerCase()
-      try {
-        const parsed = JSON.parse(body)
-        if (parsed?.provider) return String(parsed.provider).toLowerCase()
-      } catch {}
-      return undefined
-    })()
+      const breakerKey = resolveWorkerNotifyBreakerKey(workerNotify, provider)
 
-    const breakerKey = resolveWorkerNotifyBreakerKey(workerNotify, provider)
-
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${workerNotify.token}`,
-      'content-type': 'application/json',
-      'x-breaker-key': breakerKey,
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${workerNotify.token}`,
+        'content-type': 'application/json',
+        'x-breaker-key': breakerKey,
+      }
+      const currentTraceId = traceContext.getStore()
+      if (currentTraceId) headers['x-trace-id'] = currentTraceId
+      if (workerNotify.hmacSecret) {
+        const sig = crypto.createHmac('sha256', workerNotify.hmacSecret).update(body).digest('hex')
+        headers['X-Signature'] = sig
+      }
+      const resp = await fetch(workerNotify.target, { method: 'POST', headers, body })
+      if (resp.ok) return respond('forwarded', { status: 200 })
+      return respond('notify_failed', { status: 502 })
     }
-    if (workerNotify.hmacSecret) {
-      const sig = crypto.createHmac('sha256', workerNotify.hmacSecret).update(body).digest('hex')
-      headers['X-Signature'] = sig
+    // periodic sweep
+    sweep()
+    if (url.pathname === '/') {
+      markReadonlyFallback(integrityPaused)
+      return respond('Gateway skeleton', { status: 200 })
     }
-    const resp = await fetch(workerNotify.target, { method: 'POST', headers, body })
-    if (resp.ok) return respond('forwarded', { status: 200 })
-    return respond('notify_failed', { status: 502 })
-  }
-  // periodic sweep
-  sweep()
-  if (url.pathname === '/') {
-    markReadonlyFallback(integrityPaused)
-    return respond('Gateway skeleton', { status: 200 })
-  }
-  return plainErrorResponse(404, 'not found')
+    return plainErrorResponse(404, 'not found')
+  })
 }

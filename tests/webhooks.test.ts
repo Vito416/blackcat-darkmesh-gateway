@@ -173,6 +173,52 @@ describe('webhook verification', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('propagates trace ids through paypal remote verification and response headers', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_CLIENT_ID = 'client'
+    process.env.PAYPAL_CLIENT_SECRET = 'secret'
+    process.env.PAYPAL_API_BASE = 'https://api.sandbox.paypal.com'
+    process.env.PAYPAL_API_ALLOW_HOSTS = 'api.sandbox.paypal.com'
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: 'token-123' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ verification_status: 'SUCCESS' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const body = JSON.stringify({ id: 'WH-trace', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'content-type': 'application/json',
+      'x-trace-id': 'trace-paypal-1',
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'sig',
+      'PayPal-Transmission-Id': 'tx-trace',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+
+    const { handleRequest } = await loadHandler()
+    const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-trace-id')).toBe('trace-paypal-1')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    const tokenInit = fetchMock.mock.calls[0][1] as RequestInit
+    const verifyInit = fetchMock.mock.calls[1][1] as RequestInit
+    expect(new Headers(tokenInit.headers).get('x-trace-id')).toBe('trace-paypal-1')
+    expect(new Headers(verifyInit.headers).get('x-trace-id')).toBe('trace-paypal-1')
+  })
+
   it('blocks paypal api hosts not on the allowlist', async () => {
     process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
     process.env.PAYPAL_API_BASE = 'https://evil.example'

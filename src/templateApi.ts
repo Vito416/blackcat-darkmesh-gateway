@@ -15,6 +15,7 @@ type TemplateCallInput = {
   siteId?: string
   actor?: string
   role?: string
+  traceId?: string
 }
 
 type ResolveResult =
@@ -62,6 +63,7 @@ type TemplateVariantResolveResult =
 const DEFAULT_TEMPLATE_MAX_BODY_BYTES = 32_768
 const DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS = 7_000
 const DEFAULT_TEMPLATE_SIGN_TIMEOUT_MS = 5_000
+const SAFE_TRACE_ID_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/
 
 const TEMPLATE_TO_WRITE_ACTION: Record<string, string> = {
   'checkout.create-order': 'CreateOrder',
@@ -76,6 +78,12 @@ function asNonEmptyString(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : undefined
+}
+
+function resolveTraceId(rawTraceId: string | undefined): string {
+  const traceId = typeof rawTraceId === 'string' ? rawTraceId.trim() : ''
+  if (SAFE_TRACE_ID_RE.test(traceId)) return traceId
+  return crypto.randomUUID()
 }
 
 function resolveSiteId(input: TemplateCallInput): string | undefined {
@@ -383,7 +391,9 @@ function getTemplateTargetAllowlist(): string[] | null {
     .filter((value) => value.length > 0)
 }
 
-function jsonError(status: number, error: string, detail?: Record<string, unknown>): Response {
+function jsonError(status: number, error: string, detail?: Record<string, unknown>, traceId?: string): Response {
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  if (traceId) headers['x-trace-id'] = traceId
   return new Response(
     JSON.stringify({
       error,
@@ -391,7 +401,7 @@ function jsonError(status: number, error: string, detail?: Record<string, unknow
     }),
     {
       status,
-      headers: { 'content-type': 'application/json' },
+      headers,
     },
   )
 }
@@ -400,7 +410,7 @@ function isAbortError(error: unknown): boolean {
   return !!error && typeof error === 'object' && 'name' in error && (error as { name?: string }).name === 'AbortError'
 }
 
-function validateAllowlist(baseUrl: string, allowlist: string[] | null): Response | null {
+function validateAllowlist(baseUrl: string, allowlist: string[] | null, traceId?: string): Response | null {
   if (!allowlist) return null
 
   let resolvedHost: string
@@ -411,7 +421,7 @@ function validateAllowlist(baseUrl: string, allowlist: string[] | null): Respons
     return jsonError(403, 'template_target_forbidden', {
       detail: 'upstream target is invalid',
       target: baseUrl,
-    })
+    }, traceId)
   }
 
   if (allowlist.includes(resolvedHost)) return null
@@ -421,7 +431,7 @@ function validateAllowlist(baseUrl: string, allowlist: string[] | null): Respons
     detail: 'upstream host is not in the allowlist',
     host: resolvedHost,
     allowlist,
-  })
+  }, traceId)
 }
 
 function buildWriteSignEnvelope(input: TemplateCallInput, siteId: string, requestId: string, payload: unknown): SignedWriteEnvelope {
@@ -454,6 +464,7 @@ async function signWriteEnvelope(
   signerToken: string,
   envelope: SignedWriteEnvelope,
   timeoutMs: number,
+  traceId?: string,
 ): Promise<SignedWriteEnvelopeResult> {
   const signUrl = new URL('/sign', signerBaseUrl).toString()
   const controller = new AbortController()
@@ -464,12 +475,14 @@ async function signWriteEnvelope(
   }, timeoutMs)
 
   try {
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${signerToken}`,
+      'content-type': 'application/json',
+    }
+    if (traceId) headers['x-trace-id'] = traceId
     const response = await fetch(signUrl, {
       method: 'POST',
-      headers: {
-        authorization: `Bearer ${signerToken}`,
-        'content-type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(envelope),
       signal: controller.signal,
     })
@@ -515,13 +528,14 @@ async function signWriteEnvelope(
 }
 
 export async function proxyTemplateCall(input: TemplateCallInput): Promise<Response> {
+  const traceId = resolveTraceId(input.traceId)
   const policy = getResolvedPolicy(input.action)
-  if (!policy) return jsonError(403, 'action_not_allowed')
+  if (!policy) return jsonError(403, 'action_not_allowed', undefined, traceId)
 
   const enforcedRole = policy.local.kind === 'write' ? policy.contract.auth.requiredRole : input.role
 
   if (policy.local.kind === 'write' && readStringEnv('GATEWAY_TEMPLATE_ALLOW_MUTATIONS') !== '1') {
-    return jsonError(403, 'write_actions_disabled')
+    return jsonError(403, 'write_actions_disabled', undefined, traceId)
   }
 
   const roleCheck = requireAllowedRole(policy.contract.auth.requiredRole, enforcedRole, { publicRole: 'public' })
@@ -529,46 +543,46 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     return jsonError(403, 'forbidden_role', {
       requiredRole: policy.contract.auth.requiredRole,
       providedRole: (typeof enforcedRole === 'string' && enforcedRole.trim().length > 0 ? enforcedRole : null),
-    })
+    }, traceId)
   }
 
   const valid = policy.local.validate(input.payload)
   if (!valid.ok) {
     const detail = 'error' in valid ? valid.error : 'invalid_payload'
-    return jsonError(400, 'invalid_payload', { detail })
+    return jsonError(400, 'invalid_payload', { detail }, traceId)
   }
 
   const secretGuard = inspectTemplateSecretPayload(input.payload)
   if (!secretGuard.ok) {
     const blocked = secretGuard as Extract<TemplateSecretGuardResult, { ok: false }>
     inc('gateway_template_secret_guard_blocked')
-    return jsonError(blocked.status, blocked.error, blocked.detail)
+    return jsonError(blocked.status, blocked.error, blocked.detail, traceId)
   }
 
   const requestId = asNonEmptyString(input.requestId)
   if (policy.contract.idempotency.mode === 'required' && !requestId) {
     return jsonError(400, 'missing_request_id', {
       detail: 'x-request-id is required for this action',
-    })
+    }, traceId)
   }
 
   const siteIdForVariantMap = resolveSiteId(input)
   const resolvedTemplateVariant = resolveTemplateVariantMetadata(siteIdForVariantMap)
   if (resolvedTemplateVariant.ok === false) {
     const templateVariantError = resolvedTemplateVariant as Extract<TemplateVariantResolveResult, { ok: false }>
-    return jsonError(templateVariantError.status, templateVariantError.error, templateVariantError.detail)
+    return jsonError(templateVariantError.status, templateVariantError.error, templateVariantError.detail, traceId)
   }
   const payloadWithTemplateVariant = injectTemplateVariant(input.payload, resolvedTemplateVariant.value)
 
   const resolvedTarget = resolveBackendBaseUrl(policy.local.target)
   if (resolvedTarget.ok === false) {
     const resolvedTargetError = resolvedTarget as Extract<ResolveResult, { ok: false }>
-    return jsonError(resolvedTargetError.status, resolvedTargetError.error, resolvedTargetError.detail)
+    return jsonError(resolvedTargetError.status, resolvedTargetError.error, resolvedTargetError.detail, traceId)
   }
   const baseUrl = (resolvedTarget as Extract<ResolveResult, { ok: true }>).value
 
   const allowlist = getTemplateTargetAllowlist()
-  const baseUrlAllowError = validateAllowlist(baseUrl, allowlist)
+  const baseUrlAllowError = validateAllowlist(baseUrl, allowlist, traceId)
   if (baseUrlAllowError) return baseUrlAllowError
 
   let effectiveRequestId = requestId
@@ -581,44 +595,50 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     if (explicitSiteId && payloadSiteId && explicitSiteId !== payloadSiteId) {
       return jsonError(400, 'site_id_mismatch', {
         detail: 'siteId and payload.siteId must match for write actions',
-      })
+      }, traceId)
     }
 
     resolvedSiteId = explicitSiteId || payloadSiteId || resolveSiteId(input)
     if (!resolvedSiteId) {
       return jsonError(400, 'site_id_required', {
         detail: 'payload.siteId is required for write actions',
-      })
+      }, traceId)
     }
 
     const signerBase = resolveSignerBaseUrl(resolvedSiteId)
     if (signerBase.ok === false) {
       const signerBaseError = signerBase as Extract<ResolveResult, { ok: false }>
-      return jsonError(signerBaseError.status, signerBaseError.error, signerBaseError.detail)
+      return jsonError(signerBaseError.status, signerBaseError.error, signerBaseError.detail, traceId)
     }
 
-    const signerAllowError = validateAllowlist(signerBase.value, allowlist)
+    const signerAllowError = validateAllowlist(signerBase.value, allowlist, traceId)
     if (signerAllowError) return signerAllowError
 
     const signerToken = resolveSignerToken(resolvedSiteId)
     if (signerToken.ok === false) {
       const signerTokenError = signerToken as Extract<ResolveResult, { ok: false }>
-      return jsonError(signerTokenError.status, signerTokenError.error, signerTokenError.detail)
+      return jsonError(signerTokenError.status, signerTokenError.error, signerTokenError.detail, traceId)
     }
 
     const expectedSignatureRef = resolveExpectedSignatureRef(resolvedSiteId)
     if (expectedSignatureRef.ok === false) {
       const expectedSignatureRefError = expectedSignatureRef as Extract<ResolveResult, { ok: false }>
-      return jsonError(expectedSignatureRefError.status, expectedSignatureRefError.error, expectedSignatureRefError.detail)
+      return jsonError(expectedSignatureRefError.status, expectedSignatureRefError.error, expectedSignatureRefError.detail, traceId)
     }
 
     effectiveRequestId = effectiveRequestId || `req-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
     const signEnvelope = buildWriteSignEnvelope(input, resolvedSiteId, effectiveRequestId, payloadWithTemplateVariant)
     const signerBaseUrl = (signerBase as Extract<ResolveResult, { ok: true }>).value
-    const signed = await signWriteEnvelope(signerBaseUrl, signerToken.value, signEnvelope, getTemplateSignTimeoutMs())
+    const signed = await signWriteEnvelope(
+      signerBaseUrl,
+      signerToken.value,
+      signEnvelope,
+      getTemplateSignTimeoutMs(),
+      traceId,
+    )
     if (signed.ok === false) {
       const signedError = signed as Extract<SignedWriteEnvelopeResult, { ok: false }>
-      return jsonError(signedError.status, signedError.error, signedError.detail)
+      return jsonError(signedError.status, signedError.error, signedError.detail, traceId)
     }
 
     if (expectedSignatureRef.value && signed.signatureRef !== expectedSignatureRef.value) {
@@ -627,7 +647,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
         siteId: resolvedSiteId,
         expectedSignatureRef: expectedSignatureRef.value,
         actualSignatureRef: signed.signatureRef,
-      })
+      }, traceId)
     }
 
     writeEnvelope = {
@@ -660,7 +680,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
       detail: 'template call body exceeds the configured byte limit',
       maxBodyBytes,
       actualBytes: bodyBytes,
-    })
+    }, traceId)
   }
 
   const signature = hmacBody(body)
@@ -677,13 +697,13 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   const upstreamToken = resolveTemplateUpstreamToken(resolvedSiteId)
   if (upstreamToken.ok === false) {
     const upstreamTokenError = upstreamToken as Extract<ResolveResult, { ok: false }>
-    return jsonError(upstreamTokenError.status, upstreamTokenError.error, upstreamTokenError.detail)
+    return jsonError(upstreamTokenError.status, upstreamTokenError.error, upstreamTokenError.detail, traceId)
   }
   if (upstreamAuthMode !== 'none' && !upstreamToken.value) {
     return jsonError(503, 'template_upstream_auth_not_configured', {
       mode: upstreamAuthMode,
       siteId: resolvedSiteId,
-    })
+    }, traceId)
   }
   if (upstreamToken.value && upstreamAuthMode === 'bearer') {
     headers.authorization = `Bearer ${upstreamToken.value}`
@@ -702,6 +722,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
 
   let upstream: Response
   try {
+    if (traceId) headers['x-trace-id'] = traceId
     upstream = await fetch(url, { method: policy.local.method, headers, body, signal: controller.signal })
   } catch (error) {
     if (timedOut || isAbortError(error)) {
@@ -709,12 +730,12 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
       return jsonError(504, 'template_upstream_timeout', {
         detail: 'template upstream request exceeded the configured timeout',
         timeoutMs,
-      })
+      }, traceId)
     }
     inc('gateway_template_call_backend_fail')
     return jsonError(502, 'template_upstream_error', {
       detail: 'template upstream request failed',
-    })
+    }, traceId)
   } finally {
     clearTimeout(timer)
   }
@@ -723,6 +744,9 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
 
   return new Response(upstreamBody, {
     status: upstream.status,
-    headers: { 'content-type': upstream.headers.get('content-type') || 'application/json' },
+    headers: {
+      'content-type': upstream.headers.get('content-type') || 'application/json',
+      'x-trace-id': traceId,
+    },
   })
 }

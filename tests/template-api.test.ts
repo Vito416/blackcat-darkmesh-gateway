@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -142,6 +143,61 @@ describe('template api policy gateway', () => {
     expect(spy).toHaveBeenCalledTimes(1)
     const [url] = spy.mock.calls[0]
     expect(String(url)).toBe('https://ao.example/api/public/resolve-route')
+  })
+
+  it('propagates trace ids through template upstream calls and response headers', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await handleRequest(
+      new Request('http://gateway/template/call', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-trace-id': 'trace-abc-123',
+        },
+        body: JSON.stringify({
+          action: 'public.resolve-route',
+          requestId: 'req-trace-1',
+          siteId: 'site-1',
+          payload: { host: 'example.com', path: '/shop' },
+        }),
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-trace-id')).toBe('trace-abc-123')
+    expect(spy).toHaveBeenCalledTimes(1)
+    const init = spy.mock.calls[0][1] as RequestInit
+    expect(new Headers(init.headers).get('x-trace-id')).toBe('trace-abc-123')
+  })
+
+  it('generates a trace id when one is missing on direct template calls', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    const randomUuidSpy = vi.spyOn(crypto, 'randomUUID').mockReturnValue('trace-generated-1')
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      payload: { host: 'example.com', path: '/shop' },
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-trace-id')).toBe('trace-generated-1')
+    expect(randomUuidSpy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(1)
+    const init = spy.mock.calls[0][1] as RequestInit
+    expect(new Headers(init.headers).get('x-trace-id')).toBe('trace-generated-1')
   })
 
   it('forwards upstream bearer auth header when configured', async () => {
