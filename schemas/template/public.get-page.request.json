@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blackcat.darkmesh/schemas/template/public.get-page.request.json",
+  "title": "public.get-page request",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["siteId"],
+  "properties": {
+    "siteId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slug": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pageId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "locale": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "anyOf": [
+    { "required": ["slug"] },
+    { "required": ["pageId"] }
+  ]
+}

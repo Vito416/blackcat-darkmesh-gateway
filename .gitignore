@@ -20,6 +20,12 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
+# IDE / local deploy connector secrets
+**/.vscode/sftp.json
+**/.vscode/ftp-sync.json
+ops/live-wedos/*.local.*
+ops/live-wedos/**/*.local.*
+
 # Local operator artifacts / drill outputs
 tmp/
 ops/decommission/consistency-matrix.json
@@ -42,4 +48,5 @@ ops/decommission/release-evidence-ledger.md
 ops/decommission/release-evidence-ledger.json
 ops/decommission/decommission-evidence-log.md
 ops/decommission/decommission-evidence-log.json
+ops/decommission/decommission-closeout.json
 ops/decommission/evidence/

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blackcat.darkmesh/schemas/template/public.resolve-route.request.json",
+  "title": "public.resolve-route request",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["path"],
+  "properties": {
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "siteId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1
+    },
+    "locale": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "anyOf": [
+    { "required": ["siteId"] },
+    { "required": ["host"] }
+  ]
+}

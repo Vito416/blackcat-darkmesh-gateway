@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blackcat.darkmesh/schemas/template/checkout.create-payment-intent.response.json",
+  "title": "checkout.create-payment-intent response",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["status"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["OK", "ERROR"]
+    },
+    "code": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "requestId": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "paymentIntentId": { "type": "string" },
+        "provider": { "type": "string" },
+        "orderId": { "type": "string" },
+        "clientSecret": { "type": "string" },
+        "approvalUrl": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    }
+  }
+}
