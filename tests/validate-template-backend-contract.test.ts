@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -106,6 +106,40 @@ describe('validate-template-backend-contract.js', () => {
     const res = runValidator(['--file', file])
     expect(res.status).toBe(0)
     expect(res.stdout).toContain('duplicates route POST /api/checkout/order')
+    expect(res.stderr).toBe('')
+  })
+
+  it('reports missing schema refs when declared by contract actions', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gateway-contract-'))
+    tempDirs.push(dir)
+
+    mkdirSync(join(dir, 'schemas', 'template'), { recursive: true })
+    writeFileSync(join(dir, 'schemas', 'template', 'present.response.json'), '{}\n', 'utf8')
+
+    const file = join(dir, 'template-backend-contract.json')
+    writeFileSync(
+      file,
+      `${JSON.stringify(
+        buildContract({
+          allowedActions: [
+            {
+              name: 'public.resolve-route',
+              method: 'POST',
+              path: '/api/public/resolve-route',
+              requestSchemaRef: 'schemas/template/missing.request.json',
+              responseSchemaRef: 'schemas/template/present.response.json',
+            },
+          ],
+        }),
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    )
+
+    const res = runValidator(['--file', file, '--strict'])
+    expect(res.status).toBe(3)
+    expect(res.stdout).toContain('requestSchemaRef file not found')
     expect(res.stderr).toBe('')
   })
 

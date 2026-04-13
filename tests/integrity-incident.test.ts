@@ -31,7 +31,7 @@ function makeIncidentRawRequest(body: string, headers: Record<string, string> = 
 function makeTemplateWriteRequest() {
   return new Request('http://gateway/template/call', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-template-token': 'template-secret' },
     body: JSON.stringify({
       action: 'checkout.create-order',
       requestId: 'req-int-incident-write',
@@ -82,6 +82,7 @@ describe('integrity incident and state endpoints', () => {
     process.env.WRITE_API_URL = 'https://write.example'
     process.env.WORKER_API_URL = 'https://worker.example'
     process.env.WORKER_AUTH_TOKEN = 'worker-token'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'template-secret'
     clearIntegrityAoEnv()
     reset()
   })

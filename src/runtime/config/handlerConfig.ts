@@ -43,6 +43,10 @@ export type WorkerNotifyConfig = {
   breakerKeyGopay?: string
 }
 
+const STRIPE_TOLERANCE_DEFAULT_MS = 300000
+const STRIPE_TOLERANCE_MIN_MS = 1000
+const STRIPE_TOLERANCE_MAX_MS = 600000
+
 function readRawEnv(name: string, env?: Record<string, string | undefined>): string | undefined {
   const loaded = loadStringConfig(name, { env })
   return loaded.ok ? loaded.value : undefined
@@ -74,6 +78,19 @@ export function readPositiveIntEnv(
   if (!loaded.ok) return fallback
   if (!Number.isFinite(loaded.value) || loaded.value <= 0) return fallback
   return Math.floor(loaded.value)
+}
+
+function readBoundedIntEnv(
+  name: string,
+  fallback: number,
+  min: number,
+  max: number,
+  env?: Record<string, string | undefined>,
+): number {
+  const loaded = loadIntegerConfig(name, { env, fallbackValue: fallback })
+  if (!loaded.ok) return fallback
+  if (!Number.isFinite(loaded.value)) return fallback
+  return Math.min(Math.max(Math.floor(loaded.value), min), max)
 }
 
 function splitRefsCsv(raw: string | undefined): string[] {
@@ -139,7 +156,13 @@ export function readWebhookConfig(
     maxBodyBytes: readPositiveIntEnv('GATEWAY_WEBHOOK_MAX_BODY_BYTES', maxBodyBytesFallback, env),
     shadowInvalid: readRawEnv('GATEWAY_WEBHOOK_SHADOW_INVALID', env) === '1',
     stripeSecret: readRawEnv('STRIPE_WEBHOOK_SECRET', env) || '',
-    stripeToleranceMs: Number.parseInt(readRawEnv('STRIPE_WEBHOOK_TOLERANCE_MS', env) || '300000', 10),
+    stripeToleranceMs: readBoundedIntEnv(
+      'STRIPE_WEBHOOK_TOLERANCE_MS',
+      STRIPE_TOLERANCE_DEFAULT_MS,
+      STRIPE_TOLERANCE_MIN_MS,
+      STRIPE_TOLERANCE_MAX_MS,
+      env,
+    ),
     paypalWebhookSecret: readRawEnv('PAYPAL_WEBHOOK_SECRET', env) || undefined,
     gopayWebhookSecret: readRawEnv('GOPAY_WEBHOOK_SECRET', env) || '',
   }
@@ -148,7 +171,7 @@ export function readWebhookConfig(
 export function readWorkerNotifyConfig(env?: Record<string, string | undefined>): WorkerNotifyConfig {
   return {
     target: readRawEnv('WORKER_NOTIFY_URL', env) || 'http://localhost:8787/notify',
-    token: readRawEnv('WORKER_AUTH_TOKEN', env) || readRawEnv('WORKER_NOTIFY_TOKEN', env) || 'test-notify',
+    token: readRawEnv('WORKER_AUTH_TOKEN', env) || readRawEnv('WORKER_NOTIFY_TOKEN', env) || '',
     hmacSecret: readRawEnv('WORKER_NOTIFY_HMAC', env) || '',
     breakerKey: readRawEnv('WORKER_NOTIFY_BREAKER_KEY', env),
     breakerKeyStripe: readRawEnv('WORKER_NOTIFY_BREAKER_KEY_STRIPE', env),

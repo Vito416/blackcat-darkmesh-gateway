@@ -8,6 +8,7 @@ describe('template api worker token map', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv }
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
     resetTemplateContractCacheForTests()
     reset()
   })
@@ -22,7 +23,7 @@ describe('template api worker token map', () => {
   function buildWriteRequest(siteId = 'site-1') {
     return new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'tmpl-secret' },
       body: JSON.stringify({
         action: 'checkout.create-order',
         requestId: 'req-token-map-1',

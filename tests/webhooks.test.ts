@@ -9,6 +9,11 @@ function stripeSig(body: string, ts: number, secret: string) {
   return `t=${ts},v1=${hmac}`
 }
 
+function paypalSig(body: string, transmissionId: string, transmissionTime: string, secret: string) {
+  const payload = `${transmissionId}.${transmissionTime}.${body}`
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex')
+}
+
 import crypto from 'crypto'
 import { markAndCheck } from '../src/replay.js'
 
@@ -92,16 +97,30 @@ describe('webhook verification', () => {
   it('verifies paypal HMAC path when secret provided', async () => {
     const body = JSON.stringify({ id: 'WH-1', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
     const secret = 'ppsecret'
-    const sig = crypto.createHmac('sha256', secret).update(body).digest('hex')
+    const transmissionId = 'tx-1'
+    const transmissionTime = '2026-04-09T00:00:00Z'
+    const sig = paypalSig(body, transmissionId, transmissionTime, secret)
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const headers = new Headers({
       'PayPal-Transmission-Sig': sig,
+      'PayPal-Transmission-Id': transmissionId,
+      'PayPal-Transmission-Time': transmissionTime,
       'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
     })
     const ok = await verifyPayPal(body, headers, secret)
     expect(ok).toBe(true)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects paypal HMAC mode requests missing transmission metadata', async () => {
+    const body = JSON.stringify({ id: 'WH-hmac', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const secret = 'ppsecret'
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': 'deadbeef',
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+    })
+    await expect(verifyPayPal(body, headers, secret)).resolves.toBe(false)
   })
 
   it('rejects non-https paypal api bases without calling fetch', async () => {
@@ -349,8 +368,12 @@ describe('webhook verification', () => {
     process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
     const { handleRequest } = await loadHandler()
     const body = JSON.stringify({ id: 'WH-ok', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const transmissionId = 'tx-ok'
+    const transmissionTime = '2026-04-09T00:00:00Z'
     const headers = new Headers({
-      'PayPal-Transmission-Sig': crypto.createHmac('sha256', 'ppsecret').update(body).digest('hex'),
+      'PayPal-Transmission-Sig': paypalSig(body, transmissionId, transmissionTime, 'ppsecret'),
+      'PayPal-Transmission-Id': transmissionId,
+      'PayPal-Transmission-Time': transmissionTime,
     })
     const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
     expect(res.status).toBe(200)
@@ -382,9 +405,13 @@ describe('webhook verification', () => {
     await expect(secondStripe.text()).resolves.toBe('Too Many Requests')
 
     const paypalBody = JSON.stringify({ id: 'WH-rl', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const transmissionId = 'tx-rl'
+    const transmissionTime = '2026-04-09T00:00:00Z'
     const paypalHeaders = new Headers({
       ...ipHeaders,
-      'PayPal-Transmission-Sig': crypto.createHmac('sha256', 'ppsecret').update(paypalBody).digest('hex'),
+      'PayPal-Transmission-Sig': paypalSig(paypalBody, transmissionId, transmissionTime, 'ppsecret'),
+      'PayPal-Transmission-Id': transmissionId,
+      'PayPal-Transmission-Time': transmissionTime,
     })
     const firstPaypal = await handleRequest(
       new Request('http://gateway/webhook/paypal', { method: 'POST', body: paypalBody, headers: paypalHeaders }),

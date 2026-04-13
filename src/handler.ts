@@ -38,6 +38,8 @@ import {
   readWorkerNotifyConfig,
   resolveWorkerNotifyBreakerKey,
 } from './runtime/config/handlerConfig.js'
+import { templateActionPolicies } from './runtime/template/actions.js'
+import { getTemplateContractAction } from './templateContract.js'
 import type { IntegritySnapshot } from './integrity/types.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
@@ -64,6 +66,7 @@ const incidentSeverities = new Set<IntegrityIncidentSeverity>(['low', 'medium', 
 const INTEGRITY_CACHE_DEFAULT_TTL_MS = 10_000
 const INTEGRITY_INCIDENT_MAX_BODY_DEFAULT_BYTES = 16_384
 const WEBHOOK_MAX_BODY_DEFAULT_BYTES = 262_144
+const TEMPLATE_CALL_MAX_BODY_DEFAULT_BYTES = 32_768
 const incidentActionRoles: Record<string, IntegrityRole[]> = {
   report: ['reporter', 'emergency', 'root'],
   ack: ['reporter', 'emergency', 'root'],
@@ -316,6 +319,54 @@ function webhookBodyTooLargeResponse(): Response {
   return plainErrorResponse(413, 'payload too large')
 }
 
+function templateBodyTooLargeResponse(): Response {
+  inc('gateway_template_reject_size')
+  return jsonErrorResponse(413, 'payload_too_large', { retryable: false })
+}
+
+function normalizeHostForMap(hostRaw: string): string {
+  const normalized = hostRaw.trim().toLowerCase()
+  const withoutPort = normalized.replace(/:\d+$/, '')
+  return withoutPort
+}
+
+function parseSiteIdByHostMap(raw: string): { ok: true; map: Record<string, string> } | { ok: false } {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return { ok: false }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false }
+
+  const map: Record<string, string> = {}
+  for (const [keyRaw, valueRaw] of Object.entries(parsed as Record<string, unknown>)) {
+    const key = normalizeHostForMap(String(keyRaw || ''))
+    const value = typeof valueRaw === 'string' ? valueRaw.trim() : ''
+    if (!key || !value) return { ok: false }
+    map[key] = value
+  }
+
+  return { ok: true, map }
+}
+
+function resolveSiteIdFromHost(hostRaw: string): { ok: true; siteId?: string } | { ok: false; status: number; error: string } {
+  const mapRaw = readHandlerEnvString('GATEWAY_SITE_ID_BY_HOST_MAP')
+  if (!mapRaw) return { ok: true }
+
+  const parsed = parseSiteIdByHostMap(mapRaw)
+  if (!parsed.ok) {
+    return { ok: false, status: 500, error: 'site_host_map_invalid' }
+  }
+
+  const host = normalizeHostForMap(hostRaw)
+  const mapped = parsed.map[host] || parsed.map.default
+  if (!mapped) {
+    return { ok: false, status: 403, error: 'site_host_not_allowed' }
+  }
+  return { ok: true, siteId: mapped }
+}
+
 function readIncidentSignatureRef(req: Request, body: unknown): string {
   const customHeaderName = readIntegrityIncidentAuthConfig().refHeaderName
   const headerRef = customHeaderName ? readHeaderToken(req, customHeaderName) : ''
@@ -476,26 +527,23 @@ async function handleCache(
   return respond('method', { status: 405 })
 }
 
-async function handleTemplateCall(req: Request, paused: boolean): Promise<Response> {
+async function handleTemplateCall(req: Request, paused: boolean, requestHost: string): Promise<Response> {
   inc('gateway_template_call')
   if (req.method !== 'POST') return respond('method', { status: 405 })
 
   const limited = rateLimitResponse(`template:${requestIp(req)}`)
   if (limited) return limited
 
-  const requiredToken = readTemplateToken()
-  if (requiredToken) {
-    const presented = (req.headers.get('x-template-token') || '').trim()
-    if (!tokenEquals(requiredToken, presented)) {
-      inc('gateway_template_call_blocked')
-      return respond(JSON.stringify({ error: 'unauthorized' }), {
-        status: 401,
-        headers: { 'content-type': 'application/json' },
-      })
-    }
+  const bodyText = await req.text()
+  if (bodyExceedsLimit(bodyText, readPositiveIntEnv('GATEWAY_TEMPLATE_MAX_BODY_BYTES', TEMPLATE_CALL_MAX_BODY_DEFAULT_BYTES))) {
+    return templateBodyTooLargeResponse()
   }
-
-  const body = await req.json().catch(() => null)
+  let body: unknown = null
+  try {
+    body = bodyText ? JSON.parse(bodyText) : null
+  } catch {
+    body = null
+  }
   if (!body || typeof body !== 'object') {
     inc('gateway_template_call_blocked')
     return respond(JSON.stringify({ error: 'invalid_json' }), {
@@ -506,10 +554,34 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
 
   const action = String((body as any).action || '').trim()
   const payload = (body as any).payload
+  const bodySiteId = typeof (body as any).siteId === 'string' ? (body as any).siteId.trim() : ''
+  const payloadSiteId =
+    payload && typeof payload === 'object' && typeof (payload as any).siteId === 'string'
+      ? (payload as any).siteId.trim()
+      : ''
   if (!action) {
     inc('gateway_template_call_blocked')
     return respond(JSON.stringify({ error: 'action_required' }), {
       status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  const requiredToken = readTemplateToken()
+  const presentedToken = (req.headers.get('x-template-token') || '').trim()
+  const writeAction = templateWriteActions.has(action)
+  const writeMutationsEnabled = readHandlerStrictEnabledFlag('GATEWAY_TEMPLATE_ALLOW_MUTATIONS')
+  if (writeAction && writeMutationsEnabled && !requiredToken) {
+    inc('gateway_template_call_blocked')
+    return respond(JSON.stringify({ error: 'template_auth_not_configured' }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  if ((requiredToken || (writeAction && writeMutationsEnabled)) && !tokenEquals(requiredToken || '', presentedToken)) {
+    inc('gateway_template_call_blocked')
+    return respond(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
       headers: { 'content-type': 'application/json' },
     })
   }
@@ -522,11 +594,33 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
     markReadonlyFallback(true)
   }
 
+  const resolvedHostSite = resolveSiteIdFromHost(requestHost)
+  if (resolvedHostSite.ok === false) {
+    inc('gateway_template_call_blocked')
+    return jsonErrorResponse(resolvedHostSite.status, resolvedHostSite.error)
+  }
+  const mappedSiteId = resolvedHostSite.siteId
+  if (mappedSiteId) {
+    if (bodySiteId && bodySiteId !== mappedSiteId) {
+      inc('gateway_template_call_blocked')
+      return jsonErrorResponse(400, 'site_id_host_mismatch')
+    }
+    if (payloadSiteId && payloadSiteId !== mappedSiteId) {
+      inc('gateway_template_call_blocked')
+      return jsonErrorResponse(400, 'site_id_host_mismatch')
+    }
+  }
+
+  let effectivePayload = payload
+  if (mappedSiteId && payload && typeof payload === 'object' && !Array.isArray(payload) && !payloadSiteId) {
+    effectivePayload = { ...(payload as Record<string, unknown>), siteId: mappedSiteId }
+  }
+
   const res = await proxyTemplateCall({
     action,
-    payload,
+    payload: effectivePayload,
     requestId: typeof (body as any).requestId === 'string' ? (body as any).requestId : undefined,
-    siteId: typeof (body as any).siteId === 'string' ? (body as any).siteId : undefined,
+    siteId: mappedSiteId || bodySiteId || undefined,
     actor: typeof (body as any).actor === 'string' ? (body as any).actor : undefined,
     role: typeof (body as any).role === 'string' ? (body as any).role : undefined,
   })
@@ -540,6 +634,55 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
   }
 
   return secureResponse(res)
+}
+
+function buildTemplateConfigPayload(paused: boolean) {
+  const contractActions = templateActionPolicies.map((policy) => {
+    const contract = getTemplateContractAction(policy.action)
+    return {
+      action: policy.action,
+      kind: policy.kind,
+      target: policy.target,
+      method: policy.method,
+      path: policy.path,
+      requiredRole: contract?.auth.requiredRole || null,
+      idempotency: contract?.idempotency.mode || null,
+    }
+  })
+
+  return {
+    ok: true,
+    mode: 'gateway-node',
+    integrityPaused: paused,
+    templateTokenRequired: Boolean(readTemplateToken()),
+    writeMutationsEnabled: readHandlerStrictEnabledFlag('GATEWAY_TEMPLATE_ALLOW_MUTATIONS'),
+    maxTemplateBodyBytes: readPositiveIntEnv('GATEWAY_TEMPLATE_MAX_BODY_BYTES', TEMPLATE_CALL_MAX_BODY_DEFAULT_BYTES),
+    upstream: {
+      readConfigured: Boolean(readHandlerEnvString('AO_PUBLIC_API_URL') || readHandlerEnvString('AO_READ_URL')),
+      writeConfigured: Boolean(readHandlerEnvString('WRITE_API_URL')),
+      signerConfigured: Boolean(readHandlerEnvString('WORKER_API_URL') || readHandlerEnvString('WORKER_SIGN_URL')),
+      signerMapConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_WORKER_URL_MAP')),
+      signerTokenMapConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_WORKER_TOKEN_MAP')),
+      variantMapConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_VARIANT_MAP')),
+      upstreamAuthMode: readHandlerEnvString('GATEWAY_TEMPLATE_UPSTREAM_AUTH_MODE') || 'none',
+      upstreamTokenConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_UPSTREAM_TOKEN')),
+      upstreamTokenMapConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_UPSTREAM_TOKEN_MAP')),
+    },
+    contractActions,
+    timestamp: new Date().toISOString(),
+  }
+}
+
+async function handleTemplateConfig(req: Request, paused: boolean): Promise<Response> {
+  if (req.method !== 'GET') return respond('method', { status: 405 })
+  markReadonlyFallback(paused)
+  return respond(JSON.stringify(buildTemplateConfigPayload(paused)), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    },
+  })
 }
 
 async function handleIntegrityState(req: Request, integrity: IntegrityContext): Promise<Response> {
@@ -728,6 +871,25 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
 
 export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
+
+  if (url.pathname === '/health' || url.pathname === '/healthz') {
+    return applyNoStoreCacheControl(
+      respond(
+        JSON.stringify({
+          ok: true,
+          service: 'blackcat-darkmesh-gateway',
+          ts: new Date().toISOString(),
+        }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    )
+  }
+
   const integrity = await resolveIntegrityContext()
   const integrityPaused = integrity.state.paused
 
@@ -786,7 +948,16 @@ export async function handleRequest(request: Request): Promise<Response> {
     return handleInbox(request)
   }
   if (url.pathname === '/template/call') {
-    return handleTemplateCall(request, integrityPaused)
+    if (url.searchParams.size > 0) {
+      return jsonErrorResponse(400, 'query_not_allowed')
+    }
+    return handleTemplateCall(request, integrityPaused, url.host)
+  }
+  if (url.pathname === '/template/config') {
+    if (url.searchParams.size > 0) {
+      return jsonErrorResponse(400, 'query_not_allowed')
+    }
+    return handleTemplateConfig(request, integrityPaused)
   }
   if (url.pathname === '/metrics') {
     markReadonlyFallback(integrityPaused)
@@ -853,8 +1024,12 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       const headers = request.headers
       const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
+      if (!certOk) {
+        inc('gateway_webhook_paypal_verify_fail')
+        return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+      }
       const ok = await verifyPayPal(body, headers, webhookConfig.paypalWebhookSecret)
-      if (!ok || !certOk) {
+      if (!ok) {
         inc('gateway_webhook_paypal_verify_fail')
         return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
       }
@@ -896,8 +1071,26 @@ export async function handleRequest(request: Request): Promise<Response> {
 
   if (url.pathname === '/webhook/demo-forward') {
     if (integrityPaused) return policyPausedResponse()
+    if (!readHandlerStrictEnabledFlag('GATEWAY_DEMO_FORWARD_ENABLED')) {
+      return respond('not found', { status: 404 })
+    }
+    const demoForwardToken = readHandlerEnvString('GATEWAY_DEMO_FORWARD_TOKEN')
+    if (!demoForwardToken) {
+      return respond('demo_forward_auth_not_configured', { status: 500 })
+    }
+    if (!checkToken(request, demoForwardToken, 'x-demo-forward-token')) {
+      return respond('unauthorized', { status: 401 })
+    }
+    const limited = rateLimitResponse(`demo-forward:${requestIp(request)}`)
+    if (limited) return limited
     const workerNotify = readWorkerNotifyConfig()
     const body = await request.text()
+    if (bodyExceedsLimit(body, WEBHOOK_MAX_BODY_DEFAULT_BYTES)) {
+      return webhookBodyTooLargeResponse()
+    }
+    if (!workerNotify.token) {
+      return respond('worker_notify_auth_not_configured', { status: 500 })
+    }
 
     // Pick breaker key by provider (query/header/body) with per-PSP overrides, fallback to generic.
     const provider = (() => {
@@ -929,6 +1122,9 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
   // periodic sweep
   sweep()
-  if (url.pathname === '/') markReadonlyFallback(integrityPaused)
-  return respond('Gateway skeleton', { status: 200 })
+  if (url.pathname === '/') {
+    markReadonlyFallback(integrityPaused)
+    return respond('Gateway skeleton', { status: 200 })
+  }
+  return plainErrorResponse(404, 'not found')
 }

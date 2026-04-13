@@ -12,15 +12,19 @@ function hasStr(v: Record<string, unknown>, key: string): boolean {
 
 export function validateResolveRoute(payload: unknown): ValidateResult {
   if (!isObj(payload)) return { ok: false, error: 'payload must be an object' }
-  if (!hasStr(payload, 'host')) return { ok: false, error: 'payload.host is required' }
   if (!hasStr(payload, 'path')) return { ok: false, error: 'payload.path is required' }
+  if (!hasStr(payload, 'siteId') && !hasStr(payload, 'host')) {
+    return { ok: false, error: 'payload.siteId or payload.host is required' }
+  }
   return { ok: true }
 }
 
 export function validateGetPage(payload: unknown): ValidateResult {
   if (!isObj(payload)) return { ok: false, error: 'payload must be an object' }
   if (!hasStr(payload, 'siteId')) return { ok: false, error: 'payload.siteId is required' }
-  if (!hasStr(payload, 'slug')) return { ok: false, error: 'payload.slug is required' }
+  if (!hasStr(payload, 'slug') && !hasStr(payload, 'pageId')) {
+    return { ok: false, error: 'payload.slug or payload.pageId is required' }
+  }
   return { ok: true }
 }
 

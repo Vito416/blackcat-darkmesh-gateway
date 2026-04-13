@@ -72,9 +72,16 @@ describe('runtime crypto boundary evidence', () => {
     const { verifyPayPal } = await import('../src/webhooks.js')
     const body = JSON.stringify({ id: 'WH-local', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
     const secret = 'ppsecret'
-    const signature = crypto.createHmac('sha256', secret).update(body).digest('hex')
+    const transmissionId = 'tx-local-1'
+    const transmissionTime = '2026-04-09T00:00:00Z'
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(`${transmissionId}.${transmissionTime}.${body}`)
+      .digest('hex')
     const headers = new Headers({
       'PayPal-Transmission-Sig': signature,
+      'PayPal-Transmission-Id': transmissionId,
+      'PayPal-Transmission-Time': transmissionTime,
       'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
     })
 

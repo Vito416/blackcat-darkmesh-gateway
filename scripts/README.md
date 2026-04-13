@@ -29,7 +29,24 @@ npm run ops:check-forget-forward-config -- --json
 GATEWAY_FORGET_FORWARD_URL='https://worker.example/cache/forget' \
   GATEWAY_FORGET_FORWARD_TOKEN='forward-secret' \
   GATEWAY_FORGET_FORWARD_TIMEOUT_MS=5000 \
-  node scripts/check-forget-forward-config.js --strict
+node scripts/check-forget-forward-config.js --strict
+```
+
+## Cross-repo dataflow audit
+
+`scripts/audit-cross-repo-dataflow.js` validates the runtime contract boundary across:
+
+- `blackcat-darkmesh-gateway`
+- `blackcat-darkmesh-ao` (public adapter + worker signer)
+- `blackcat-darkmesh-write` (checkout adapter + write signature verifier)
+
+It reports P0 blockers, P1 warnings, plus current nice-to-have/future-proof tracks.
+
+Usage:
+```bash
+npm run ops:audit-cross-repo-dataflow -- --json
+npm run ops:audit-cross-repo-dataflow -- --strict --json
+node scripts/audit-cross-repo-dataflow.js --workspace-root /path/to/BLACKCAT_MESH_NEXUS --strict
 ```
 
 ## Integrity incident helper
@@ -846,7 +863,8 @@ npm run ops:build-attestation-exchange-pack -- \
 
 ## Rate-limit override suggestion helper
 
-`scripts/suggest-ratelimit-overrides.js` generates deterministic per-prefix `RATE_LIMIT_ROUTE_OVERRIDES` suggestions from route stats for `wedos_small`, `wedos_medium`, or `diskless` profiles.
+`scripts/suggest-ratelimit-overrides.js` generates deterministic per-prefix `GATEWAY_RL_MAX_OVERRIDES` suggestions from route stats for `wedos_small`, `wedos_medium`, or `diskless` profiles.
+Use `--env-line` when you want a paste-ready `GATEWAY_RL_MAX_OVERRIDES=...` line for dotenv/runtime config.
 
 Usage:
 ```bash

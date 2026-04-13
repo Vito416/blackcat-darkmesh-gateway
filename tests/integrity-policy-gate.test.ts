@@ -21,6 +21,7 @@ describe('integrity policy gate', () => {
     process.env.WRITE_API_URL = 'https://write.example'
     process.env.WORKER_API_URL = 'https://worker.example'
     process.env.WORKER_AUTH_TOKEN = 'worker-token'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'template-secret'
     reset()
   })
 
@@ -34,7 +35,7 @@ describe('integrity policy gate', () => {
     return import('../src/handler.js')
   }
 
-  function makeTemplateWriteRequest(token?: string) {
+  function makeTemplateWriteRequest(token = 'template-secret') {
     const headers: Record<string, string> = { 'content-type': 'application/json' }
     if (token) headers['x-template-token'] = token
     return new Request('http://gateway/template/call', {
@@ -52,7 +53,7 @@ describe('integrity policy gate', () => {
   function makeTemplateReadRequest() {
     return new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'template-secret' },
       body: JSON.stringify({
         action: 'public.resolve-route',
         payload: { host: 'example.com', path: '/' },

@@ -29,6 +29,8 @@ type ResolveResult =
       detail?: Record<string, unknown>
     }
 
+type TemplateUpstreamAuthMode = 'none' | 'bearer' | 'x-template-token'
+
 type ResolvedTemplatePolicy = {
   local: TemplateActionPolicy
   contract: TemplateContractAction
@@ -81,6 +83,11 @@ function resolveSiteId(input: TemplateCallInput): string | undefined {
   if (explicitSiteId) return explicitSiteId
   if (!isObj(input.payload)) return undefined
   return asNonEmptyString(input.payload.siteId)
+}
+
+function resolvePayloadSiteId(payload: unknown): string | undefined {
+  if (!isObj(payload)) return undefined
+  return asNonEmptyString(payload.siteId)
 }
 
 function parseStringMap(raw: string, envName: string): { ok: true; map: Record<string, string> } | { ok: false; message: string } {
@@ -313,6 +320,35 @@ function resolveTemplateVariantMetadata(siteId: string | undefined): TemplateVar
   return { ok: true, value: variantMetadata }
 }
 
+function readTemplateUpstreamAuthMode(): TemplateUpstreamAuthMode {
+  const raw = (readStringEnv('GATEWAY_TEMPLATE_UPSTREAM_AUTH_MODE') || 'none').toLowerCase()
+  if (raw === 'bearer' || raw === 'x-template-token') return raw
+  return 'none'
+}
+
+function resolveTemplateUpstreamToken(siteId: string | undefined): ResolveResult {
+  const mapRaw = readStringEnv('GATEWAY_TEMPLATE_UPSTREAM_TOKEN_MAP')
+  if (mapRaw) {
+    const parsed = parseStringMap(mapRaw, 'GATEWAY_TEMPLATE_UPSTREAM_TOKEN_MAP')
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        status: 500,
+        error: 'upstream_token_map_invalid',
+        detail: { message: 'message' in parsed ? parsed.message : 'invalid_map' },
+      }
+    }
+    if (siteId) {
+      const mapped = parsed.map[siteId]
+      if (mapped) return { ok: true, value: mapped }
+    }
+  }
+
+  const fallback = readStringEnv('GATEWAY_TEMPLATE_UPSTREAM_TOKEN')
+  if (fallback) return { ok: true, value: fallback }
+  return { ok: true, value: '' }
+}
+
 function hmacBody(body: string): string | undefined {
   const secret = readStringEnv('GATEWAY_TEMPLATE_HMAC_SECRET')
   if (!secret) return undefined
@@ -323,8 +359,15 @@ function getTemplateMaxBodyBytes(): number {
   return readPositiveIntegerEnv('GATEWAY_TEMPLATE_MAX_BODY_BYTES', DEFAULT_TEMPLATE_MAX_BODY_BYTES)
 }
 
-function getTemplateUpstreamTimeoutMs(): number {
-  return readPositiveIntegerEnv('GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS', DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS)
+function getTemplateUpstreamTimeoutMs(kind?: 'read' | 'write'): number {
+  const fallback = readPositiveIntegerEnv('GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS', DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS)
+  if (kind === 'read') {
+    return readPositiveIntegerEnv('GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS_READ', fallback)
+  }
+  if (kind === 'write') {
+    return readPositiveIntegerEnv('GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS_WRITE', fallback)
+  }
+  return fallback
 }
 
 function getTemplateSignTimeoutMs(): number {
@@ -432,12 +475,11 @@ async function signWriteEnvelope(
     })
 
     if (!response.ok) {
-      const bodyText = await response.text().catch(() => '')
       return {
         ok: false,
         status: response.status >= 500 ? 502 : 401,
         error: 'worker_sign_failed',
-        detail: { upstreamStatus: response.status, body: bodyText.slice(0, 256) },
+        detail: { upstreamStatus: response.status },
       }
     }
 
@@ -476,15 +518,17 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   const policy = getResolvedPolicy(input.action)
   if (!policy) return jsonError(403, 'action_not_allowed')
 
+  const enforcedRole = policy.local.kind === 'write' ? policy.contract.auth.requiredRole : input.role
+
   if (policy.local.kind === 'write' && readStringEnv('GATEWAY_TEMPLATE_ALLOW_MUTATIONS') !== '1') {
     return jsonError(403, 'write_actions_disabled')
   }
 
-  const roleCheck = requireAllowedRole(policy.contract.auth.requiredRole, input.role, { publicRole: 'public' })
+  const roleCheck = requireAllowedRole(policy.contract.auth.requiredRole, enforcedRole, { publicRole: 'public' })
   if (!roleCheck.ok) {
     return jsonError(403, 'forbidden_role', {
       requiredRole: policy.contract.auth.requiredRole,
-      providedRole: input.role || null,
+      providedRole: (typeof enforcedRole === 'string' && enforcedRole.trim().length > 0 ? enforcedRole : null),
     })
   }
 
@@ -532,7 +576,15 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   let writeEnvelope: Record<string, unknown> | null = null
 
   if (policy.local.kind === 'write') {
-    resolvedSiteId = resolveSiteId(input)
+    const explicitSiteId = asNonEmptyString(input.siteId)
+    const payloadSiteId = resolvePayloadSiteId(payloadWithTemplateVariant)
+    if (explicitSiteId && payloadSiteId && explicitSiteId !== payloadSiteId) {
+      return jsonError(400, 'site_id_mismatch', {
+        detail: 'siteId and payload.siteId must match for write actions',
+      })
+    }
+
+    resolvedSiteId = explicitSiteId || payloadSiteId || resolveSiteId(input)
     if (!resolvedSiteId) {
       return jsonError(400, 'site_id_required', {
         detail: 'payload.siteId is required for write actions',
@@ -583,7 +635,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
       signature: signed.signature,
       signatureRef: signed.signatureRef,
       siteId: resolvedSiteId,
-      role: input.role,
+      role: policy.contract.auth.requiredRole,
       templateAction: input.action,
     }
   }
@@ -621,7 +673,26 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   if (resolvedSiteId) headers['x-site-id'] = resolvedSiteId
   if (signature) headers['x-template-signature'] = signature
 
-  const timeoutMs = getTemplateUpstreamTimeoutMs()
+  const upstreamAuthMode = readTemplateUpstreamAuthMode()
+  const upstreamToken = resolveTemplateUpstreamToken(resolvedSiteId)
+  if (upstreamToken.ok === false) {
+    const upstreamTokenError = upstreamToken as Extract<ResolveResult, { ok: false }>
+    return jsonError(upstreamTokenError.status, upstreamTokenError.error, upstreamTokenError.detail)
+  }
+  if (upstreamAuthMode !== 'none' && !upstreamToken.value) {
+    return jsonError(503, 'template_upstream_auth_not_configured', {
+      mode: upstreamAuthMode,
+      siteId: resolvedSiteId,
+    })
+  }
+  if (upstreamToken.value && upstreamAuthMode === 'bearer') {
+    headers.authorization = `Bearer ${upstreamToken.value}`
+  }
+  if (upstreamToken.value && upstreamAuthMode === 'x-template-token') {
+    headers['x-template-token'] = upstreamToken.value
+  }
+
+  const timeoutMs = getTemplateUpstreamTimeoutMs(policy.local.kind)
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {

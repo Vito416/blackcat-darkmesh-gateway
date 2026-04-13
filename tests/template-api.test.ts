@@ -144,6 +144,51 @@ describe('template api policy gateway', () => {
     expect(String(url)).toBe('https://ao.example/api/public/resolve-route')
   })
 
+  it('forwards upstream bearer auth header when configured', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_TEMPLATE_UPSTREAM_AUTH_MODE = 'bearer'
+    process.env.GATEWAY_TEMPLATE_UPSTREAM_TOKEN = 'upstream-secret'
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      siteId: 'site-1',
+      payload: { host: 'example.com', path: '/shop' },
+    })
+
+    expect(res.status).toBe(200)
+    expect(spy).toHaveBeenCalledTimes(1)
+    const init = spy.mock.calls[0][1] as RequestInit
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer upstream-secret')
+  })
+
+  it('fails closed when upstream auth mode requires a missing token', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_TEMPLATE_UPSTREAM_AUTH_MODE = 'bearer'
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      siteId: 'site-1',
+      payload: { host: 'example.com', path: '/shop' },
+    })
+
+    expect(res.status).toBe(503)
+    expect(spy).not.toHaveBeenCalled()
+    await expect(res.text()).resolves.toContain('template_upstream_auth_not_configured')
+  })
+
   it('injects template variant metadata when the site mapping exists', async () => {
     process.env.AO_PUBLIC_API_URL = 'https://ao.example'
     process.env.GATEWAY_TEMPLATE_VARIANT_MAP = JSON.stringify({
@@ -392,9 +437,10 @@ describe('template api policy gateway', () => {
 
   it('blocks write actions unless explicitly enabled', async () => {
     process.env.WRITE_API_URL = 'https://write.example'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
     const req = new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'tmpl-secret' },
       body: JSON.stringify({
         action: 'checkout.create-order',
         requestId: 'req-write-disabled-1',
@@ -411,6 +457,7 @@ describe('template api policy gateway', () => {
     process.env.WORKER_API_URL = 'https://worker.example'
     process.env.WORKER_AUTH_TOKEN = 'worker-token'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
     const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input)
       if (url === 'https://worker.example/sign') {
@@ -426,7 +473,7 @@ describe('template api policy gateway', () => {
     })
     const req = new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'tmpl-secret' },
       body: JSON.stringify({
         action: 'checkout.create-order',
         requestId: 'req-write-ok-1',
@@ -449,14 +496,29 @@ describe('template api policy gateway', () => {
     expect(snapshot().counters.gateway_template_secret_guard_blocked).toBeUndefined()
   })
 
-  it('requires role for non-public write actions', async () => {
+  it('enforces contract role for write actions even when caller role is omitted', async () => {
     process.env.WRITE_API_URL = 'https://write.example'
+    process.env.WORKER_API_URL = 'https://worker.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url === 'https://worker.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url === 'https://write.example/api/checkout/order') {
+        return new Response('ok', { status: 200 })
+      }
+      return new Response('unexpected', { status: 404 })
+    })
 
     const req = new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'tmpl-secret' },
       body: JSON.stringify({
         action: 'checkout.create-order',
         requestId: 'req-write-no-role-1',
@@ -465,19 +527,21 @@ describe('template api policy gateway', () => {
     })
 
     const res = await handleRequest(req)
-    expect(res.status).toBe(403)
-    await expect(res.text()).resolves.toContain('forbidden_role')
-    expect(spy).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    expect(spy).toHaveBeenCalledTimes(2)
+    const writeBody = JSON.parse(String((spy.mock.calls[1][1] as RequestInit).body))
+    expect(writeBody.role).toBe('shop_admin')
   })
 
   it('requires request id for write actions with required idempotency', async () => {
     process.env.WRITE_API_URL = 'https://write.example'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
     const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
 
     const req = new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'tmpl-secret' },
       body: JSON.stringify({
         action: 'checkout.create-order',
         role: 'shop_admin',
@@ -494,6 +558,7 @@ describe('template api policy gateway', () => {
   it('routes write signer calls using per-site worker map', async () => {
     process.env.WRITE_API_URL = 'https://write.example'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
     process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP = JSON.stringify({
       'site-1': 'https://worker-one.example',
       'site-2': 'https://worker-two.example',
@@ -515,7 +580,7 @@ describe('template api policy gateway', () => {
 
     const req = new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'tmpl-secret' },
       body: JSON.stringify({
         action: 'checkout.create-order',
         requestId: 'req-worker-map-1',
@@ -534,6 +599,7 @@ describe('template api policy gateway', () => {
   it('fails closed when worker map is configured but site route is missing', async () => {
     process.env.WRITE_API_URL = 'https://write.example'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
     process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP = JSON.stringify({
       'site-1': 'https://worker-one.example',
     })
@@ -542,7 +608,7 @@ describe('template api policy gateway', () => {
 
     const req = new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'tmpl-secret' },
       body: JSON.stringify({
         action: 'checkout.create-order',
         requestId: 'req-worker-map-missing-1',
@@ -560,13 +626,14 @@ describe('template api policy gateway', () => {
   it('fails closed when worker map config is invalid JSON', async () => {
     process.env.WRITE_API_URL = 'https://write.example'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
     process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP = '{invalid'
     process.env.WORKER_AUTH_TOKEN = 'worker-token'
     const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
 
     const req = new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'tmpl-secret' },
       body: JSON.stringify({
         action: 'checkout.create-order',
         requestId: 'req-worker-map-invalid-1',
@@ -578,6 +645,56 @@ describe('template api policy gateway', () => {
     const res = await handleRequest(req)
     expect(res.status).toBe(500)
     await expect(res.text()).resolves.toContain('worker_route_map_invalid')
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('requires explicit template auth config for write actions when mutations are enabled', async () => {
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    delete process.env.GATEWAY_TEMPLATE_TOKEN
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+
+    const req = new Request('http://gateway/template/call', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'checkout.create-order',
+        requestId: 'req-write-no-template-auth-config',
+        role: 'shop_admin',
+        payload: { siteId: 'site-1', items: [{ sku: 'sku-1', qty: 1 }] },
+      }),
+    })
+
+    const res = await handleRequest(req)
+    expect(res.status).toBe(500)
+    await expect(res.text()).resolves.toContain('template_auth_not_configured')
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('rejects write calls when top-level siteId and payload.siteId differ', async () => {
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.WORKER_API_URL = 'https://worker.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+
+    const req = new Request('http://gateway/template/call', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-template-token': 'tmpl-secret' },
+      body: JSON.stringify({
+        action: 'checkout.create-order',
+        requestId: 'req-site-mismatch-1',
+        siteId: 'site-1',
+        role: 'shop_admin',
+        payload: { siteId: 'site-2', items: [{ sku: 'sku-1', qty: 1 }] },
+      }),
+    })
+
+    const res = await handleRequest(req)
+    expect(res.status).toBe(400)
+    await expect(res.text()).resolves.toContain('site_id_mismatch')
     expect(spy).not.toHaveBeenCalled()
   })
 

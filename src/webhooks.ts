@@ -102,6 +102,17 @@ function parseStripeSignatureHeader(sigHeader: string): { timestamp: string | nu
   return { timestamp: ts, signatures: buckets.v1 || [] }
 }
 
+function readRequiredHeaderValue(headers: Headers, name: string): string | null {
+  const raw = headers.get(name)
+  if (!raw) return null
+  const value = raw.trim()
+  return value.length > 0 ? value : null
+}
+
+function buildPayPalHmacPayload(transmissionId: string, transmissionTime: string, body: string): string {
+  return `${transmissionId}.${transmissionTime}.${body}`
+}
+
 // Stripe webhook verification (t=timestamp,v1=signature)
 export function verifyStripe(body: string, sigHeader: string | null, secret: string, toleranceMs: number): boolean {
   if (!body || !sigHeader || !secret) return false
@@ -122,12 +133,17 @@ export async function verifyPayPal(body: string, headers: Headers, secret?: stri
   if (!body) return false
   const parsedBody = parsePayPalBody(body)
   if (!parsedBody) return false
-  // HMAC short-path if secret provided
+  // HMAC mode: require transmission metadata and bind it to the signature input.
   if (secret) {
-    const sig = headers.get('PayPal-Transmission-Sig') || headers.get('PP-Signature')
-    if (!sig) return false
-    const expected = crypto.createHmac('sha256', secret).update(body).digest('hex')
-    if (safeCompareHexOrAscii(expected, sig.trim())) return true
+    const sig = readRequiredHeaderValue(headers, 'PayPal-Transmission-Sig') || readRequiredHeaderValue(headers, 'PP-Signature')
+    const transmissionId = readRequiredHeaderValue(headers, 'PayPal-Transmission-Id')
+    const transmissionTime = readRequiredHeaderValue(headers, 'PayPal-Transmission-Time')
+    if (!sig || !transmissionId || !transmissionTime) return false
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(buildPayPalHmacPayload(transmissionId, transmissionTime, body))
+      .digest('hex')
+    return safeCompareHexOrAscii(expected, sig)
   }
   const certUrl = headers.get('PayPal-Cert-Url')
   if (!isValidCertUrl(certUrl || undefined)) return false

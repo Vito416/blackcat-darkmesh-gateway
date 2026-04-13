@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 
-import { basename, join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { assessManualProofs } from './check-decommission-manual-proofs.js'
 import { assessDecommissionReadiness } from './check-decommission-readiness.js'
 
 const DEFAULT_DECOMMISSION_DIR = 'ops/decommission'
 const DEFAULT_AO_GATE_FILE = 'ao-dependency-gate.json'
+const DEFAULT_MANUAL_PROOF_LOG = 'decommission-evidence-log.json'
 
 class CliError extends Error {
   constructor(message, exitCode = 64) {
@@ -18,11 +21,12 @@ class CliError extends Error {
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/check-production-readiness-summary.js [--dir <DIR>] [--ao-gate <FILE>] [--json] [--help]',
+    '  node scripts/check-production-readiness-summary.js [--dir <DIR>] [--ao-gate <FILE>] [--manual-log <FILE>] [--json] [--help]',
     '',
     'Options:',
     `  --dir <DIR>      Decommission artifact directory (default: ${DEFAULT_DECOMMISSION_DIR})`,
     '  --ao-gate <FILE> AO dependency gate JSON file (default: <dir>/ao-dependency-gate.json)',
+    '  --manual-log <FILE> Manual proof log JSON file (default: <dir>/decommission-evidence-log.json)',
     '  --json           Print JSON only',
     '  --help           Show this help',
     '',
@@ -41,6 +45,7 @@ function parseArgs(argv) {
   const args = {
     dir: DEFAULT_DECOMMISSION_DIR,
     aoGate: '',
+    manualLog: '',
     json: false,
   }
 
@@ -71,6 +76,9 @@ function parseArgs(argv) {
       case '--ao-gate':
         args.aoGate = readValue()
         break
+      case '--manual-log':
+        args.manualLog = readValue()
+        break
       default:
         if (arg.startsWith('--')) throw new CliError(`unknown option: ${arg}`, 64)
         throw new CliError(`unexpected positional argument: ${arg}`, 64)
@@ -79,6 +87,7 @@ function parseArgs(argv) {
 
   if (!isNonEmptyString(args.dir)) throw new CliError('--dir must be a non-empty string', 64)
   if (!isNonEmptyString(args.aoGate)) args.aoGate = join(args.dir, DEFAULT_AO_GATE_FILE)
+  if (!isNonEmptyString(args.manualLog)) args.manualLog = join(args.dir, DEFAULT_MANUAL_PROOF_LOG)
 
   return args
 }
@@ -122,6 +131,18 @@ function toActionableBlocker(message) {
   if (invalidJsonMatch) {
     const file = normalizeFileLabel(invalidJsonMatch[1])
     return `Fix invalid JSON in ${file}.`
+  }
+
+  const missingManualLogMatch = /^missing manual proof log: (.+)$/i.exec(normalized)
+  if (missingManualLogMatch) {
+    const file = normalizeFileLabel(missingManualLogMatch[1])
+    return `Generate ${file} with manual proof placeholders, then fill all required links.`
+  }
+
+  const missingManualProofMatch = /^missing manual proof link: (.+)$/i.exec(normalized)
+  if (missingManualProofMatch) {
+    const label = missingManualProofMatch[1].trim()
+    return `Add ${label} link in decommission-evidence-log.json.`
   }
 
   if (/^release mismatch across drill artifacts:/i.test(normalized)) {
@@ -173,18 +194,93 @@ function toActionableBlocker(message) {
   return normalized
 }
 
+function normalizeManualProofState(summary) {
+  if (!summary || typeof summary !== 'object') return 'blocked'
+  if (Array.isArray(summary.blockers) && summary.blockers.length > 0) return 'blocked'
+  if (summary.status === 'complete') return 'complete'
+  return 'pending'
+}
+
+function computeAoManualState(aoState, manualState) {
+  if (aoState === 'blocked' || manualState === 'blocked') return 'blocked'
+  if (aoState === 'pending' || manualState === 'pending') return 'pending'
+  return 'complete'
+}
+
+function readManualProofSummary(manualProofFile) {
+  let logRaw
+  try {
+    logRaw = readFileSync(manualProofFile, 'utf8')
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    return {
+      status: 'blocked',
+      blockers: [`missing manual proof log: ${manualProofFile}`],
+      warnings: [`unable to read ${manualProofFile}: ${reason}`],
+      requiredCount: 0,
+      providedCount: 0,
+      missingCount: 0,
+      missingProofLabels: [],
+      proofs: [],
+    }
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(logRaw)
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    return {
+      status: 'blocked',
+      blockers: [`invalid JSON in ${manualProofFile}: ${reason}`],
+      warnings: [],
+      requiredCount: 0,
+      providedCount: 0,
+      missingCount: 0,
+      missingProofLabels: [],
+      proofs: [],
+    }
+  }
+
+  const summary = assessManualProofs(parsed)
+  const blockers = [...summary.blockers]
+  if (Array.isArray(summary.missingProofLabels)) {
+    for (const label of summary.missingProofLabels) {
+      blockers.push(`missing manual proof link: ${label}`)
+    }
+  }
+
+  return {
+    ...summary,
+    blockers,
+  }
+}
+
 function buildSummary(options = {}) {
   const dir = isNonEmptyString(options.dir) ? options.dir : DEFAULT_DECOMMISSION_DIR
   const aoGateFile = isNonEmptyString(options.aoGate) ? options.aoGate : join(dir, DEFAULT_AO_GATE_FILE)
+  const manualProofFile = isNonEmptyString(options.manualLog) ? options.manualLog : join(dir, DEFAULT_MANUAL_PROOF_LOG)
+  const resolvedManualProofFile = resolve(manualProofFile)
   const readiness = assessDecommissionReadiness({ dir, aoGateFile })
-
+  const manualProofs = readManualProofSummary(resolvedManualProofFile)
+  const manualProofState = normalizeManualProofState(manualProofs)
+  const aoManualState = computeAoManualState(readiness.aoManualState, manualProofState)
+  const closeoutState =
+    readiness.automationState === 'complete'
+      ? aoManualState === 'complete'
+        ? 'ready'
+        : aoManualState === 'pending'
+          ? 'ao-manual-pending'
+          : 'ao-manual-blocked'
+      : 'automation-blocked'
   const automationBlockers = uniqueStrings(readiness.automationBlockers.map(toActionableBlocker))
   const aoManualBlockers = uniqueStrings(readiness.aoManualBlockers.map(toActionableBlocker))
-  const blockers = uniqueStrings([...automationBlockers, ...aoManualBlockers])
-  const decision = readiness.closeoutState === 'ready' ? 'GO' : 'NO-GO'
+  const manualProofBlockers = uniqueStrings((manualProofs.blockers || []).map(toActionableBlocker))
+  const blockers = uniqueStrings([...automationBlockers, ...aoManualBlockers, ...manualProofBlockers])
+  const decision = closeoutState === 'ready' ? 'GO' : 'NO-GO'
 
   if (decision === 'NO-GO' && blockers.length === 0) {
-    blockers.push(`Resolve closeout state ${readiness.closeoutState}.`)
+    blockers.push(`Resolve closeout state ${closeoutState}.`)
   }
 
   return {
@@ -192,18 +288,29 @@ function buildSummary(options = {}) {
     decision,
     status: decision === 'GO' ? 'ready' : 'blocked',
     release: readiness.release,
-    closeoutState: readiness.closeoutState,
+    closeoutState,
     automationState: readiness.automationState,
-    aoManualState: readiness.aoManualState,
+    aoManualState,
+    manualProofState,
     blockerCount: blockers.length,
     blockers,
     blockerGroups: {
       automation: automationBlockers,
       aoManual: aoManualBlockers,
+      manualProofs: manualProofBlockers,
+    },
+    manualProofs: {
+      file: resolvedManualProofFile,
+      status: manualProofs.status,
+      requiredCount: manualProofs.requiredCount,
+      providedCount: manualProofs.providedCount,
+      missingCount: manualProofs.missingCount,
+      missingProofLabels: manualProofs.missingProofLabels,
     },
     sources: {
       decommissionDir: readiness.dir,
       aoGateFile: readiness.aoGateFile,
+      manualProofFile: resolvedManualProofFile,
     },
   }
 }
@@ -216,10 +323,15 @@ function renderHuman(summary) {
   lines.push(`- Closeout state: \`${summary.closeoutState}\``)
   lines.push(`- Automation state: \`${summary.automationState}\``)
   lines.push(`- AO/manual state: \`${summary.aoManualState}\``)
+  lines.push(`- Manual proof state: \`${summary.manualProofState}\``)
+  lines.push(
+    `- Manual proofs: ${summary.manualProofs.providedCount}/${summary.manualProofs.requiredCount} (missing ${summary.manualProofs.missingCount})`,
+  )
   lines.push(`- Blockers: ${summary.blockerCount}`)
   if (isNonEmptyString(summary.release)) lines.push(`- Release: \`${summary.release}\``)
   lines.push(`- Decommission dir: \`${summary.sources.decommissionDir}\``)
   lines.push(`- AO gate: \`${summary.sources.aoGateFile}\``)
+  lines.push(`- Manual proof log: \`${summary.sources.manualProofFile}\``)
 
   if (summary.blockers.length > 0) {
     lines.push('')

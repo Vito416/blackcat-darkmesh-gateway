@@ -118,7 +118,7 @@ describe('suggest-ratelimit-overrides.js', () => {
     expect(res.stdout.trim().startsWith('{')).toBe(true)
     expect(res.stdout.trim().endsWith('}')).toBe(true)
     expect(res.stdout).not.toContain('\n- prefix=')
-    expect(res.stdout).not.toContain('RATE_LIMIT_ROUTE_OVERRIDES=')
+    expect(res.stdout).not.toContain('GATEWAY_RL_MAX_OVERRIDES=')
   })
 
   it('prints only the env override line with --env-line', () => {
@@ -129,7 +129,7 @@ describe('suggest-ratelimit-overrides.js', () => {
 
     const res = runCli(['--input', input, '--env-line'])
     expect(res.status).toBe(0)
-    expect(res.stdout.trim()).toBe('RATE_LIMIT_ROUTE_OVERRIDES=inbox=16,webhook=31')
+    expect(res.stdout.trim()).toBe('GATEWAY_RL_MAX_OVERRIDES=inbox=16,webhook=31')
     expect(res.stdout).not.toContain('- prefix=')
     expect(res.stdout).not.toContain('{"profile"')
   })

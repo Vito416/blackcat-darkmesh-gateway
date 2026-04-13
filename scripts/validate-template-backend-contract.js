@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const DEFAULT_FILE = 'config/template-backend-contract.json'
@@ -101,7 +103,7 @@ function parseArgs(argv) {
   return args
 }
 
-function validateTemplateBackendContract(contract) {
+function validateTemplateBackendContract(contract, { contractDir = process.cwd(), workspaceDir = process.cwd() } = {}) {
   const issues = []
 
   if (!isObject(contract)) {
@@ -142,6 +144,16 @@ function validateTemplateBackendContract(contract) {
         issues.push(`allowedActions[${index}].path must be a non-empty string`)
       } else if (!path.startsWith('/')) {
         issues.push(`allowedActions[${index}].path must start with "/"`)
+      }
+
+      for (const field of ['requestSchemaRef', 'responseSchemaRef']) {
+        const schemaRef = normalizeString(action[field])
+        if (!schemaRef) continue
+        const schemaCandidates = [resolve(workspaceDir, schemaRef), resolve(contractDir, schemaRef)]
+        const schemaExists = schemaCandidates.some((schemaPath) => existsSync(schemaPath))
+        if (!schemaExists) {
+          issues.push(`allowedActions[${index}].${field} file not found: ${schemaRef}`)
+        }
       }
 
       if (method && path) {
@@ -255,7 +267,9 @@ async function runCli(argv = process.argv.slice(2)) {
     }
   }
 
-  const issues = validateTemplateBackendContract(contract)
+  const contractDir = dirname(resolve(args.file))
+  const workspaceDir = process.cwd()
+  const issues = validateTemplateBackendContract(contract, { contractDir, workspaceDir })
   const result = {
     ok: issues.length === 0,
     allowedActionCount: Array.isArray(contract?.allowedActions) ? contract.allowedActions.length : 0,

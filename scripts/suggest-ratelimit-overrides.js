@@ -38,7 +38,7 @@ function usage(exitCode = 0) {
       '  --floor <N>          Optional minimum suggested value',
       '  --ceiling <N>        Optional maximum suggested value',
       '  --json               Print structured JSON only',
-      '  --env-line           Print RATE_LIMIT_ROUTE_OVERRIDES=<...> only',
+      '  --env-line           Print GATEWAY_RL_MAX_OVERRIDES=<...> only',
       '  --help               Show this help',
       '',
       'Input format:',
@@ -256,7 +256,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   if (args.envLine) {
-    console.log(`RATE_LIMIT_ROUTE_OVERRIDES=${result.suggestion}`)
+    console.log(`GATEWAY_RL_MAX_OVERRIDES=${result.suggestion}`)
     return
   }
 

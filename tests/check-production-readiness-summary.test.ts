@@ -35,6 +35,12 @@ function seedDrillDir(options = {}) {
     drillCheckOk = true,
     ledgerStatus = 'ready',
     gateStatuses = ['closed', 'closed', 'closed'],
+    manualProofLinks = {
+      recoveryDrillLink: 'https://ops.example/recovery-drill',
+      aoFallbackLink: 'https://ops.example/ao-fallback',
+      rollbackProofLink: 'https://ops.example/rollback',
+      approvalsLink: 'https://ops.example/approvals',
+    },
   } = options as {
     omit?: string[]
     release?: string
@@ -44,6 +50,12 @@ function seedDrillDir(options = {}) {
     drillCheckOk?: boolean
     ledgerStatus?: string
     gateStatuses?: string[]
+    manualProofLinks?: {
+      recoveryDrillLink?: string
+      aoFallbackLink?: string
+      rollbackProofLink?: string
+      approvalsLink?: string
+    }
   }
 
   const dir = makeTempDir()
@@ -172,6 +184,14 @@ function seedDrillDir(options = {}) {
         },
       ],
     },
+    'decommission-evidence-log.json': {
+      manualProofs: [
+        { key: 'recoveryDrillLink', label: 'Recovery drill proof', link: manualProofLinks.recoveryDrillLink || '' },
+        { key: 'aoFallbackLink', label: 'AO fallback proof', link: manualProofLinks.aoFallbackLink || '' },
+        { key: 'rollbackProofLink', label: 'Rollback proof', link: manualProofLinks.rollbackProofLink || '' },
+        { key: 'approvalsLink', label: 'Approvals / sign-off', link: manualProofLinks.approvalsLink || '' },
+      ],
+    },
   }
 
   for (const [name, payload] of Object.entries(payloads)) {
@@ -237,5 +257,27 @@ describe('check-production-readiness-summary.js', () => {
     expect(res.stdout).toContain('Automation state: `complete`')
     expect(res.stdout).toContain('AO/manual state: `pending`')
     expect(res.stdout).toContain('Close AO gate check p1_1_authority_rotation_workflow (current: in_progress)')
+  })
+
+  it('reports NO-GO when manual proof links are missing', () => {
+    const dir = seedDrillDir({
+      manualProofLinks: {
+        recoveryDrillLink: '',
+        aoFallbackLink: 'https://ops.example/ao-fallback',
+        rollbackProofLink: '',
+        approvalsLink: 'https://ops.example/approvals',
+      },
+    })
+    const gateFile = join(dir, 'ao-dependency-gate.json')
+
+    const res = runCli(['--dir', dir, '--ao-gate', gateFile, '--json'])
+    const payload = JSON.parse(res.stdout)
+
+    expect(res.status).toBe(3)
+    expect(payload.decision).toBe('NO-GO')
+    expect(payload.closeoutState).toBe('ao-manual-blocked')
+    expect(payload.manualProofState).toBe('blocked')
+    expect(payload.blockers.some((blocker: string) => blocker.includes('Recovery drill proof'))).toBe(true)
+    expect(payload.blockers.some((blocker: string) => blocker.includes('Rollback proof'))).toBe(true)
   })
 })

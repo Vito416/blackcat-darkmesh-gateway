@@ -115,12 +115,18 @@ describe('runtime config handler helpers', () => {
     })
   })
 
+  it('clamps stripe webhook tolerance within safe bounds', () => {
+    expect(readWebhookConfig(262144, { STRIPE_WEBHOOK_TOLERANCE_MS: '999' }).stripeToleranceMs).toBe(1000)
+    expect(readWebhookConfig(262144, { STRIPE_WEBHOOK_TOLERANCE_MS: '700000' }).stripeToleranceMs).toBe(600000)
+    expect(readWebhookConfig(262144, { STRIPE_WEBHOOK_TOLERANCE_MS: 'invalid' }).stripeToleranceMs).toBe(300000)
+  })
+
   it('returns worker notify defaults and resolves breaker keys by provider precedence', () => {
     const defaults = readWorkerNotifyConfig()
 
     expect(defaults).toEqual({
       target: 'http://localhost:8787/notify',
-      token: 'test-notify',
+      token: '',
       hmacSecret: '',
       breakerKey: undefined,
       breakerKeyStripe: undefined,
