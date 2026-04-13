@@ -1,1 +1,1 @@
-valid dependency gate: ops/decommission/ao-dependency-gate.json
+valid dependency gate: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/ops/decommission/ao-dependency-gate.json

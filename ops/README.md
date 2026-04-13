@@ -19,7 +19,8 @@
 - Decommission manual-proof scaffold: `npm run ops:init-decommission-manual-proofs -- --dir <drill-dir> [--force]` generates JSON + Markdown placeholders for recovery/fallback/rollback/approvals proof links.
 - Decommission manual-proof checker: `npm run ops:check-decommission-manual-proofs -- --file <drill-dir>/decommission-evidence-log.json [--strict] [--json]` validates recovery/fallback/rollback/approvals links and returns `pending` (non-strict) vs hard failure (strict).
 - Decommission readiness summary: `npm run ops:check-decommission-readiness -- --dir <drill-dir> --ao-gate ops/decommission/ao-dependency-gate.json [--strict] [--json]` emits `automationState`, `aoManualState`, and `closeoutState` so `automation-complete`, `ao-manual-pending`, and `ao-manual-blocked` are not conflated.
-- Production GO/NO-GO summary: `npm run ops:check-production-readiness -- [--dir ops/decommission] [--ao-gate <file>] [--json]` prints a concise closeout decision with actionable blockers only.
+- Production GO/NO-GO summary: `npm run ops:check-production-readiness -- [--dir ops/decommission] [--ao-gate <file>] [--manual-log <file>] [--json]` prints a concise closeout decision with actionable blockers only, including missing manual proof links from `decommission-evidence-log.json`.
+- Cross-repo dataflow summary: `npm run ops:audit-cross-repo-dataflow -- --strict --json` validates gateway<->AO<->write<->worker contract coherence and reports P0/P1 findings.
 - Decommission closeout artifact validator: `npm run ops:validate-decommission-closeout -- --file <drill-dir>/decommission-closeout.json [--strict] [--json]` verifies closeout shape and can hard-fail when closeout is not `ready`.
 - Worker-routing config checker: `node scripts/check-template-worker-routing-config.js --url-map <json> [--token-map <json>] [--strict] [--json]` validates tenant URL/token map shape before routing is published.
 - Worker-routing scaffold helper: `node scripts/init-template-worker-routing.js --sites <csv> [--url-map-out <file>] [--token-map-out <file>] [--force]` generates the routing map skeleton for a new site set.
@@ -55,7 +56,7 @@
 - Pre-live decommission bootstrap (no live gateways yet): `npm run ops:bootstrap-prelive-decommission-artifacts:tmp -- --release 1.4.0` seeds a deterministic baseline artifact set under `tmp/decommission-prelive` so readiness can report `automation-complete` while AO checks remain open.
 - Release drill runbook: `ops/release-drill-runbook.md`.
 - Fresh-machine production bootstrap runbook: `ops/fresh-machine-production-bootstrap-runbook.md` (prereqs, env bootstrap, strict preflight, strict drill path).
-- WEDOS live handoff folder: `ops/live-wedos/` (layout bootstrap + preflight checklist for FTP-based rollout).
+- WEDOS live handoff folder: `ops/live-wedos/` (VPS + cloudflared rollout and production-like validation tooling).
 - Production gaplist tracker for 1.4.0: `ops/decommission/PRODUCTION_READY_GAPLIST_1.4.0.md`.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
 - Bundle indexing/exchange pack: `npm run ops:index-evidence-bundles` and `npm run ops:build-attestation-exchange-pack` for portable review artifacts.

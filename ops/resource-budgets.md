@@ -141,6 +141,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - Watch `gateway_ratelimit_effective_max_last` when validating a hot path so you can see which ceiling the last request used.
 - Keep bucket keys coarse: route plus tenant/session/IP class, not per-request uniqueness.
 - Use `GATEWAY_RL_MAX_OVERRIDES` for narrow hot paths instead of raising the global `GATEWAY_RL_MAX`; prefix matches are resolved from the part before the first `:`.
+- `scripts/suggest-ratelimit-overrides.js --env-line` emits `GATEWAY_RL_MAX_OVERRIDES=...` so the suggestion can be copied directly into runtime env config.
 - If bucket count rises with traffic, collapse keys or reduce tenant fan-out before increasing the limit.
 
 ## Replay budget

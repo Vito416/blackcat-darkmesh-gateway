@@ -28,6 +28,16 @@ npm run test:integrity-gate
 GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://localhost:8787}" GATEWAY_INTEGRITY_INCIDENT_TOKEN="${GATEWAY_INTEGRITY_INCIDENT_TOKEN}" GATEWAY_TEMPLATE_TOKEN="${GATEWAY_TEMPLATE_TOKEN}" node scripts/e2e-integrity-incident-smoke.js
 ```
 
+## Node runtime entrypoint (VPS mode)
+```bash
+npm run build
+HOST=127.0.0.1 PORT=8080 npm start
+```
+
+- `/health` and `/healthz` are lightweight liveness endpoints (no AO dependency lookup).
+- Keep the process private (`127.0.0.1`), then publish through Cloudflare Tunnel.
+- Optional domain lock: `GATEWAY_ALLOWED_HOSTS=domain1.cz,domain2.cz,gateway.example.com`
+
 ## P3 operator tools
 ```bash
 npm run ops:compare-integrity -- --url ... --url ...
@@ -108,7 +118,13 @@ Configuration (per site)
     - when signer map is configured, write actions fail closed for unknown `siteId`
   - `GATEWAY_TEMPLATE_VARIANT_MAP` (optional per-site template variant map, JSON `{ "<site>": { "variant": "signal|bastion|horizon", "templateTxId": "...", "manifestTxId": "..." } }`)
   - `GATEWAY_TEMPLATE_HMAC_SECRET` (optional HMAC signature header for forwarded template calls)
-- Notify → Worker:
+  - `GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS` (global fallback timeout)
+  - `GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS_READ` / `GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS_WRITE` (per-route-kind timeout overrides)
+  - `GATEWAY_TEMPLATE_UPSTREAM_AUTH_MODE` (`none`|`bearer`|`x-template-token`, default `none`)
+  - `GATEWAY_TEMPLATE_UPSTREAM_TOKEN` (shared upstream auth token used when auth mode is enabled)
+  - `GATEWAY_TEMPLATE_UPSTREAM_TOKEN_MAP` (optional per-site upstream auth token map, JSON)
+  - `GATEWAY_SITE_ID_BY_HOST_MAP` (optional JSON host->site binding map; when set, template calls fail-closed for unmapped hosts and block siteId mismatch)
+  - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
   - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.
 - Metrics scrape example (Prometheus):
@@ -166,6 +182,7 @@ Open items to design/implement
 - `/api/public/*` → served from AO read state (cached).
 - `/webhook/:psp` → PSP bridge ingress.
 - `/template/call` → constrained template backend API (allowlisted actions only, schema-validated, optional token + HMAC).
+- `/template/config` → machine-readable template backend/runtime contract snapshot for operators and template loaders.
 - `/integrity/state` → read current runtime integrity state + latest AO/checkpoint snapshot details (optional token).
 - `/integrity/incident` → authenticated incident intake (`report|ack|pause|resume`) with optional forwarding hook.
 - `/metrics` → Prom/OpenMetrics (protected, text format; set `GATEWAY_REQUIRE_METRICS_AUTH=1` + bearer/basic creds).

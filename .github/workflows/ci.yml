@@ -810,7 +810,7 @@ jobs:
       - name: Check release readiness
         run: |
           set -euo pipefail
-          npm run --silent ops:check-release-readiness -- --pack "$RELEASE_PACK_JSON" --json | tee "$RELEASE_READINESS_JSON" | tee -a "$GITHUB_STEP_SUMMARY"
+          npm run --silent ops:check-release-readiness -- --pack "$RELEASE_PACK_JSON" --json --strict | tee "$RELEASE_READINESS_JSON" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Build and validate release drill manifest
         run: |
           set -euo pipefail
@@ -930,7 +930,8 @@ jobs:
           else
             echo "### Release drill artifact check" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Result: skipped because ops:check-release-drill-artifacts is not defined." >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/check-release-drill-artifacts.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
       - name: Build release evidence ledger
         run: |
@@ -957,27 +958,30 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/scripts/check-ao-gate-evidence.js" ]; then
             node "$GITHUB_WORKSPACE/scripts/check-ao-gate-evidence.js" \
               --file "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
+              --strict \
               --json > "$RELEASE_AO_GATE_EVIDENCE_JSON"
             node -e "const fs=require('node:fs');const p=process.env.RELEASE_AO_GATE_EVIDENCE_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### AO gate evidence quality');console.log('');console.log('- Result: '+String(d.result||'unknown'));console.log('- Issues: '+(Array.isArray(d.issues)?d.issues.length:0));console.log('- Warnings: '+(Array.isArray(d.warnings)?d.warnings.length:0));" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "### AO gate evidence quality" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Result: skipped because ops:check-ao-gate-evidence is not defined." >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/check-ao-gate-evidence.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
       - name: Check decommission readiness
         run: |
           set -euo pipefail
-          if [ -f "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" ]; then
-            node "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" \
-              --dir "$RELEASE_PACK_WORKDIR" \
-              --ao-gate "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
-              --json > "$RELEASE_DECOMMISSION_READY_JSON"
-            node -e "const fs=require('node:fs');const p=process.env.RELEASE_DECOMMISSION_READY_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission readiness');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Blockers: '+Number(d.blockerCount||0));" >> "$GITHUB_STEP_SUMMARY"
-          else
+          if [ ! -f "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" ]; then
             echo "### Decommission readiness" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Result: skipped because ops:check-decommission-readiness is not defined." >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/check-decommission-readiness.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
+          node "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" \
+            --dir "$RELEASE_PACK_WORKDIR" \
+            --ao-gate "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
+            --strict \
+            --json > "$RELEASE_DECOMMISSION_READY_JSON"
+          node -e "const fs=require('node:fs');const p=process.env.RELEASE_DECOMMISSION_READY_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission readiness');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Blockers: '+Number(d.blockerCount||0));" >> "$GITHUB_STEP_SUMMARY"
       - name: Build decommission evidence log
         run: |
           set -euo pipefail
@@ -993,21 +997,24 @@ jobs:
       - name: Check decommission manual proofs
         run: |
           set -euo pipefail
-          if [ -f "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" ] && [ -f "$RELEASE_DECOMMISSION_LOG_JSON" ]; then
-            node "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" \
-              --file "$RELEASE_DECOMMISSION_LOG_JSON" \
-              --json \
-              > "$RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON"
-            node -e "const fs=require('node:fs');const p=process.env.RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission manual proofs');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Provided: '+Number(d.providedCount||0));console.log('- Required: '+Number(d.requiredCount||0));console.log('- Missing: '+Number(d.missingCount||0));" >> "$GITHUB_STEP_SUMMARY"
-          else
+          if [ ! -f "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" ]; then
             echo "### Decommission manual proofs" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            if [ ! -f "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" ]; then
-              echo "- Result: skipped because scripts/check-decommission-manual-proofs.js is missing." >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "- Result: skipped because decommission evidence log JSON is missing." >> "$GITHUB_STEP_SUMMARY"
-            fi
+            echo "- Result: failed because scripts/check-decommission-manual-proofs.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
+          if [ ! -f "$RELEASE_DECOMMISSION_LOG_JSON" ]; then
+            echo "### Decommission manual proofs" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because decommission evidence log JSON is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          node "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" \
+            --file "$RELEASE_DECOMMISSION_LOG_JSON" \
+            --strict \
+            --json \
+            > "$RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON"
+          node -e "const fs=require('node:fs');const p=process.env.RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission manual proofs');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Provided: '+Number(d.providedCount||0));console.log('- Required: '+Number(d.requiredCount||0));console.log('- Missing: '+Number(d.missingCount||0));" >> "$GITHUB_STEP_SUMMARY"
       - name: Check legacy module map sync
         run: |
           set -euo pipefail
@@ -1025,34 +1032,38 @@ jobs:
       - name: Run decommission closeout
         run: |
           set -euo pipefail
-          if [ -f "$GITHUB_WORKSPACE/scripts/run-decommission-closeout.js" ]; then
-            node "$GITHUB_WORKSPACE/scripts/run-decommission-closeout.js" \
-              --dir "$RELEASE_PACK_WORKDIR" \
-              --ao-gate "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
-              --json > "$RELEASE_CLOSEOUT_JSON"
-            node -e "const fs=require('node:fs');const p=process.env.RELEASE_CLOSEOUT_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission closeout');console.log('');console.log('- Status: '+String(d.status||d.result||'unknown'));console.log('- Blockers: '+Number(d.blockerCount ?? (Array.isArray(d.blockers)?d.blockers.length:0)));console.log('- Warnings: '+Number(d.warningCount ?? (Array.isArray(d.warnings)?d.warnings.length:0)));" >> "$GITHUB_STEP_SUMMARY"
-          else
+          if [ ! -f "$GITHUB_WORKSPACE/scripts/run-decommission-closeout.js" ]; then
             echo "### Decommission closeout" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Result: skipped because scripts/run-decommission-closeout.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/run-decommission-closeout.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
+          node "$GITHUB_WORKSPACE/scripts/run-decommission-closeout.js" \
+            --dir "$RELEASE_PACK_WORKDIR" \
+            --ao-gate "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
+            --strict \
+            --json > "$RELEASE_CLOSEOUT_JSON"
+          node -e "const fs=require('node:fs');const p=process.env.RELEASE_CLOSEOUT_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission closeout');console.log('');console.log('- Status: '+String(d.status||d.result||'unknown'));console.log('- Blockers: '+Number(d.blockerCount ?? (Array.isArray(d.blockers)?d.blockers.length:0)));console.log('- Warnings: '+Number(d.warningCount ?? (Array.isArray(d.warnings)?d.warnings.length:0)));" >> "$GITHUB_STEP_SUMMARY"
       - name: Validate decommission closeout artifact
         run: |
           set -euo pipefail
-          if [ -f "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" ] && [ -f "$RELEASE_CLOSEOUT_JSON" ]; then
-            node "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" \
-              --file "$RELEASE_CLOSEOUT_JSON" \
-              --json > "$RELEASE_CLOSEOUT_VALIDATION_JSON"
-            node -e "const fs=require('node:fs');const p=process.env.RELEASE_CLOSEOUT_VALIDATION_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission closeout validation');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Ready: '+String(Boolean(d.ready)));console.log('- Issues: '+Number(d.issueCount||0));console.log('- Blockers: '+Number(d.blockerCount||0));" >> "$GITHUB_STEP_SUMMARY"
-          else
+          if [ ! -f "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" ]; then
             echo "### Decommission closeout validation" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            if [ ! -f "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" ]; then
-              echo "- Result: skipped because scripts/validate-decommission-closeout.js is missing." >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "- Result: skipped because decommission closeout JSON is missing." >> "$GITHUB_STEP_SUMMARY"
-            fi
+            echo "- Result: failed because scripts/validate-decommission-closeout.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
+          if [ ! -f "$RELEASE_CLOSEOUT_JSON" ]; then
+            echo "### Decommission closeout validation" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because decommission closeout JSON is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          node "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" \
+            --file "$RELEASE_CLOSEOUT_JSON" \
+            --strict \
+            --json > "$RELEASE_CLOSEOUT_VALIDATION_JSON"
+          node -e "const fs=require('node:fs');const p=process.env.RELEASE_CLOSEOUT_VALIDATION_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission closeout validation');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Ready: '+String(Boolean(d.ready)));console.log('- Issues: '+Number(d.issueCount||0));console.log('- Blockers: '+Number(d.blockerCount||0));" >> "$GITHUB_STEP_SUMMARY"
       - name: Append release pack summary
         if: always()
         run: |

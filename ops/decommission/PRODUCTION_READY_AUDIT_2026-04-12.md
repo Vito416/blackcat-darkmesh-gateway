@@ -32,7 +32,7 @@ None at this time (machine checks report GO).
 
 1. Add schema file for `GATEWAY_TEMPLATE_VARIANT_MAP` and include it in CI docs validators.
 2. Add templated release notes for variant updates so ops can diff UX changes without reading full HTML.
-3. Add a tiny `ops/live-wedos` bootstrap script to stage dist/config assets before FTP upload.
+3. Add one hardened VPS bootstrap checklist update (cloudflared + systemd + service probes) after first live operator rehearsal.
 
 ## Recommended execution split
 
