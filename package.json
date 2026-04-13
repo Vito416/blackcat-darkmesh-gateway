@@ -18,6 +18,7 @@
     "ops:validate-consistency-preflight": "node scripts/validate-consistency-preflight.js",
     "ops:validate-ao-dependency-gate": "node scripts/validate-ao-dependency-gate.js",
     "ops:validate-template-backend-contract": "node scripts/validate-template-backend-contract.js",
+    "ops:check-template-bridge-contract": "node scripts/check-template-bridge-contract.js",
     "ops:check-legacy-runtime-boundary": "node scripts/check-legacy-runtime-boundary.js",
     "ops:check-installer-runtime-boundary": "node scripts/check-installer-runtime-boundary.js",
     "ops:check-config-loader-runtime-boundary": "node scripts/check-config-loader-runtime-boundary.js",

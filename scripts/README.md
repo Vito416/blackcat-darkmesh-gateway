@@ -32,6 +32,19 @@ GATEWAY_FORGET_FORWARD_URL='https://worker.example/cache/forget' \
 node scripts/check-forget-forward-config.js --strict
 ```
 
+## Template bridge contract compatibility
+
+`scripts/check-template-bridge-contract.js` cross-checks the gateway template
+backend contract against the workspace copies of the AO worker adapter and the
+write checkout adapter. It treats the bridge contract and the adapter package
+majors as a compatibility family, then verifies the route paths still line up.
+
+Usage:
+```bash
+npm run ops:check-template-bridge-contract -- --strict --json
+node scripts/check-template-bridge-contract.js --workspace-root ..
+```
+
 ## Cross-repo dataflow audit
 
 `scripts/audit-cross-repo-dataflow.js` validates the runtime contract boundary across:

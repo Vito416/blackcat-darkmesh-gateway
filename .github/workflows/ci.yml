@@ -209,6 +209,8 @@ jobs:
           fi
       - name: Check template signature-ref map
         run: npm run ops:check-template-signature-ref-map -- --strict --json
+      - name: Check template bridge contract compatibility
+        run: npm run ops:check-template-bridge-contract -- --strict --json
       - name: Validate template variant map config (strict)
         run: |
           set -euo pipefail
