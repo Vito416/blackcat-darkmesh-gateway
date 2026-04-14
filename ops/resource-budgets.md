@@ -165,4 +165,4 @@ node scripts/validate-hosting-readiness.js \
 - `--env-file <FILE>` is optional; use it when you want to validate a deployment dotenv file instead of the live process environment.
 - `--strict` fails when critical constraints are violated; warnings stay visible but do not fail a healthy profile.
 - `--json` is useful for CI or release-drill archives.
-- The validator focuses on the knobs that matter most on shared hosting: AO fetch timeout/retry bounds, cache caps/admission mode, ratelimit caps, and diskless checkpoint guidance.
+- The validator focuses on the knobs that matter most on constrained VPS tiers: AO fetch timeout/retry bounds, cache caps/admission mode, ratelimit caps, and diskless checkpoint guidance.

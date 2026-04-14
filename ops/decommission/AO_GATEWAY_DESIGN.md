@@ -64,9 +64,9 @@ Triggered on startup, cache miss, version bump, policy change:
 - write local signed checkpoint file (for restart continuity)
 - mark cache entries verified or reject
 
-This keeps shared-hosting CPU stable and avoids expensive per-request verification.
+This keeps runtime CPU stable on minimum VPS tiers and avoids expensive per-request verification.
 
-## 4) shared-hosting constraints
+## 4) VPS constraints
 
 Design assumptions:
 - no mandatory background queue required for correctness

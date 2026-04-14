@@ -54,10 +54,10 @@ Scope: `blackcat-darkmesh-write`, `blackcat-darkmesh-ao`, `blackcat-darkmesh-ao/
 
 ## VPS Constraints
 
-- Default the gateway to the VPS + Cloudflare Tunnel model, not the retired shared-hosting FTP/PHP bridge.
+- Default the gateway to the VPS + Cloudflare Tunnel model.
 - Keep `GATEWAY_RESOURCE_PROFILE` bounded to `vps_small`, `vps_medium`, or `diskless`; do not assume large-memory hosts, persistent local disks, or unbounded cache growth.
 - Treat local checkpoint storage as optional on small or diskless hosts; stale checkpoints must be treated as absent.
-- Keep AO fetch timeouts, retry counts, cache size, replay windows, and webhook body limits conservative enough for shared-VPS capacity.
+- Keep AO fetch timeouts, retry counts, cache size, replay windows, and webhook body limits conservative enough for minimum VPS capacity.
 - Use the live VPS drill commands only after the gateway is bound to loopback and `cloudflared.service` is the public entrypoint.
 
 ## Trust Boundaries

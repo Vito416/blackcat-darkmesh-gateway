@@ -4,7 +4,6 @@ Canonical docs for the current production-like VPS model.
 
 ## Status
 
-- Shared-hosting FTP/PHP-bridge rollout is retired from this repository.
 - Canonical runtime is now VPS + Node + Cloudflare Tunnel.
 - Public entrypoint should be `https://gateway.blgateway.fun` (or your mapped hostname), with local gateway bound to loopback (`127.0.0.1:8080`).
 

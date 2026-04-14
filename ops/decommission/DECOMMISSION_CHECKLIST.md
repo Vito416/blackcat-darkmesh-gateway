@@ -145,7 +145,7 @@ Manual evidence still required separately:
   - [x] degraded mode behavior
   - [x] recovery from AO outage
 - [x] Fresh-machine bootstrap and strict release-drill operator path is documented in `ops/fresh-machine-production-bootstrap-runbook.md`.
-- [ ] shared-hosting limits are validated (resource and runtime model).
+- [ ] VPS profile limits are validated (resource and runtime model).
 - [ ] Recovery drill completed at least once in staging with timestamps captured in notes.
 - [ ] Key rotation drill completed at least once for each integrity role.
 - [ ] AO fetch fallback was exercised and resumed without manual state repair.
