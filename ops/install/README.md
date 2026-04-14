@@ -46,6 +46,31 @@ bash ops/install/bin/install-all.sh
 4. `30-cloudflared.sh` (only if `TUNNEL_ID` and `TUNNEL_HOSTNAME` are set)
 5. `40-verify.sh` (service + health + firewall checks)
 
+## Remote install over Tailscale (recommended for team testing)
+
+From your local machine (repo checkout), run one of these:
+
+```bash
+bash ops/install/bin/remote-install-via-tailscale.sh adminops@blackcat-gateway-vps
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\install\bin\remote-install-via-tailscale.ps1 -Target adminops@blackcat-gateway-vps
+```
+
+Both wrappers:
+
+- connect through `tailscale ssh`
+- sync the target branch/repo
+- run the full installer on the remote VPS
+
+Optional tunnel wiring in the same run:
+
+```bash
+TUNNEL_ID=<uuid> TUNNEL_HOSTNAME=gateway.example.com \
+bash ops/install/bin/remote-install-via-tailscale.sh adminops@blackcat-gateway-vps
+```
+
 ## Environment and service files
 
 - Gateway runtime template: `ops/install/env/gateway.env.example`
@@ -79,3 +104,5 @@ Optional public check:
 ```bash
 PUBLIC_URL=https://gateway.example.com bash ops/install/bin/40-verify.sh
 ```
+
+See also: `ops/install/SCENARIOS.md` for ready-to-run flows (existing VPS, fresh ISO VPS, team test branch).
