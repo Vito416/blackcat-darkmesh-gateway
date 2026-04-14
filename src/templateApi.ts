@@ -5,6 +5,7 @@ import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
 import { requireAllowedRole } from './runtime/auth/policy.js'
 import { bodyExceedsUtf8Limit, utf8ByteLength } from './runtime/core/index.js'
 import { getTemplateActionPolicy, type BackendTarget, type TemplateActionPolicy } from './runtime/template/actions.js'
+import type { RuntimeRoutingHints } from './runtime/template/siteResolver.js'
 import { inspectTemplateSecretPayload, type TemplateSecretGuardResult } from './runtime/template/secretGuard.js'
 import { getTemplateContractAction, type TemplateContractAction } from './templateContract.js'
 
@@ -13,6 +14,7 @@ type TemplateCallInput = {
   payload: unknown
   requestId?: string
   siteId?: string
+  runtimeHints?: RuntimeRoutingHints
   actor?: string
   role?: string
   traceId?: string
@@ -64,6 +66,8 @@ const DEFAULT_TEMPLATE_MAX_BODY_BYTES = 32_768
 const DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS = 7_000
 const DEFAULT_TEMPLATE_SIGN_TIMEOUT_MS = 5_000
 const SAFE_TRACE_ID_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/
+const SAFE_WRITE_PID_RE = /^[A-Za-z0-9_-]{20,128}$/
+const WRITE_PID_OVERRIDE_HEADER = 'x-write-process-id'
 
 const TEMPLATE_TO_WRITE_ACTION: Record<string, string> = {
   'checkout.create-order': 'CreateOrder',
@@ -96,6 +100,36 @@ function resolveSiteId(input: TemplateCallInput): string | undefined {
 function resolvePayloadSiteId(payload: unknown): string | undefined {
   if (!isObj(payload)) return undefined
   return asNonEmptyString(payload.siteId)
+}
+
+function resolveRuntimeHintValue(runtimeHints: RuntimeRoutingHints | undefined, keys: string[]): string | undefined {
+  if (!runtimeHints) return undefined
+  const records = [runtimeHints.runtime, runtimeHints.runtimePointers]
+  for (const record of records) {
+    if (!record) continue
+    for (const key of keys) {
+      const value = asNonEmptyString(record[key])
+      if (value) return value
+    }
+  }
+  return undefined
+}
+
+function resolveRuntimeWritePid(runtimeHints: RuntimeRoutingHints | undefined): string | undefined {
+  return resolveRuntimeHintValue(runtimeHints, ['writeProcessId', 'writePid', 'write_process_id'])
+}
+
+function resolveRuntimeWorkerUrl(runtimeHints: RuntimeRoutingHints | undefined): string | undefined {
+  return resolveRuntimeHintValue(runtimeHints, ['workerUrl', 'worker_url'])
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 function parseStringMap(raw: string, envName: string): { ok: true; map: Record<string, string> } | { ok: false; message: string } {
@@ -217,7 +251,10 @@ function resolveBackendBaseUrl(target: BackendTarget): ResolveResult {
   return { ok: true, value: baseUrl }
 }
 
-function resolveSignerBaseUrl(siteId: string): ResolveResult {
+function resolveSignerBaseUrl(siteId: string, runtimeWorkerUrl?: string): ResolveResult {
+  if (runtimeWorkerUrl) {
+    return { ok: true, value: runtimeWorkerUrl }
+  }
   const mapRaw = readStringEnv('GATEWAY_TEMPLATE_WORKER_URL_MAP')
   if (mapRaw) {
     const parsed = parseStringMap(mapRaw, 'GATEWAY_TEMPLATE_WORKER_URL_MAP')
@@ -588,6 +625,15 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   let effectiveRequestId = requestId
   let resolvedSiteId = asNonEmptyString(input.siteId)
   let writeEnvelope: Record<string, unknown> | null = null
+  const runtimeWritePid = resolveRuntimeWritePid(input.runtimeHints)
+  const runtimeWorkerUrl = resolveRuntimeWorkerUrl(input.runtimeHints)
+
+  if (runtimeWritePid && !SAFE_WRITE_PID_RE.test(runtimeWritePid)) {
+    return jsonError(502, 'invalid_runtime_write_process_id', { value: runtimeWritePid }, traceId)
+  }
+  if (runtimeWorkerUrl && !isValidHttpUrl(runtimeWorkerUrl)) {
+    return jsonError(502, 'invalid_runtime_worker_url', { value: runtimeWorkerUrl }, traceId)
+  }
 
   if (policy.local.kind === 'write') {
     const explicitSiteId = asNonEmptyString(input.siteId)
@@ -605,7 +651,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
       }, traceId)
     }
 
-    const signerBase = resolveSignerBaseUrl(resolvedSiteId)
+    const signerBase = resolveSignerBaseUrl(resolvedSiteId, runtimeWorkerUrl)
     if (signerBase.ok === false) {
       const signerBaseError = signerBase as Extract<ResolveResult, { ok: false }>
       return jsonError(signerBaseError.status, signerBaseError.error, signerBaseError.detail, traceId)
@@ -692,6 +738,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   if (effectiveRequestId) headers['x-request-id'] = effectiveRequestId
   if (resolvedSiteId) headers['x-site-id'] = resolvedSiteId
   if (signature) headers['x-template-signature'] = signature
+  if (policy.local.kind === 'write' && runtimeWritePid) headers[WRITE_PID_OVERRIDE_HEADER] = runtimeWritePid
 
   const upstreamAuthMode = readTemplateUpstreamAuthMode()
   const upstreamToken = resolveTemplateUpstreamToken(resolvedSiteId)

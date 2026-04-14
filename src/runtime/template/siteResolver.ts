@@ -1,8 +1,12 @@
 import { readHandlerEnvString, readHandlerStrictEnabledFlag, readPositiveIntEnv } from '../config/handlerConfig.js'
 
 type ResolveMode = 'map' | 'ao' | 'hybrid'
+export type RuntimeRoutingHints = {
+  runtime?: Record<string, unknown>
+  runtimePointers?: Record<string, unknown>
+}
 type AoLookupResult =
-  | { kind: 'resolved'; siteId: string }
+  | { kind: 'resolved'; siteId: string; runtimeHints?: RuntimeRoutingHints }
   | { kind: 'not_found' }
   | { kind: 'unavailable'; error: string; status: number }
 
@@ -10,14 +14,62 @@ type HostMapParseResult = { ok: true; map: Record<string, string> } | { ok: fals
 
 type CachedAoResolution = {
   siteId?: string
+  runtimeHints?: RuntimeRoutingHints
   expiresAt: number
 }
 
-export type HostSiteResolution = { ok: true; siteId?: string } | { ok: false; status: number; error: string }
+export type HostSiteResolution =
+  | { ok: true; siteId?: string; runtimeHints?: RuntimeRoutingHints }
+  | { ok: false; status: number; error: string }
 
 const SITE_RESOLVE_TIMEOUT_DEFAULT_MS = 3_000
 const SITE_RESOLVE_CACHE_TTL_DEFAULT_MS = 30_000
 const aoResolutionCache = new Map<string, CachedAoResolution>()
+const RUNTIME_POINTER_FIELDS = [
+  'processId',
+  'siteProcessId',
+  'readProcessId',
+  'writeProcessId',
+  'catalogProcessId',
+  'accessProcessId',
+  'ingestProcessId',
+  'registryProcessId',
+  'workerId',
+  'workerUrl',
+  'updatedAt',
+  'sitePid',
+  'readPid',
+  'writePid',
+  'catalogPid',
+  'accessPid',
+  'ingestPid',
+  'registryPid',
+  'workerPid',
+  'site_process_id',
+  'read_process_id',
+  'write_process_id',
+  'catalog_process_id',
+  'access_process_id',
+  'ingest_process_id',
+  'registry_process_id',
+  'worker_id',
+  'worker_url',
+  'ProcessId',
+  'Process-Id',
+  'process_id',
+  'UpdatedAt',
+  'Updated-At',
+  'updated_at',
+  'moduleId',
+  'ModuleId',
+  'Module-Id',
+  'module_id',
+  'scheduler',
+  'Scheduler',
+  'Scheduler-Id',
+  'schedulerId',
+  'scheduler_id',
+] as const
 
 function normalizeHost(hostRaw: string): string {
   const normalized = hostRaw.trim().toLowerCase()
@@ -73,25 +125,86 @@ function allowFallback(): boolean {
   return readHandlerStrictEnabledFlag('GATEWAY_SITE_RESOLVE_ALLOW_BODY_FALLBACK')
 }
 
-function readSiteIdFromResolverBody(body: unknown): string | undefined {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return undefined
-  }
-
-  const siteId = (body as { siteId?: unknown }).siteId
-  if (typeof siteId === 'string' && siteId.trim()) {
-    return siteId.trim()
-  }
-
-  const dataSiteId = (body as { data?: { siteId?: unknown } }).data?.siteId
-  if (typeof dataSiteId === 'string' && dataSiteId.trim()) {
-    return dataSiteId.trim()
-  }
-
-  return undefined
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
 }
 
-function cachedAoLookup(host: string): string | undefined | null {
+function trimString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function collectScalarRuntimePointers(source: Record<string, unknown>): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {}
+  for (const key of RUNTIME_POINTER_FIELDS) {
+    const value = trimString(source[key])
+    if (value) out[key] = value
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function collectRuntimeHintsFromRecord(record: Record<string, unknown> | null): RuntimeRoutingHints | undefined {
+  if (!record) return undefined
+  const runtime = asRecord(record.runtime) || asRecord(record.Runtime) || undefined
+  const runtimePointers =
+    asRecord(record.runtimePointers) ||
+    asRecord(record.RuntimePointers) ||
+    asRecord(record.runtimePointer) ||
+    asRecord(record.RuntimePointer) ||
+    undefined
+  const scalarPointers = collectScalarRuntimePointers(record)
+
+  const out: RuntimeRoutingHints = {}
+  if (runtime) out.runtime = { ...runtime }
+  if (runtimePointers || scalarPointers) {
+    out.runtimePointers = {
+      ...(runtimePointers ? { ...runtimePointers } : {}),
+      ...(scalarPointers ? scalarPointers : {}),
+    }
+  }
+  if (!out.runtime && !out.runtimePointers) return undefined
+  return out
+}
+
+function mergeRuntimeHints(
+  primary?: RuntimeRoutingHints,
+  secondary?: RuntimeRoutingHints,
+): RuntimeRoutingHints | undefined {
+  const mergedRuntime =
+    primary?.runtime || secondary?.runtime
+      ? {
+          ...(secondary?.runtime ? { ...secondary.runtime } : {}),
+          ...(primary?.runtime ? { ...primary.runtime } : {}),
+        }
+      : undefined
+  const mergedRuntimePointers =
+    primary?.runtimePointers || secondary?.runtimePointers
+      ? {
+          ...(secondary?.runtimePointers ? { ...secondary.runtimePointers } : {}),
+          ...(primary?.runtimePointers ? { ...primary.runtimePointers } : {}),
+        }
+      : undefined
+  if (!mergedRuntime && !mergedRuntimePointers) return undefined
+  return {
+    ...(mergedRuntime ? { runtime: mergedRuntime } : {}),
+    ...(mergedRuntimePointers ? { runtimePointers: mergedRuntimePointers } : {}),
+  }
+}
+
+function parseResolverBody(body: unknown): { siteId?: string; runtimeHints?: RuntimeRoutingHints } {
+  const record = asRecord(body)
+  if (!record) return {}
+  const data = asRecord(record.data)
+
+  const siteId = trimString(record.siteId) || trimString(data?.siteId)
+  const runtimeHints = mergeRuntimeHints(collectRuntimeHintsFromRecord(data), collectRuntimeHintsFromRecord(record))
+  return {
+    ...(siteId ? { siteId } : {}),
+    ...(runtimeHints ? { runtimeHints } : {}),
+  }
+}
+
+function cachedAoLookup(host: string): CachedAoResolution | null {
   const cached = aoResolutionCache.get(host)
   if (!cached) {
     return null
@@ -100,13 +213,14 @@ function cachedAoLookup(host: string): string | undefined | null {
     aoResolutionCache.delete(host)
     return null
   }
-  return cached.siteId
+  return cached
 }
 
-function storeAoLookup(host: string, siteId: string | undefined) {
+function storeAoLookup(host: string, siteId: string | undefined, runtimeHints?: RuntimeRoutingHints) {
   const ttlMs = readResolverCacheTtlMs()
   aoResolutionCache.set(host, {
     siteId,
+    runtimeHints,
     expiresAt: Date.now() + ttlMs,
   })
 }
@@ -114,8 +228,12 @@ function storeAoLookup(host: string, siteId: string | undefined) {
 async function lookupSiteIdViaAo(host: string): Promise<AoLookupResult> {
   const cached = cachedAoLookup(host)
   if (cached !== null) {
-    if (cached) {
-      return { kind: 'resolved', siteId: cached }
+    if (cached.siteId) {
+      return {
+        kind: 'resolved',
+        siteId: cached.siteId,
+        ...(cached.runtimeHints ? { runtimeHints: cached.runtimeHints } : {}),
+      }
     }
     return { kind: 'not_found' }
   }
@@ -155,14 +273,18 @@ async function lookupSiteIdViaAo(host: string): Promise<AoLookupResult> {
     }
 
     const body = await response.json().catch(() => null)
-    const siteId = readSiteIdFromResolverBody(body)
-    if (!siteId) {
+    const parsed = parseResolverBody(body)
+    if (!parsed.siteId) {
       storeAoLookup(host, undefined)
       return { kind: 'not_found' }
     }
 
-    storeAoLookup(host, siteId)
-    return { kind: 'resolved', siteId }
+    storeAoLookup(host, parsed.siteId, parsed.runtimeHints)
+    return {
+      kind: 'resolved',
+      siteId: parsed.siteId,
+      ...(parsed.runtimeHints ? { runtimeHints: parsed.runtimeHints } : {}),
+    }
   } catch {
     if (timedOut) {
       return { kind: 'unavailable', error: 'site_resolver_timeout', status: 504 }
@@ -236,7 +358,11 @@ export async function resolveTemplateSiteIdFromHost(hostRaw: string, productionL
 
     const aoLookup = await lookupSiteIdViaAo(host)
     if (aoLookup.kind === 'resolved') {
-      return { ok: true, siteId: aoLookup.siteId }
+      return {
+        ok: true,
+        siteId: aoLookup.siteId,
+        ...(aoLookup.runtimeHints ? { runtimeHints: aoLookup.runtimeHints } : {}),
+      }
     }
 
     if (aoLookup.kind === 'not_found') {

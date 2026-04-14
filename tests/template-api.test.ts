@@ -652,6 +652,76 @@ describe('template api policy gateway', () => {
     expect(String(spy.mock.calls[1][0])).toBe('https://write.example/api/checkout/order')
   })
 
+  it('prefers runtime routing hints for signer url and write pid override header', async () => {
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
+    process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP = JSON.stringify({
+      'site-1': 'https://worker-map.example',
+    })
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url === 'https://worker-runtime.example/sign') {
+        return new Response(JSON.stringify({ signature: 'feedface', signatureRef: 'worker-site-runtime' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url === 'https://write.example/api/checkout/order') {
+        const headers = new Headers(init?.headers)
+        expect(headers.get('x-write-process-id')).toBe('B'.repeat(43))
+        return new Response('ok', { status: 200 })
+      }
+      return new Response('unexpected', { status: 404 })
+    })
+
+    const res = await proxyTemplateCall({
+      action: 'checkout.create-order',
+      requestId: 'req-runtime-routing-1',
+      role: 'shop_admin',
+      siteId: 'site-1',
+      payload: { siteId: 'site-1', items: [{ sku: 'sku-1', qty: 1 }] },
+      runtimeHints: {
+        runtime: {
+          workerUrl: 'https://worker-runtime.example',
+          writeProcessId: 'B'.repeat(43),
+        },
+      },
+    })
+
+    expect(res.status).toBe(200)
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(String(spy.mock.calls[0][0])).toBe('https://worker-runtime.example/sign')
+    expect(String(spy.mock.calls[1][0])).toBe('https://write.example/api/checkout/order')
+  })
+
+  it('fails closed when runtime write pid hint is invalid', async () => {
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.WORKER_API_URL = 'https://worker.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+
+    const res = await proxyTemplateCall({
+      action: 'checkout.create-order',
+      requestId: 'req-runtime-routing-bad-1',
+      role: 'shop_admin',
+      siteId: 'site-1',
+      payload: { siteId: 'site-1', items: [{ sku: 'sku-1', qty: 1 }] },
+      runtimeHints: {
+        runtimePointers: {
+          writeProcessId: 'bad pid with spaces',
+        },
+      },
+    })
+
+    expect(res.status).toBe(502)
+    await expect(res.text()).resolves.toContain('invalid_runtime_write_process_id')
+    expect(spy).not.toHaveBeenCalled()
+  })
+
   it('fails closed when worker map is configured but site route is missing', async () => {
     process.env.WRITE_API_URL = 'https://write.example'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'

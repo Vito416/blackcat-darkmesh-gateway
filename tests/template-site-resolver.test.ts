@@ -25,6 +25,11 @@ describe('template host resolver', () => {
     delete process.env.GATEWAY_SITE_RESOLVE_ALLOW_BODY_FALLBACK
     delete process.env.GATEWAY_PRODUCTION_LIKE
     delete process.env.AO_PUBLIC_API_URL
+    delete process.env.WRITE_API_URL
+    delete process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS
+    delete process.env.GATEWAY_TEMPLATE_TOKEN
+    delete process.env.WORKER_API_URL
+    delete process.env.WORKER_AUTH_TOKEN
     delete process.env.NODE_ENV
   })
 
@@ -127,6 +132,68 @@ describe('template host resolver', () => {
     const [, templateInit] = fetchSpy.mock.calls[1] as [string, RequestInit]
     const templateBody = JSON.parse(String(templateInit.body || '{}'))
     expect(templateBody.siteId).toBe('site-ao-fallback')
+  })
+
+  it('forwards AO runtime hints to write signer and write pid override header', async () => {
+    process.env.GATEWAY_SITE_RESOLVE_MODE = 'ao'
+    process.env.GATEWAY_SITE_RESOLVE_AO_URL = 'https://resolver.example'
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
+    process.env.WORKER_API_URL = 'https://worker-fallback.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url.includes('/api/public/site-by-host')) {
+        return new Response(
+          JSON.stringify({
+            status: 'OK',
+            data: {
+              siteId: 'site-ao-runtime',
+              runtime: { writeProcessId: 'B'.repeat(43), workerUrl: 'https://worker-runtime.example' },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
+      }
+      if (url === 'https://worker-runtime.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url === 'https://write.example/api/checkout/order') {
+        const headers = new Headers(init?.headers)
+        expect(headers.get('x-write-process-id')).toBe('B'.repeat(43))
+        return new Response('ok', { status: 200 })
+      }
+      return new Response('unexpected', { status: 404 })
+    })
+
+    const res = await handleRequest(
+      new Request('https://runtime-write.example/template/call', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-template-token': 'tmpl-secret',
+        },
+        body: JSON.stringify({
+          action: 'checkout.create-order',
+          requestId: 'req-runtime-site-1',
+          role: 'shop_admin',
+          payload: { items: [{ sku: 'sku-1', qty: 1 }] },
+        }),
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    expect(fetchSpy).toHaveBeenCalledTimes(3)
+    expect(String(fetchSpy.mock.calls[1]?.[0])).toBe('https://worker-runtime.example/sign')
+    expect(String(fetchSpy.mock.calls[2]?.[0])).toBe('https://write.example/api/checkout/order')
   })
 
   it('fails closed in production-like mode when no resolver source is configured', async () => {

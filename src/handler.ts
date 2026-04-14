@@ -689,6 +689,7 @@ async function handleTemplateCall(
     payload: effectivePayload,
     requestId: typeof (body as any).requestId === 'string' ? (body as any).requestId : undefined,
     siteId: mappedSiteId || bodySiteId || undefined,
+    runtimeHints: resolvedHostSite.runtimeHints,
     actor: typeof (body as any).actor === 'string' ? (body as any).actor : undefined,
     role: typeof (body as any).role === 'string' ? (body as any).role : undefined,
     traceId: traceContext.getStore(),
