@@ -1,4 +1,4 @@
-# First Production-Like Checklist (WEDOS VPS)
+# First Production-Like Checklist (VPS VPS)
 
 Use this after Node gateway + cloudflared are up on VPS.
 

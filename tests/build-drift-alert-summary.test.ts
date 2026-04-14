@@ -75,7 +75,7 @@ describe('build-drift-alert-summary.js', () => {
           ],
         }),
       ),
-      'wedos_small',
+      'vps_small',
     )
 
     expect(summary.status).toBe('critical')
@@ -105,7 +105,7 @@ describe('build-drift-alert-summary.js', () => {
           runs: [{ index: 1, name: 'pair-1', status: 'MISMATCH', outcome: 'mismatch', reason: 'audit.seqTo differs' }],
         }),
       ),
-      'wedos_medium',
+      'vps_medium',
     )
 
     const markdown = buildMarkdown(summary)
@@ -133,7 +133,7 @@ describe('build-drift-alert-summary.js', () => {
       '--matrix',
       matrixPath,
       '--profile',
-      'wedos_medium',
+      'vps_medium',
       '--out',
       markdownPath,
       '--json',

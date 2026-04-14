@@ -8,8 +8,8 @@ import {
 describe('runtime config profile helpers', () => {
   it('normalizes gateway resource profile aliases', () => {
     expect(resolveGatewayResourceProfile(undefined)).toBeNull()
-    expect(resolveGatewayResourceProfile('  WeDoS-Small  ')).toBe('wedos_small')
-    expect(resolveGatewayResourceProfile('m')).toBe('wedos_medium')
+    expect(resolveGatewayResourceProfile('  VPS-Small  ')).toBe('vps_small')
+    expect(resolveGatewayResourceProfile('m')).toBe('vps_medium')
     expect(resolveGatewayResourceProfile('memory_only')).toBe('diskless')
   })
 

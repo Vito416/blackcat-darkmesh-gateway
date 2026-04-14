@@ -148,7 +148,7 @@ Usage:
 ```bash
 npm run ops:validate-consistency-preflight -- \
   --urls https://gateway-a.example.com,https://gateway-b.example.com \
-  --mode pairwise --profile wedos_medium --allow-anon
+  --mode pairwise --profile vps_medium --allow-anon
 ```
 
 ## Integrity incident smoke
@@ -278,7 +278,7 @@ Usage:
 ```bash
 node scripts/build-drift-alert-summary.js \
   --matrix ./tmp/consistency-matrix.json \
-  --profile wedos_medium \
+  --profile vps_medium \
   --out ./tmp/consistency-drift-report.md \
   --json-out ./tmp/consistency-drift-summary.json
 
@@ -473,7 +473,7 @@ Usage:
 npm run ops:run-release-drill -- \
   --urls https://gateway-a.example.com,https://gateway-b.example.com \
   --out-dir ./tmp/release-drill \
-  --profile wedos_medium \
+  --profile vps_medium \
   --mode pairwise \
   --token "$GATEWAY_INTEGRITY_STATE_TOKEN" \
   --release 1.4.0 \
@@ -487,7 +487,7 @@ npm run ops:run-release-drill -- \
   --urls https://gateway-a.example.com,https://gateway-b.example.com \
   --out-root ./tmp/release-drills \
   --run-label canary-a \
-  --profile wedos_medium \
+  --profile vps_medium \
   --mode pairwise \
   --token "$GATEWAY_INTEGRITY_STATE_TOKEN" \
   --release 1.4.0 \
@@ -710,13 +710,13 @@ npm run ops:validate-decommission-closeout -- \
 
 ## hosting readiness validator
 
-`scripts/validate-hosting-readiness.js` validates constrained-hosting env settings against `wedos_small`, `wedos_medium`, or `diskless` budget envelopes.
+`scripts/validate-hosting-readiness.js` validates constrained-hosting env settings against `vps_small`, `vps_medium`, or `diskless` budget envelopes.
 
 Usage:
 ```bash
 npm run ops:validate-hosting-readiness -- \
-  --profile wedos_small \
-  --env-file ./.env.wedos \
+  --profile vps_small \
+  --env-file ./.env.vps \
   --strict
 ```
 
@@ -876,14 +876,14 @@ npm run ops:build-attestation-exchange-pack -- \
 
 ## Rate-limit override suggestion helper
 
-`scripts/suggest-ratelimit-overrides.js` generates deterministic per-prefix `GATEWAY_RL_MAX_OVERRIDES` suggestions from route stats for `wedos_small`, `wedos_medium`, or `diskless` profiles.
+`scripts/suggest-ratelimit-overrides.js` generates deterministic per-prefix `GATEWAY_RL_MAX_OVERRIDES` suggestions from route stats for `vps_small`, `vps_medium`, or `diskless` profiles.
 Use `--env-line` when you want a paste-ready `GATEWAY_RL_MAX_OVERRIDES=...` line for dotenv/runtime config.
 
 Usage:
 ```bash
 node scripts/suggest-ratelimit-overrides.js \
   --input ./tmp/rate-stats.json \
-  --profile wedos_small \
+  --profile vps_small \
   --floor 5 \
   --ceiling 120
 
@@ -906,7 +906,7 @@ GH_TOKEN="$GH_TOKEN" \
     --ref main \
     --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
     --consistency-mode all \
-    --consistency-profile wedos_medium \
+    --consistency-profile vps_medium \
     --consistency-token "$STATE_TOKEN" \
     --evidence-urls https://gateway-a.example.com,https://gateway-b.example.com \
     --evidence-token "$STATE_TOKEN"

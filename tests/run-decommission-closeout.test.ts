@@ -43,7 +43,7 @@ function seedCloseoutArtifacts(dir: string) {
   writeJson(join(dir, 'legacy-crypto-boundary-evidence.json'), { ok: true, status: 'pass' })
   writeJson(join(dir, 'release-drill-checks.json'), {
     release: '1.4.0',
-    profile: 'wedos_medium',
+    profile: 'vps_medium',
     mode: 'pairwise',
     strict: false,
   })
@@ -284,16 +284,16 @@ describe('run-decommission-closeout.js', () => {
       '--ao-gate',
       './tmp/ao-dependency-gate.json',
       '--profile',
-      'wedos_medium',
+      'vps_medium',
       '--env-file',
-      './tmp/wedos.env',
+      './tmp/vps.env',
       '--dry-run',
     ])
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('# Decommission Closeout')
     expect(result.stdout).toContain('check AO gate evidence')
-    expect(result.stdout).toContain('validate WEDOS readiness (wedos_medium)')
+    expect(result.stdout).toContain('validate VPS readiness (vps_medium)')
     expect(result.stdout).toContain('validate final migration summary')
     expect(result.stdout).toContain('validate signoff record')
     expect(result.stdout).toContain('build decommission evidence log')
@@ -331,8 +331,8 @@ describe('run-decommission-closeout.js', () => {
   it('runs the closeout flow and returns machine-friendly JSON', () => {
     const dir = makeTempDir()
     seedCloseoutArtifacts(dir)
-    const envFile = join(dir, 'wedos.env')
-    writeFileSync(envFile, 'GATEWAY_RESOURCE_PROFILE=wedos_small\n', 'utf8')
+    const envFile = join(dir, 'vps.env')
+    writeFileSync(envFile, 'GATEWAY_RESOURCE_PROFILE=vps_small\n', 'utf8')
 
     const spawnSyncFn = vi.fn((command: string, args: string[]) => {
       expect(command).toBe(process.execPath)
@@ -372,11 +372,11 @@ describe('run-decommission-closeout.js', () => {
               2,
             ),
           )
-        case 'validate-wedos-readiness.js':
+        case 'validate-hosting-readiness.js':
           return spawnResult(
             JSON.stringify(
               {
-                profile: 'wedos_small',
+                profile: 'vps_small',
                 status: 'pass',
                 criticalCount: 0,
                 warningCount: 0,
@@ -463,7 +463,7 @@ describe('run-decommission-closeout.js', () => {
         '--ao-gate',
         join(dir, 'ao-dependency-gate.json'),
         '--profile',
-        'wedos_small',
+        'vps_small',
         '--env-file',
         envFile,
         '--final-summary',
@@ -521,7 +521,7 @@ describe('run-decommission-closeout.js', () => {
     expect(spawnSyncFn.mock.calls.map((call) => basename(String(call[1][0])))).toEqual([
       'check-ao-gate-evidence.js',
       'check-decommission-readiness.js',
-      'validate-wedos-readiness.js',
+      'validate-hosting-readiness.js',
       'validate-final-migration-summary.js',
       'validate-signoff-record.js',
       'build-decommission-evidence-log.js',
@@ -571,11 +571,11 @@ describe('run-decommission-closeout.js', () => {
               2,
             ),
           )
-        case 'validate-wedos-readiness.js':
+        case 'validate-hosting-readiness.js':
           return spawnResult(
             JSON.stringify(
               {
-                profile: 'wedos_small',
+                profile: 'vps_small',
                 status: 'pass',
                 criticalCount: 0,
                 warningCount: 0,

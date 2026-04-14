@@ -30,7 +30,7 @@ Describe what was migrated, stabilized, or decommissioned.
 - **User-facing changes:**
   - `/template/call` now provides stricter upstream safety checks and deterministic rejection reasons for unsafe payloads.
   - `/cache/forget` keeps local purge availability even when optional worker forwarding fails or times out.
-  - Security-hardening controls are profile-aware for WEDOS-like environments via explicit env-driven limits.
+  - Security-hardening controls are profile-aware for VPS-like environments via explicit env-driven limits.
 
 ## Current hardening notes
 

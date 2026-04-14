@@ -9,7 +9,7 @@ export GW_A_URL="https://gateway-a.example.com"
 export GW_B_URL="https://gateway-b.example.com"
 export CONSISTENCY_URLS="$GW_A_URL,$GW_B_URL"
 
-export GATEWAY_RESOURCE_PROFILE="wedos_medium"
+export GATEWAY_RESOURCE_PROFILE="vps_medium"
 export CONSISTENCY_MODE="pairwise"
 export RELEASE_VERSION="1.4.0"
 export REQUIRED_TEMPLATE_SITES="site-alpha,site-beta"
@@ -19,7 +19,7 @@ export DRILL_DIR="./tmp/release-drills/live-${RELEASE_VERSION}-$(date -u +%Y%m%d
 # Token mode (recommended). For public /integrity/state use --allow-anon later.
 export GATEWAY_INTEGRITY_STATE_TOKEN="<real-integrity-state-token>"
 
-# Optional env file used by validate-wedos-readiness
+# Optional env file used by validate-hosting-readiness
 export BOOTSTRAP_ENV_FILE="./tmp/bootstrap/gateway.production.env"
 
 # Real secret-backed maps (JSON strings)

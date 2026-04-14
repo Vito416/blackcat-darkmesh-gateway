@@ -9,11 +9,11 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
 const DEFAULT_DIR = 'ops/decommission'
 const DEFAULT_RELEASE = '1.4.0'
-const DEFAULT_PROFILE = 'wedos_medium'
+const DEFAULT_PROFILE = 'vps_medium'
 const DEFAULT_MODE = 'pairwise'
 const DEFAULT_LABEL = 'prelive'
 
-const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
+const VALID_PROFILES = new Set(['vps_small', 'vps_medium', 'diskless'])
 const VALID_MODES = new Set(['pairwise', 'all'])
 
 const STEP_SCRIPTS = {
@@ -36,7 +36,7 @@ function isNonEmptyString(value) {
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/bootstrap-prelive-decommission-artifacts.js [--dir <DIR>] [--release <VERSION>] [--profile wedos_small|wedos_medium|diskless] [--mode pairwise|all] [--label <TEXT>] [--ao-gate <FILE>] [--dry-run] [--help]',
+    '  node scripts/bootstrap-prelive-decommission-artifacts.js [--dir <DIR>] [--release <VERSION>] [--profile vps_small|vps_medium|diskless] [--mode pairwise|all] [--label <TEXT>] [--ao-gate <FILE>] [--dry-run] [--help]',
     '',
     'Options:',
     `  --dir <DIR>        Target decommission dir (default: ${DEFAULT_DIR})`,

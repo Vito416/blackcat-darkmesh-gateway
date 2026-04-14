@@ -150,7 +150,7 @@ describe('run-release-drill.js', () => {
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('Out dir: ')
     expect(result.stdout).toContain('tmp/release-drills')
-    expect(result.stdout).toMatch(/1\.4\.0-wedos_medium-pairwise-/)
+    expect(result.stdout).toMatch(/1\.4\.0-vps_medium-pairwise-/)
     expect(result.stderr).toBe('')
   })
 
@@ -190,7 +190,7 @@ describe('run-release-drill.js', () => {
             'Consistency preflight passed',
             'URLs: 2',
             'Mode: pairwise',
-            'Profile: wedos_medium',
+            'Profile: vps_medium',
             'Auth: token provided',
           ].join('\n'),
         )
@@ -212,7 +212,7 @@ describe('run-release-drill.js', () => {
         writeFileSync(reportPath, '# Multi-region drift report\n', 'utf8')
         writeFileSync(
           summaryPath,
-          JSON.stringify({ profile: 'wedos_medium', status: 'ok', counts: { total: 1 } }, null, 2),
+          JSON.stringify({ profile: 'vps_medium', status: 'ok', counts: { total: 1 } }, null, 2),
           'utf8',
         )
         return makeSpawnResult(
@@ -596,7 +596,7 @@ describe('run-release-drill.js', () => {
           {
             urlsCsv: 'https://gw-a.example/integrity/state,https://gw-b.example/integrity/state',
             outDir,
-            profile: 'wedos_medium',
+            profile: 'vps_medium',
             mode: 'pairwise',
             token: 'shared-token',
             allowAnon: false,

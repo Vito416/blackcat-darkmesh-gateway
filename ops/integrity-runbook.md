@@ -279,7 +279,7 @@ GH_TOKEN="$GH_TOKEN" \
     --ref feat/gateway-p2-1-hardening-batch \
     --consistency-urls https://gateway-a.example.com,https://gateway-b.example.com \
     --consistency-mode all \
-    --consistency-profile wedos_medium \
+    --consistency-profile vps_medium \
     --consistency-token "$STATE_TOKEN" \
     --evidence-urls https://gateway-a.example.com,https://gateway-b.example.com \
     --evidence-token "$STATE_TOKEN"
@@ -403,7 +403,7 @@ Weekly drill checklist:
 Recommended repo-level config for scheduled runs:
 - variable: `CONSISTENCY_URLS` (comma-separated gateway URLs)
 - optional variable: `CONSISTENCY_MODE` (`pairwise` or `all`)
-- optional variable: `GATEWAY_RESOURCE_PROFILE` (`wedos_small|wedos_medium|diskless`)
+- optional variable: `GATEWAY_RESOURCE_PROFILE` (`vps_small|vps_medium|diskless`)
 - secret: `GATEWAY_INTEGRITY_STATE_TOKEN` (required unless `CONSISTENCY_ALLOW_ANON=1`)
 - optional variable: `CONSISTENCY_ALLOW_ANON=1` (only for intentionally public `/integrity/state`)
 

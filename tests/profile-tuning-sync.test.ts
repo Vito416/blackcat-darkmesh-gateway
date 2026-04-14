@@ -54,8 +54,8 @@ function readTableRow(markdown: string, rowPrefix: string) {
   if (cells.length < 4) throw new Error(`unexpected table shape for row: ${rowPrefix}`)
   const normalizeCell = (value: string) => value.replace(/^`|`$/g, '').trim()
   return {
-    wedos_small: normalizeCell(cells[1]),
-    wedos_medium: normalizeCell(cells[2]),
+    vps_small: normalizeCell(cells[1]),
+    vps_medium: normalizeCell(cells[2]),
     diskless: normalizeCell(cells[3]),
   }
 }
@@ -66,7 +66,7 @@ function readThresholdCell(cell: string) {
   return Number.parseInt(match[1], 10)
 }
 
-function readProfileBaselineRow(markdown: string, profile: 'wedos_small' | 'wedos_medium' | 'diskless') {
+function readProfileBaselineRow(markdown: string, profile: 'vps_small' | 'vps_medium' | 'diskless') {
   const line = markdown
     .split('\n')
     .map((value) => value.trim())
@@ -90,19 +90,27 @@ function readProfileBaselineRow(markdown: string, profile: 'wedos_small' | 'wedo
 }
 
 function readProfileDefaultsFromBudgets(markdown: string) {
-  const small = getSection(markdown, '### Profile A: WEDOS small (conservative)', '### Profile B: WEDOS medium (balanced default)')
-  const medium = getSection(markdown, '### Profile B: WEDOS medium (balanced default)', '### Profile C: Diskless/ephemeral host')
+  const small = getSection(
+    markdown,
+    '### Profile A: constrained small (conservative)',
+    '### Profile B: balanced medium (balanced default)',
+  )
+  const medium = getSection(
+    markdown,
+    '### Profile B: balanced medium (balanced default)',
+    '### Profile C: Diskless/ephemeral host',
+  )
   const diskless = getSection(markdown, '### Profile C: Diskless/ephemeral host', '## Webhook verification budget')
 
   return {
-    wedos_small: {
+    vps_small: {
       timeoutMs: readBudgetInt(small, 'AO_INTEGRITY_FETCH_TIMEOUT_MS'),
       retryAttempts: readBudgetInt(small, 'AO_INTEGRITY_FETCH_RETRY_ATTEMPTS'),
       retryBackoffMs: readBudgetInt(small, 'AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS'),
       retryJitterMs: readBudgetInt(small, 'AO_INTEGRITY_FETCH_RETRY_JITTER_MS'),
       checkpointMaxAgeSeconds: readBudgetInt(small, 'GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS'),
     },
-    wedos_medium: {
+    vps_medium: {
       timeoutMs: readBudgetInt(medium, 'AO_INTEGRITY_FETCH_TIMEOUT_MS'),
       retryAttempts: readBudgetInt(medium, 'AO_INTEGRITY_FETCH_RETRY_ATTEMPTS'),
       retryBackoffMs: readBudgetInt(medium, 'AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS'),
@@ -158,7 +166,7 @@ describe('profile tuning synchronization', () => {
       issues: [],
     }
 
-    for (const profile of ['wedos_small', 'wedos_medium', 'diskless'] as const) {
+    for (const profile of ['vps_small', 'vps_medium', 'diskless'] as const) {
       const summary = buildSummary(matrix, profile)
       const baselineRow = readProfileBaselineRow(alertsMarkdown, profile)
 
@@ -199,12 +207,12 @@ describe('profile tuning synchronization', () => {
     const alertsMarkdown = readFileSync(ALERT_PROFILES_PATH, 'utf8')
     const checkpointThresholdRow = readTableRow(alertsMarkdown, 'gateway_integrity_checkpoint_age_seconds stale')
 
-    const smallThreshold = readThresholdCell(checkpointThresholdRow.wedos_small)
-    const mediumThreshold = readThresholdCell(checkpointThresholdRow.wedos_medium)
+    const smallThreshold = readThresholdCell(checkpointThresholdRow.vps_small)
+    const mediumThreshold = readThresholdCell(checkpointThresholdRow.vps_medium)
     const disklessThreshold = readThresholdCell(checkpointThresholdRow.diskless)
 
-    expect(smallThreshold).toBeLessThan(expected.wedos_small.checkpointMaxAgeSeconds)
-    expect(mediumThreshold).toBeLessThan(expected.wedos_medium.checkpointMaxAgeSeconds)
+    expect(smallThreshold).toBeLessThan(expected.vps_small.checkpointMaxAgeSeconds)
+    expect(mediumThreshold).toBeLessThan(expected.vps_medium.checkpointMaxAgeSeconds)
     expect(disklessThreshold).toBeLessThan(smallThreshold)
   })
 })

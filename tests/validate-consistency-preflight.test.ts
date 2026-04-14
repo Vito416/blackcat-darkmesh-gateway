@@ -26,7 +26,7 @@ describe('validate-consistency-preflight.js', () => {
     expect(res.status).toBe(0)
     expect(res.stdout).toContain('Consistency preflight passed')
     expect(res.stdout).toContain('Mode: pairwise')
-    expect(res.stdout).toContain('Profile: wedos_medium')
+    expect(res.stdout).toContain('Profile: vps_medium')
     expect(res.stdout).toContain('Auth: token provided')
     expect(res.stderr).toBe('')
   })
@@ -114,7 +114,7 @@ describe('validate-consistency-preflight.js', () => {
       ok: true,
       exitCode: 0,
       mode: 'pairwise',
-      profile: 'wedos_medium',
+      profile: 'vps_medium',
       allowAnon: true,
       tokenPresent: false,
       urls: [

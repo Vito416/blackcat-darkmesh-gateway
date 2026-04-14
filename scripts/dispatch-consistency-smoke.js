@@ -7,12 +7,12 @@ const API_BASE = 'https://api.github.com'
 const DEFAULT_WORKFLOW = 'ci.yml'
 const VALID_PROTOCOLS = new Set(['http:', 'https:'])
 const VALID_CONSISTENCY_MODES = new Set(['pairwise', 'all'])
-const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
+const VALID_PROFILES = new Set(['vps_small', 'vps_medium', 'diskless'])
 
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/dispatch-consistency-smoke.js --owner <org> --repo <name> [--workflow <file>] [--ref <branch>] [--consistency-urls <csv>] [--consistency-token <value>] [--consistency-mode pairwise|all] [--consistency-profile wedos_small|wedos_medium|diskless] [--evidence-urls <csv>] [--evidence-token <value>] [--dry-run]',
+    '  node scripts/dispatch-consistency-smoke.js --owner <org> --repo <name> [--workflow <file>] [--ref <branch>] [--consistency-urls <csv>] [--consistency-token <value>] [--consistency-mode pairwise|all] [--consistency-profile vps_small|vps_medium|diskless] [--evidence-urls <csv>] [--evidence-token <value>] [--dry-run]',
     '',
     'Options:',
     '  --owner <ORG>               GitHub owner/org (required)',
@@ -22,7 +22,7 @@ function usageText() {
     '  --consistency-urls <CSV>    Comma-separated integrity consistency URLs',
     '  --consistency-token <VALUE> Consistency token passed to the workflow',
     '  --consistency-mode <MODE>   Consistency comparison mode (pairwise|all)',
-    '  --consistency-profile <P>   Profile for drift summary (wedos_small|wedos_medium|diskless)',
+    '  --consistency-profile <P>   Profile for drift summary (vps_small|vps_medium|diskless)',
     '  --evidence-urls <CSV>       Comma-separated evidence URLs',
     '  --evidence-token <VALUE>    Evidence token passed to the workflow',
     '  --dry-run                   Print the payload and skip the API call',

@@ -39,7 +39,7 @@ async function seedDrillArtifacts(dir: string, overrides: Record<string, string>
     'legacy-crypto-boundary-evidence.json': JSON.stringify({ ok: true, status: 'pass' }),
     'release-drill-checks.json': JSON.stringify({
       release: '1.4.0',
-      profile: 'wedos_medium',
+      profile: 'vps_medium',
       mode: 'pairwise',
       strict: false,
     }),

@@ -17,13 +17,13 @@ Environment (required unless --allow-anon):
   GATEWAY_INTEGRITY_STATE_TOKEN
 
 Environment (optional):
-  GATEWAY_RESOURCE_PROFILE   default: wedos_medium
+  GATEWAY_RESOURCE_PROFILE   default: vps_medium
   CONSISTENCY_MODE           default: pairwise
   RELEASE_VERSION            default: 1.4.0
   REQUIRED_TEMPLATE_SITES    default: site-alpha,site-beta
   AO_GATE_FILE               default: ops/decommission/ao-dependency-gate.json
   DRILL_DIR                  default: tmp/release-drills/live-<release>-<utcstamp>
-  BOOTSTRAP_ENV_FILE         optional env file for validate-wedos-readiness
+  BOOTSTRAP_ENV_FILE         optional env file for validate-hosting-readiness
 EOF
 }
 
@@ -70,7 +70,7 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-GATEWAY_RESOURCE_PROFILE="${GATEWAY_RESOURCE_PROFILE:-wedos_medium}"
+GATEWAY_RESOURCE_PROFILE="${GATEWAY_RESOURCE_PROFILE:-vps_medium}"
 CONSISTENCY_MODE="${CONSISTENCY_MODE:-pairwise}"
 RELEASE_VERSION="${RELEASE_VERSION:-1.4.0}"
 REQUIRED_TEMPLATE_SITES="${REQUIRED_TEMPLATE_SITES:-site-alpha,site-beta}"
@@ -106,7 +106,7 @@ fi
 run_cmd npm run -s ops:validate-template-backend-contract -- --strict --json
 
 if [[ -n "${BOOTSTRAP_ENV_FILE:-}" ]]; then
-  run_cmd npm run -s ops:validate-wedos-readiness -- \
+  run_cmd npm run -s ops:validate-hosting-readiness -- \
     --profile "${GATEWAY_RESOURCE_PROFILE}" \
     --env-file "${BOOTSTRAP_ENV_FILE}" \
     --strict --json

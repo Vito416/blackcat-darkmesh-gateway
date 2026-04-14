@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 
 import { buildMarkdown, buildSummary, parseMatrixJson } from './build-drift-alert-summary.js'
 
-const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
+const VALID_PROFILES = new Set(['vps_small', 'vps_medium', 'diskless'])
 
 class CliError extends Error {
   constructor(message, exitCode = 3) {
@@ -19,11 +19,11 @@ class CliError extends Error {
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/export-consistency-report.js --matrix <FILE> --out-dir <DIR> [--profile wedos_small|wedos_medium|diskless] [--prefix <NAME>]',
+    '  node scripts/export-consistency-report.js --matrix <FILE> --out-dir <DIR> [--profile vps_small|vps_medium|diskless] [--prefix <NAME>]',
     '',
     'Options:',
     '  --matrix <FILE>     Matrix JSON file to read (required)',
-    '  --profile <NAME>    Deployment profile (default: wedos_medium)',
+    '  --profile <NAME>    Deployment profile (default: vps_medium)',
     '  --out-dir <DIR>     Directory for report outputs (required)',
     '  --prefix <NAME>     Output filename prefix (default: consistency)',
     '  --help              Show this help',
@@ -47,7 +47,7 @@ function parseArgs(argv) {
   const args = {
     help: false,
     matrix: '',
-    profile: 'wedos_medium',
+    profile: 'vps_medium',
     outDir: '',
     prefix: 'consistency',
   }
@@ -129,7 +129,7 @@ function buildOutputPaths(outDir, prefix) {
 
 async function exportConsistencyReport({
   matrix,
-  profile = 'wedos_medium',
+  profile = 'vps_medium',
   outDir,
   prefix = 'consistency',
   readJsonFileFn = readJsonFile,

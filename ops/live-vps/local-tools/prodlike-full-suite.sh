@@ -4,7 +4,7 @@ set -euo pipefail
 PRIMARY_BASE_URL="${1:-${PRIMARY_BASE_URL:-https://gateway.blgateway.fun}}"
 SECONDARY_BASE_URL="${2:-${SECONDARY_BASE_URL:-}}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-TOOLS_DIR="${ROOT_DIR}/ops/live-wedos/local-tools"
+TOOLS_DIR="${ROOT_DIR}/ops/live-vps/local-tools"
 
 echo "prodlike-full-suite"
 echo "primary:   ${PRIMARY_BASE_URL}"

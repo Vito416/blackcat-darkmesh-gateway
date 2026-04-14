@@ -1,10 +1,10 @@
-export type GatewayResourceProfile = 'wedos_small' | 'wedos_medium' | 'diskless'
+export type GatewayResourceProfile = 'vps_small' | 'vps_medium' | 'diskless'
 
 export function resolveGatewayResourceProfile(raw: string | undefined): GatewayResourceProfile | null {
   const value = (raw || '').trim().toLowerCase()
   if (!value) return null
-  if (value === 'wedos-small' || value === 'small' || value === 's' || value === 'wedos_small') return 'wedos_small'
-  if (value === 'wedos-medium' || value === 'medium' || value === 'm' || value === 'default' || value === 'wedos_medium') return 'wedos_medium'
+  if (value === 'vps-small' || value === 'small' || value === 's' || value === 'vps_small') return 'vps_small'
+  if (value === 'vps-medium' || value === 'medium' || value === 'm' || value === 'default' || value === 'vps_medium') return 'vps_medium'
   if (value === 'diskless' || value === 'memory-only' || value === 'memory_only' || value === 'ephemeral') return 'diskless'
   return null
 }

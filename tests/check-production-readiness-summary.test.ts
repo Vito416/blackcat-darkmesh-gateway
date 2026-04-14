@@ -131,7 +131,7 @@ function seedDrillDir(options = {}) {
     'template-variant-map.json': templateVariantMap,
     'release-drill-checks.json': {
       release,
-      profile: 'wedos_medium',
+      profile: 'vps_medium',
       mode: 'pairwise',
       strict: false,
       legacyCoreExtractionEvidence,

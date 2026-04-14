@@ -73,7 +73,7 @@ fi
 if [[ -f tests/check-ao-gate-evidence.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
-if [[ -f tests/validate-wedos-readiness.test.ts ]]; then
+if [[ -f tests/validate-hosting-readiness.test.ts ]]; then
   STEPS_TOTAL=$((STEPS_TOTAL + 1))
 fi
 
@@ -163,9 +163,9 @@ if [[ -f tests/check-ao-gate-evidence.test.ts ]]; then
   run_step "$CURRENT_STEP" npx vitest run tests/check-ao-gate-evidence.test.ts
 fi
 
-if [[ -f tests/validate-wedos-readiness.test.ts ]]; then
-  CURRENT_STEP="validate-wedos-readiness"
-  run_step "$CURRENT_STEP" npx vitest run tests/validate-wedos-readiness.test.ts
+if [[ -f tests/validate-hosting-readiness.test.ts ]]; then
+  CURRENT_STEP="validate-hosting-readiness"
+  run_step "$CURRENT_STEP" npx vitest run tests/validate-hosting-readiness.test.ts
 fi
 
 CURRENT_STEP="fetch-control"

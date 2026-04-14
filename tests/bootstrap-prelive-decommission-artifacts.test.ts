@@ -12,7 +12,7 @@ describe('bootstrap-prelive-decommission-artifacts.js', () => {
   it('parses defaults and validates profile/mode', () => {
     const args = parseArgs(['--dir', 'ops/decommission', '--release', '1.4.0'])
     expect(args.release).toBe('1.4.0')
-    expect(args.profile).toBe('wedos_medium')
+    expect(args.profile).toBe('vps_medium')
     expect(args.mode).toBe('pairwise')
     expect(args.dir.endsWith(resolve('ops/decommission'))).toBe(true)
   })

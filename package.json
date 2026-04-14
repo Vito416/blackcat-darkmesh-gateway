@@ -57,7 +57,6 @@
     "ops:bootstrap-prelive-decommission-artifacts": "node scripts/bootstrap-prelive-decommission-artifacts.js",
     "ops:bootstrap-prelive-decommission-artifacts:tmp": "node scripts/bootstrap-prelive-decommission-artifacts.js --dir tmp/decommission-prelive --ao-gate ops/decommission/ao-dependency-gate.json",
     "ops:validate-hosting-readiness": "node scripts/validate-hosting-readiness.js",
-    "ops:validate-wedos-readiness": "node scripts/validate-wedos-readiness.js",
     "ops:validate-release-drill-manifest": "node scripts/validate-release-drill-manifest.js",
     "ops:check-evidence-bundle": "node scripts/check-evidence-bundle.js",
     "ops:latest-evidence-bundle": "node scripts/latest-evidence-bundle.js",

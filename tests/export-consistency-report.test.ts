@@ -42,7 +42,7 @@ describe('export-consistency-report.js', () => {
     ).toEqual({
       help: false,
       matrix: './tmp/matrix.json',
-      profile: 'wedos_medium',
+      profile: 'vps_medium',
       outDir: './tmp/out',
       prefix: 'consistency',
     })

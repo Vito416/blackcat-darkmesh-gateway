@@ -9,7 +9,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Gateway-side implementation is complete for the current migration slice; the remaining blockers are AO-side registry/authority lifecycle work plus the final decommission evidence, and those AO blockers remain open.
 - Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.
 - Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, strict manifest validation log, and drill artifact check JSON as one drill bundle.
-- Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-manual-proofs`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-wedos-readiness`, but the final state is still split as `automation-complete` plus `ao-manual-pending` until the AO/manual proofs land.
+- Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-manual-proofs`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-hosting-readiness`, but the final state is still split as `automation-complete` plus `ao-manual-pending` until the AO/manual proofs land.
 - `ops/decommission` now has a complete strict artifact set (matrix/report/pack/readiness/drill-manifest/drill-check/ledger), and machine checks report `automationState=complete` with AO-only blockers.
 - Worker-routing and secrets-boundary tooling is now being tracked alongside the gateway libs workstream: `check-template-worker-routing-config`, `init-template-worker-routing`, and `validate-worker-secrets-trust-model` form the public-template/worker boundary checks, but they are guardrails only and do not change AO blocker status.
 - SignatureRef pinning is now enforced at runtime for template workers, and the routing-map coherence validators keep the URL/token/signatureRef maps aligned before release artifacts are published; these remain gateway-side guardrails and do not alter the AO blocker state.
@@ -251,7 +251,7 @@ Progress notes:
   - `AO_INTEGRITY_FETCH_TIMEOUT_MS`
   - `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS`
   - `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS`
-- Profiled cadence defaults are now available via `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskless`.
+- Profiled cadence defaults are now available via `GATEWAY_RESOURCE_PROFILE=vps_small|vps_medium|diskless`.
 - Precedence is explicit: call override > `AO_INTEGRITY_FETCH_*` env > `GATEWAY_RESOURCE_PROFILE` > medium fallback.
 - Alert guidance is now calibrated per profile in `ops/alerts-profiles.md`.
 - Doc/code sync tests now guard profile tuning drift (`tests/profile-tuning-sync.test.ts`) for fetch defaults, anti-flap windows, and checkpoint stale threshold safety.
@@ -334,7 +334,7 @@ Use this checklist before merge/release sign-off.
 - [ ] Scheduled consistency preflight is passing with repository configuration in place:
   - [ ] `CONSISTENCY_URLS` (at least two valid URLs)
   - [ ] `CONSISTENCY_MODE` (optional, `pairwise|all`)
-  - [ ] `GATEWAY_RESOURCE_PROFILE` (optional, `wedos_small|wedos_medium|diskless`)
+  - [ ] `GATEWAY_RESOURCE_PROFILE` (optional, `vps_small|vps_medium|diskless`)
   - [ ] `GATEWAY_INTEGRITY_STATE_TOKEN` secret (required unless `CONSISTENCY_ALLOW_ANON=1`)
 - [ ] Latest consistency-smoke artifacts are archived (`consistency-matrix.json`, drift report `.md`, drift summary `.json`).
 - [ ] Latest machine-validated release evidence is archived (`release-evidence-pack.md`, `release-evidence-pack.json`, `build-release-signoff-checklist` output, `check-release-readiness --json` output, `ao-dependency-gate.validation.txt`, drift report `.md`, drift summary `.json`, `legacy-core-extraction-evidence.json`, `legacy-crypto-boundary-evidence.json`, `release-drill-manifest.json`, `release-drill-check.json`, `release-drill-checks.json`, `release-evidence-ledger.md`, `release-evidence-ledger.json`, `decommission-evidence-log.md/.json`, `check-decommission-manual-proofs` output) and the closeout log shows `automation-complete` plus `ao-manual-pending` or `ao-manual-blocked` as applicable.

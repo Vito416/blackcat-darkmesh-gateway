@@ -3,11 +3,11 @@
 Use this document with `ops/alerts.md` to tune thresholds per deployment profile.
 
 `ops/alerts.md` reflects **balanced medium** defaults. For smaller or diskless hosts, replace only the numeric thresholds using the matrix below; do not mix rows across profiles.
-Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskless`.
+Select the profile with `GATEWAY_RESOURCE_PROFILE=vps_small|vps_medium|diskless`.
 
 ## Threshold matrix
 
-| Signal | constrained small (`wedos_small`) | balanced medium (`wedos_medium`) | Diskless (`diskless`) |
+| Signal | constrained small (`vps_small`) | balanced medium (`vps_medium`) | Diskless (`diskless`) |
 | --- | ---: | ---: | ---: |
 | `gateway_cache_size` high | `> 110` | `> 220` | `> 90` |
 | `increase(gateway_cache_store_reject_total[10m])` | `> 10` | `> 20` | `> 8` |
@@ -32,8 +32,8 @@ Use this pack when you need one profile-specific baseline without cross-reading 
 
 | Profile | Fetch/retry cadence | Mirror mismatch/fetch fail | Audit lag | Checkpoint stale |
 | --- | --- | --- | --- | --- |
-| `wedos_small` | `timeout=4000ms`, `attempts=2`, `backoff=75ms`, `jitter=25ms` | `> 0` over `10m`, `for: 2m` | `> 1800`, `for: 12m` | `> 32400`, `for: 15m` |
-| `wedos_medium` | `timeout=5000ms`, `attempts=3`, `backoff=100ms`, `jitter=25ms` | `> 0` over `10m`, `for: 1m` | `> 3600`, `for: 8m` | `> 64800`, `for: 10m` |
+| `vps_small` | `timeout=4000ms`, `attempts=2`, `backoff=75ms`, `jitter=25ms` | `> 0` over `10m`, `for: 2m` | `> 1800`, `for: 12m` | `> 32400`, `for: 15m` |
+| `vps_medium` | `timeout=5000ms`, `attempts=3`, `backoff=100ms`, `jitter=25ms` | `> 0` over `10m`, `for: 1m` | `> 3600`, `for: 8m` | `> 64800`, `for: 10m` |
 | `diskless` | `timeout=4000ms`, `attempts=2`, `backoff=75ms`, `jitter=25ms` | `> 0` over `10m`, `for: 1m` | `> 1200`, `for: 10m` | `> 21600`, `for: 12m` |
 
 ## Tuning loop by profile
@@ -42,8 +42,8 @@ Use this loop when you are deciding whether to change fetch cadence, alert windo
 
 | Profile | Watch first | Tune first | Roll back when |
 | --- | --- | --- | --- |
-| `wedos_small` | `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])`, `increase(gateway_webhook_replay_pruned_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS`; only then increase `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS` if the failures remain transient | Revert to the profile defaults if lag does not drop within one full alert window, or if replay prune / cache reject pressure rises faster than the failure rate falls |
-| `wedos_medium` | `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])`, `increase(gateway_cache_store_reject_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_JITTER_MS`; if the pattern is still bursty, raise `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS` before touching alert thresholds | Revert if the added jitter lowers fetch burstiness but increases checkpoint staleness, or if cache/replay pressure now outruns the retry failures |
+| `vps_small` | `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])`, `increase(gateway_webhook_replay_pruned_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS`; only then increase `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS` if the failures remain transient | Revert to the profile defaults if lag does not drop within one full alert window, or if replay prune / cache reject pressure rises faster than the failure rate falls |
+| `vps_medium` | `gateway_integrity_audit_lag_seconds`, `gateway_integrity_checkpoint_age_seconds`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])`, `increase(gateway_cache_store_reject_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_JITTER_MS`; if the pattern is still bursty, raise `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS` before touching alert thresholds | Revert if the added jitter lowers fetch burstiness but increases checkpoint staleness, or if cache/replay pressure now outruns the retry failures |
 | `diskless` | `gateway_integrity_checkpoint_age_seconds`, `gateway_integrity_audit_lag_seconds`, `increase(gateway_integrity_mirror_mismatch_total[10m])`, `increase(gateway_integrity_mirror_fetch_fail_total[10m])` | First raise `AO_INTEGRITY_FETCH_RETRY_JITTER_MS`; keep `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS` low so diskless hosts do not accumulate long retry chains | Revert if the diskless host starts spending more time retrying than checkpointing, or if the mirror mismatch / fetch-fail signals stay flat while checkpoint age keeps climbing |
 
 ## Release-week checklist
@@ -59,7 +59,7 @@ Use this when a rollout is in flight and you are deciding whether to tighten or 
 
 Use these as starter `for:` values when you need profile-specific alert rules. They reduce flapping without hiding a real regression. Do not widen all alerts at once; widen the noisiest signal first.
 
-| Signal family | constrained small (`wedos_small`) | balanced medium (`wedos_medium`) | Diskless (`diskless`) |
+| Signal family | constrained small (`vps_small`) | balanced medium (`vps_medium`) | Diskless (`diskless`) |
 | --- | --- | --- | --- |
 | Mirror mismatch / mirror fetch fail | `for: 2m` | `for: 1m` | `for: 1m` |
 | Audit lag | `for: 12m` | `for: 8m` | `for: 10m` |

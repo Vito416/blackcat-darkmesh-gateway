@@ -53,7 +53,7 @@ describe('resource hardening edge cases', () => {
   })
 
   it('keeps the rate-limit bucket blocked on the reset boundary and releases it after the boundary', async () => {
-    process.env.GATEWAY_RESOURCE_PROFILE = 'wedos_small'
+    process.env.GATEWAY_RESOURCE_PROFILE = 'vps_small'
     process.env.GATEWAY_RL_WINDOW_MS = '1000'
     process.env.GATEWAY_RL_MAX = '1'
     const rateLimit = await import('../src/ratelimit.js')

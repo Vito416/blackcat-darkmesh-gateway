@@ -23,8 +23,8 @@ Thumbs.db
 # IDE / local deploy connector secrets
 **/.vscode/sftp.json
 **/.vscode/ftp-sync.json
-ops/live-wedos/*.local.*
-ops/live-wedos/**/*.local.*
+ops/live-vps/*.local.*
+ops/live-vps/**/*.local.*
 
 # Local operator artifacts / drill outputs
 tmp/

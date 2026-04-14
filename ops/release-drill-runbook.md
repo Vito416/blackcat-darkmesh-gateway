@@ -65,7 +65,7 @@ Use this when no gateway endpoints are live yet, but we still want a complete de
 ```bash
 npm run ops:bootstrap-prelive-decommission-artifacts:tmp -- \
   --release 1.4.0 \
-  --profile wedos_medium
+  --profile vps_medium
 ```
 
 Expected result:
@@ -78,7 +78,7 @@ Expected result:
 - Repo root: `blackcat-darkmesh-gateway`
 - Writable artifact directory, for example `./tmp/release-drill`
 - At least two gateway base URLs
-- Deployment profile: `wedos_small`, `wedos_medium`, or `diskless` (`wedos_medium` is the default)
+- Deployment profile: `vps_small`, `vps_medium`, or `diskless` (`vps_medium` is the default)
 - Integrity state token: `GATEWAY_INTEGRITY_STATE_TOKEN`
 - Optional attestation HMAC env: `GATEWAY_ATTESTATION_HMAC_KEY`
 - Template worker maps and variant map (for strict drill):
@@ -95,7 +95,7 @@ Suggested shell setup:
 export GW_A_URL="https://gateway-a.example.com"
 export GW_B_URL="https://gateway-b.example.com"
 export CONSISTENCY_URLS="$GW_A_URL,$GW_B_URL"
-export GATEWAY_RESOURCE_PROFILE="wedos_medium"
+export GATEWAY_RESOURCE_PROFILE="vps_medium"
 export GATEWAY_INTEGRITY_STATE_TOKEN="replace-me"
 export GATEWAY_ATTESTATION_HMAC_KEY="replace-me"
 export GATEWAY_TEMPLATE_VARIANT_MAP="$(cat config/template-variant-map.example.json)"

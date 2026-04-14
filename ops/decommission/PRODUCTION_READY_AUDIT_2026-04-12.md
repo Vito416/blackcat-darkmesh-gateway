@@ -54,6 +54,6 @@ None at this time (machine checks report GO).
   - AO-only status normalization in closeout checks so `automation-complete` and `ao-manual-pending` are split cleanly.
   - Full `ops/decommission` artifact set generated and validated in strict artifact mode.
   - Profile-specific cadence/threshold tuning sync across docs + script + tests.
-  - Added template variant map guardrails (`config/template-variant-map.example.json`, `ops:check-template-variant-map`) and live handoff folder (`ops/live-wedos/README.md`).
+  - Added template variant map guardrails (`config/template-variant-map.example.json`, `ops:check-template-variant-map`) and live handoff folder (`ops/live-vps/README.md`).
   - Wired template variant map checks into strict release-drill flow and drill-artifact completeness checks (`template-variant-map.json` is now a first-class strict artifact).
 - Best next move: run one live strict drill with real gateway endpoints + real variant map and archive that drill as release-grade evidence.

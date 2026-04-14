@@ -6,9 +6,9 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const VALID_MODES = new Set(['pairwise', 'all'])
-const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
+const VALID_PROFILES = new Set(['vps_small', 'vps_medium', 'diskless'])
 const DEFAULT_RELEASE = '1.4.0'
-const DEFAULT_PROFILE = 'wedos_medium'
+const DEFAULT_PROFILE = 'vps_medium'
 const DEFAULT_MODE = 'pairwise'
 const DEFAULT_OUT_ROOT = './tmp/release-drills'
 
@@ -172,14 +172,14 @@ function isNonEmptyString(value) {
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/run-release-drill.js --urls <csv> [--out-dir <dir> | --out-root <dir>] [--run-label <label>] [--profile wedos_small|wedos_medium|diskless] [--mode pairwise|all] [--token <value>] [--allow-anon] [--release <label>] [--strict] [--dry-run] [--help]',
+    '  node scripts/run-release-drill.js --urls <csv> [--out-dir <dir> | --out-root <dir>] [--run-label <label>] [--profile vps_small|vps_medium|diskless] [--mode pairwise|all] [--token <value>] [--allow-anon] [--release <label>] [--strict] [--dry-run] [--help]',
     '',
     'Options:',
     '  --urls <CSV>        Comma-separated gateway URLs (required)',
     '  --out-dir <DIR>     Exact directory for drill artifacts',
     '  --out-root <DIR>    Root for auto-generated drill directory (default: ./tmp/release-drills)',
     '  --run-label <TEXT>  Optional slug appended to auto-generated directory name',
-    '  --profile <NAME>    wedos_small|wedos_medium|diskless (default: wedos_medium)',
+    '  --profile <NAME>    vps_small|vps_medium|diskless (default: vps_medium)',
     '  --mode <MODE>       pairwise (default) or all',
     '  --token <VALUE>     Optional integrity state token',
     '  --allow-anon        Allow anonymous preflight validation',

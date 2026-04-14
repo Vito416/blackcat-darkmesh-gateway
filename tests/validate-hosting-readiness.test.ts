@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { runCli } from '../scripts/validate-wedos-readiness.js'
+import { runCli } from '../scripts/validate-hosting-readiness.js'
 
 const tempDirs: string[] = []
 const originalEnv = { ...process.env }
@@ -17,29 +17,29 @@ afterEach(() => {
 })
 
 function makeTempEnvFile(contents: string) {
-  const dir = mkdtempSync(join(tmpdir(), 'wedos-readiness-'))
+  const dir = mkdtempSync(join(tmpdir(), 'hosting-readiness-'))
   tempDirs.push(dir)
   const file = join(dir, 'envfile')
   writeFileSync(file, contents, 'utf8')
   return file
 }
 
-function baseEnv(profile: 'wedos_small' | 'wedos_medium' | 'diskless') {
+function baseEnv(profile: 'vps_small' | 'vps_medium' | 'diskless') {
   const common = {
     GATEWAY_RESOURCE_PROFILE: profile,
-    AO_INTEGRITY_FETCH_TIMEOUT_MS: profile === 'wedos_medium' ? '5000' : '4000',
-    AO_INTEGRITY_FETCH_RETRY_ATTEMPTS: profile === 'wedos_medium' ? '3' : '2',
-    AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS: profile === 'wedos_medium' ? '100' : '75',
+    AO_INTEGRITY_FETCH_TIMEOUT_MS: profile === 'vps_medium' ? '5000' : '4000',
+    AO_INTEGRITY_FETCH_RETRY_ATTEMPTS: profile === 'vps_medium' ? '3' : '2',
+    AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS: profile === 'vps_medium' ? '100' : '75',
     AO_INTEGRITY_FETCH_RETRY_JITTER_MS: '25',
-    GATEWAY_CACHE_TTL_MS: profile === 'wedos_medium' ? '300000' : '180000',
-    GATEWAY_CACHE_MAX_ENTRY_BYTES: profile === 'wedos_medium' ? '262144' : '131072',
-    GATEWAY_CACHE_MAX_ENTRIES: profile === 'wedos_medium' ? '256' : '128',
-    GATEWAY_CACHE_MAX_KEYS_PER_SUBJECT: profile === 'wedos_medium' ? '64' : '32',
+    GATEWAY_CACHE_TTL_MS: profile === 'vps_medium' ? '300000' : '180000',
+    GATEWAY_CACHE_MAX_ENTRY_BYTES: profile === 'vps_medium' ? '262144' : '131072',
+    GATEWAY_CACHE_MAX_ENTRIES: profile === 'vps_medium' ? '256' : '128',
+    GATEWAY_CACHE_MAX_KEYS_PER_SUBJECT: profile === 'vps_medium' ? '64' : '32',
     GATEWAY_CACHE_ADMISSION_MODE: 'reject',
     GATEWAY_RL_WINDOW_MS: '60000',
-    GATEWAY_RL_MAX: profile === 'wedos_medium' ? '120' : '80',
-    GATEWAY_RL_MAX_BUCKETS: profile === 'wedos_medium' ? '10000' : '3000',
-    GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS: profile === 'wedos_medium' ? '86400' : '43200',
+    GATEWAY_RL_MAX: profile === 'vps_medium' ? '120' : '80',
+    GATEWAY_RL_MAX_BUCKETS: profile === 'vps_medium' ? '10000' : '3000',
+    GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS: profile === 'vps_medium' ? '86400' : '43200',
     GATEWAY_TEMPLATE_ALLOW_MUTATIONS: '0',
     GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST:
       'ao-read.example.com,ao-write.example.com,worker-alpha.example.com,worker-beta.example.com',
@@ -57,7 +57,7 @@ function baseEnv(profile: 'wedos_small' | 'wedos_medium' | 'diskless') {
     }),
   }
 
-  if (profile === 'wedos_medium') {
+  if (profile === 'vps_medium') {
     return {
       ...common,
       GATEWAY_RL_MAX_OVERRIDES: 'inbox=80,webhook=240,template=120',
@@ -75,22 +75,22 @@ function baseEnv(profile: 'wedos_small' | 'wedos_medium' | 'diskless') {
   return common
 }
 
-describe('validate-wedos-readiness.js', () => {
-  it('passes wedos_small when all required knobs are within budget', () => {
-    const result = runCli(['--profile', 'wedos_small'], { env: baseEnv('wedos_small') })
+describe('validate-hosting-readiness.js', () => {
+  it('passes vps_small when all required knobs are within budget', () => {
+    const result = runCli(['--profile', 'vps_small'], { env: baseEnv('vps_small') })
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('# Hosting Readiness')
-    expect(result.stdout).toContain('Profile: `wedos_small`')
+    expect(result.stdout).toContain('Profile: `vps_small`')
     expect(result.stdout).toContain('Status: `pass`')
     expect(result.stderr).toBe('')
   })
 
-  it('warns on wedos_medium when the recommended override map is missing', () => {
-    const env = baseEnv('wedos_medium')
+  it('warns on vps_medium when the recommended override map is missing', () => {
+    const env = baseEnv('vps_medium')
     delete env.GATEWAY_RL_MAX_OVERRIDES
 
-    const result = runCli(['--profile', 'wedos_medium'], { env })
+    const result = runCli(['--profile', 'vps_medium'], { env })
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('Status: `warn`')
@@ -112,10 +112,10 @@ describe('validate-wedos-readiness.js', () => {
   })
 
   it('rejects out-of-budget numeric knobs', () => {
-    const env = baseEnv('wedos_small')
+    const env = baseEnv('vps_small')
     env.AO_INTEGRITY_FETCH_TIMEOUT_MS = '9001'
 
-    const result = runCli(['--profile', 'wedos_small'], { env })
+    const result = runCli(['--profile', 'vps_small'], { env })
 
     expect(result.exitCode).toBe(3)
     expect(result.stdout).toContain('AO_INTEGRITY_FETCH_TIMEOUT_MS is too large for constrained-small (found 9001)')
@@ -125,7 +125,7 @@ describe('validate-wedos-readiness.js', () => {
   it('loads env values from --env-file and prints JSON when requested', () => {
     const envFile = makeTempEnvFile([
       '# Hosting config',
-      'export GATEWAY_RESOURCE_PROFILE="wedos_small"',
+      'export GATEWAY_RESOURCE_PROFILE="vps_small"',
       'AO_INTEGRITY_FETCH_TIMEOUT_MS=4000',
       'AO_INTEGRITY_FETCH_RETRY_ATTEMPTS=2',
       'AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS=75',
@@ -147,13 +147,13 @@ describe('validate-wedos-readiness.js', () => {
       '',
     ].join('\n'))
 
-    const result = runCli(['--profile', 'wedos_small', '--env-file', envFile, '--json'], { env: {} })
+    const result = runCli(['--profile', 'vps_small', '--env-file', envFile, '--json'], { env: {} })
 
     expect(result.exitCode).toBe(0)
     expect(result.stderr).toBe('')
     expect(JSON.parse(result.stdout)).toEqual(
       expect.objectContaining({
-        profile: 'wedos_small',
+        profile: 'vps_small',
         status: 'pass',
         envSource: envFile,
         counts: { critical: 0, warning: 0, total: 0 },
@@ -170,56 +170,56 @@ describe('validate-wedos-readiness.js', () => {
   })
 
   it('fails when template upstream host allowlist is missing', () => {
-    const env = baseEnv('wedos_small')
+    const env = baseEnv('vps_small')
     delete env.GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST
 
-    const result = runCli(['--profile', 'wedos_small'], { env })
+    const result = runCli(['--profile', 'vps_small'], { env })
 
     expect(result.exitCode).toBe(3)
     expect(result.stdout).toContain('GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST is required')
   })
 
   it('fails when host->site binding map is missing', () => {
-    const env = baseEnv('wedos_small')
+    const env = baseEnv('vps_small')
     delete env.GATEWAY_SITE_ID_BY_HOST_MAP
 
-    const result = runCli(['--profile', 'wedos_small'], { env })
+    const result = runCli(['--profile', 'vps_small'], { env })
 
     expect(result.exitCode).toBe(3)
     expect(result.stdout).toContain('GATEWAY_SITE_ID_BY_HOST_MAP is required and must be a JSON object')
   })
 
   it('fails when worker routing map does not use /sign path', () => {
-    const env = baseEnv('wedos_small')
+    const env = baseEnv('vps_small')
     env.GATEWAY_TEMPLATE_WORKER_URL_MAP = JSON.stringify({
       'site-alpha': 'https://worker-alpha.example.com/template/sign',
       'site-beta': 'https://worker-beta.example.com/sign',
     })
 
-    const result = runCli(['--profile', 'wedos_small'], { env })
+    const result = runCli(['--profile', 'vps_small'], { env })
 
     expect(result.exitCode).toBe(3)
     expect(result.stdout).toContain('worker signer route drift detected (expected /sign)')
   })
 
   it('fails when worker token map misses coverage for mapped sites', () => {
-    const env = baseEnv('wedos_small')
+    const env = baseEnv('vps_small')
     env.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP = JSON.stringify({
       'site-alpha': 'worker-token-alpha',
     })
 
-    const result = runCli(['--profile', 'wedos_small'], { env })
+    const result = runCli(['--profile', 'vps_small'], { env })
 
     expect(result.exitCode).toBe(3)
     expect(result.stdout).toContain('GATEWAY_TEMPLATE_WORKER_TOKEN_MAP is missing token coverage for: site-beta')
   })
 
   it('fails when template mutations are enabled without template token', () => {
-    const env = baseEnv('wedos_small')
+    const env = baseEnv('vps_small')
     env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
     delete env.GATEWAY_TEMPLATE_TOKEN
 
-    const result = runCli(['--profile', 'wedos_small'], { env })
+    const result = runCli(['--profile', 'vps_small'], { env })
 
     expect(result.exitCode).toBe(3)
     expect(result.stdout).toContain('GATEWAY_TEMPLATE_TOKEN is required when GATEWAY_TEMPLATE_ALLOW_MUTATIONS is enabled')

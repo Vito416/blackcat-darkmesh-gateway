@@ -4,10 +4,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
+const VALID_PROFILES = new Set(['vps_small', 'vps_medium', 'diskless'])
 
 const PROFILE_TUNING = {
-  wedos_small: {
+  vps_small: {
     fetchCadence: {
       timeoutMs: 4000,
       retryAttempts: 2,
@@ -26,7 +26,7 @@ const PROFILE_TUNING = {
       checkpoint: 'for: 15m',
     },
   },
-  wedos_medium: {
+  vps_medium: {
     fetchCadence: {
       timeoutMs: 5000,
       retryAttempts: 3,
@@ -75,11 +75,11 @@ function usage(exitCode = 0) {
   console.log(
     [
       'Usage:',
-      '  node scripts/build-drift-alert-summary.js --matrix <FILE> [--profile wedos_small|wedos_medium|diskless] [--out <FILE>] [--json] [--json-out <FILE>]',
+      '  node scripts/build-drift-alert-summary.js --matrix <FILE> [--profile vps_small|vps_medium|diskless] [--out <FILE>] [--json] [--json-out <FILE>]',
       '',
       'Options:',
       '  --matrix <FILE>     JSON output file produced by compare-integrity-matrix.js (required)',
-      '  --profile <NAME>    Deployment profile (default: wedos_medium)',
+      '  --profile <NAME>    Deployment profile (default: vps_medium)',
       '  --out <FILE>        Optional markdown output file path',
       '  --json              Print JSON summary to stdout (markdown is default)',
       '  --json-out <FILE>   Optional JSON summary output file path',
@@ -113,7 +113,7 @@ function parseInteger(value, fieldName) {
 function parseArgs(argv) {
   const args = {
     matrix: '',
-    profile: 'wedos_medium',
+    profile: 'vps_medium',
     out: '',
     json: false,
     jsonOut: '',
@@ -199,7 +199,7 @@ function parseMatrixJson(value) {
 
 function buildSummary(matrix, profile) {
   const status = matrix.counts.failure > 0 ? 'critical' : matrix.counts.mismatch > 0 ? 'warning' : 'ok'
-  const profileTuning = PROFILE_TUNING[profile] || PROFILE_TUNING.wedos_medium
+  const profileTuning = PROFILE_TUNING[profile] || PROFILE_TUNING.vps_medium
 
   const alertSet = new Set()
   if (matrix.counts.mismatch > 0) {

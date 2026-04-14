@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
+const VALID_PROFILES = new Set(['vps_small', 'vps_medium', 'diskless'])
 const VALID_DECISIONS = new Set(['pending', 'go', 'no-go'])
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
@@ -16,7 +16,7 @@ const DEFAULT_SIGNOFF_RECORD_PATH = resolve(REPO_ROOT, 'ops/decommission/SIGNOFF
 const STEP_SCRIPTS = {
   checkAoGateEvidence: resolve(SCRIPT_DIR, 'check-ao-gate-evidence.js'),
   checkDecommissionReadiness: resolve(SCRIPT_DIR, 'check-decommission-readiness.js'),
-  validateWedosReadiness: resolve(SCRIPT_DIR, 'validate-wedos-readiness.js'),
+  validateWedosReadiness: resolve(SCRIPT_DIR, 'validate-hosting-readiness.js'),
   validateFinalMigrationSummary: resolve(SCRIPT_DIR, 'validate-final-migration-summary.js'),
   validateSignoffRecord: resolve(SCRIPT_DIR, 'validate-signoff-record.js'),
   buildDecommissionEvidenceLog: resolve(SCRIPT_DIR, 'build-decommission-evidence-log.js'),
@@ -42,13 +42,13 @@ function normalizeTrimmed(value) {
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/run-decommission-closeout.js --dir <DRILL_DIR> --ao-gate <FILE> [--profile wedos_small|wedos_medium|diskless] [--env-file <FILE>] [--operator <NAME>] [--ticket <ID>] [--decision pending|go|no-go] [--notes <TEXT>] [--final-summary <FILE>] [--signoff-record <FILE>] [--recovery-drill-link <URL>] [--ao-fallback-link <URL>] [--rollback-proof-link <URL>] [--approvals-link <URL>] [--json] [--strict] [--dry-run] [--help]',
+    '  node scripts/run-decommission-closeout.js --dir <DRILL_DIR> --ao-gate <FILE> [--profile vps_small|vps_medium|diskless] [--env-file <FILE>] [--operator <NAME>] [--ticket <ID>] [--decision pending|go|no-go] [--notes <TEXT>] [--final-summary <FILE>] [--signoff-record <FILE>] [--recovery-drill-link <URL>] [--ao-fallback-link <URL>] [--rollback-proof-link <URL>] [--approvals-link <URL>] [--json] [--strict] [--dry-run] [--help]',
     '',
     'Options:',
     '  --dir <DRILL_DIR>          Drill artifact directory (required)',
     '  --ao-gate <FILE>           AO dependency gate JSON file (required)',
-    '  --profile <NAME>           Optional WEDOS profile to validate',
-    '  --env-file <FILE>          Optional dotenv-style env file for WEDOS validation',
+    '  --profile <NAME>           Optional VPS profile to validate',
+    '  --env-file <FILE>          Optional dotenv-style env file for VPS validation',
     '  --operator <NAME>          Operator name for the evidence log',
     '  --ticket <ID>              Change/ticket reference for the evidence log',
     '  --decision <VALUE>         pending|go|no-go (default: pending)',
@@ -67,7 +67,7 @@ function usageText() {
     'Sequence:',
     '  1) check AO gate evidence',
     '  2) check decommission readiness',
-    '  3) optional WEDOS readiness validation',
+    '  3) optional VPS readiness validation',
     '  4) validate final migration summary',
     '  5) validate signoff record',
     '  6) build decommission evidence log',
@@ -238,7 +238,7 @@ function stepStatusFromResult(stepId, exitCode, parsed) {
     return exitCode === 0 ? 'blocked' : 'failed'
   }
 
-  if (stepId === 'validate-wedos-readiness') {
+  if (stepId === 'validate-hosting-readiness') {
     const status = normalizeTrimmed(parsed?.status).toLowerCase()
     if (status === 'pass') return 'passed'
     if (status === 'warn') return 'warning'
@@ -318,9 +318,9 @@ function buildCloseoutPlan(options = {}) {
       parseJson: true,
     },
     {
-      id: 'validate-wedos-readiness',
+      id: 'validate-hosting-readiness',
       index: 3,
-      label: profile ? `validate WEDOS readiness (${profile})` : 'validate WEDOS readiness',
+      label: profile ? `validate VPS readiness (${profile})` : 'validate VPS readiness',
       command: 'node',
       scriptPath: STEP_SCRIPTS.validateWedosReadiness,
       displayScriptPath: asRelativePath(STEP_SCRIPTS.validateWedosReadiness),
@@ -413,7 +413,7 @@ function buildCloseoutPlan(options = {}) {
   const activeSteps = profile ? steps : [steps[0], steps[1], steps[3], steps[4], steps[5], steps[6]]
   const plannedSteps = profile
     ? steps
-    : steps.map((step) => (step.id === 'validate-wedos-readiness' ? { ...step, skipped: true } : step))
+    : steps.map((step) => (step.id === 'validate-hosting-readiness' ? { ...step, skipped: true } : step))
 
   return {
     createdAtUtc: new Date().toISOString(),
@@ -530,7 +530,7 @@ function reduceStepResult(step, spawnResult, plan) {
       result.blockers = parsed.blockers.slice()
     }
     result.status = stepStatusFromResult(step.id, exitCode, parsed)
-  } else if (step.id === 'validate-wedos-readiness') {
+  } else if (step.id === 'validate-hosting-readiness') {
     if (parsed && Array.isArray(parsed.issues)) {
       result.issues = parsed.issues.slice()
     }
@@ -756,18 +756,18 @@ function runCloseout(options = {}, deps = {}) {
       }
     }
 
-    if (step.id === 'validate-wedos-readiness') {
+    if (step.id === 'validate-hosting-readiness') {
       if (reduced.status === 'failed') {
         automationBlocked = true
-        automationBlockers.push('WEDOS readiness validation failed')
+        automationBlockers.push('VPS readiness validation failed')
       }
       if (Array.isArray(reduced.payload?.issues)) {
         for (const issue of reduced.payload.issues) {
           if (issue && issue.severity === 'critical') {
             automationBlocked = true
-            automationBlockers.push(`WEDOS: ${issue.message}`)
+            automationBlockers.push(`VPS: ${issue.message}`)
           } else if (issue && issue.severity === 'warning') {
-            warnings.push(`WEDOS: ${issue.message}`)
+            warnings.push(`VPS: ${issue.message}`)
           }
         }
       }

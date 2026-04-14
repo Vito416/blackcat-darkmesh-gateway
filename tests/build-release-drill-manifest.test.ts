@@ -72,7 +72,7 @@ function seedDrill(options: { omit?: string[] } = {}) {
     }),
     'release-drill-checks.json': JSON.stringify({
       release: '1.4.0',
-      profile: 'wedos_medium',
+      profile: 'vps_medium',
       mode: 'pairwise',
       strict: false,
     }),

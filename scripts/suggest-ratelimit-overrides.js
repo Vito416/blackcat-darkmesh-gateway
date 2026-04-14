@@ -4,13 +4,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 
 const PROFILES = {
-  wedos_small: {
+  vps_small: {
     headroom: 0.16,
     burstWeight: 0.32,
     blockedWeight: 18,
     bias: 2,
   },
-  wedos_medium: {
+  vps_medium: {
     headroom: 0.24,
     burstWeight: 0.4,
     blockedWeight: 24,
@@ -30,11 +30,11 @@ function usage(exitCode = 0) {
   console.log(
     [
       'Usage:',
-      '  node scripts/suggest-ratelimit-overrides.js --input <FILE> [--profile wedos_small|wedos_medium|diskless] [--floor <N>] [--ceiling <N>] [--json|--env-line]',
+      '  node scripts/suggest-ratelimit-overrides.js --input <FILE> [--profile vps_small|vps_medium|diskless] [--floor <N>] [--ceiling <N>] [--json|--env-line]',
       '',
       'Options:',
       '  --input <FILE>       JSON file with route stats array (required)',
-      '  --profile <NAME>     wedos_small|wedos_medium|diskless (default: wedos_medium)',
+      '  --profile <NAME>     vps_small|vps_medium|diskless (default: vps_medium)',
       '  --floor <N>          Optional minimum suggested value',
       '  --ceiling <N>        Optional maximum suggested value',
       '  --json               Print structured JSON only',
@@ -67,7 +67,7 @@ function parseInteger(value, flagName) {
 function parseArgs(argv) {
   const args = {
     input: '',
-    profile: 'wedos_medium',
+    profile: 'vps_medium',
     floor: undefined,
     ceiling: undefined,
     json: false,
@@ -184,8 +184,8 @@ function clamp(value, floor, ceiling) {
   return next
 }
 
-export function buildRateLimitSuggestion(routes, profile = 'wedos_medium', bounds = {}) {
-  const selectedProfile = PROFILES[profile] || PROFILES.wedos_medium
+export function buildRateLimitSuggestion(routes, profile = 'vps_medium', bounds = {}) {
+  const selectedProfile = PROFILES[profile] || PROFILES.vps_medium
   const normalizedRoutes = validateRouteStats(routes)
 
   const entries = normalizedRoutes

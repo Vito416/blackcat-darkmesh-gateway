@@ -24,8 +24,8 @@ const MAX_RETRY_BACKOFF_MS = 5_000
 const MAX_RETRY_JITTER_MS = 500
 
 const PROFILE_DEFAULTS: Record<GatewayResourceProfile, IntegrityFetchControl> = {
-  wedos_small: { timeoutMs: 4000, retryAttempts: 2, retryBackoffMs: 75, retryJitterMs: DEFAULT_RETRY_JITTER_MS },
-  wedos_medium: {
+  vps_small: { timeoutMs: 4000, retryAttempts: 2, retryBackoffMs: 75, retryJitterMs: DEFAULT_RETRY_JITTER_MS },
+  vps_medium: {
     timeoutMs: DEFAULT_TIMEOUT_MS,
     retryAttempts: DEFAULT_RETRY_ATTEMPTS,
     retryBackoffMs: DEFAULT_RETRY_BACKOFF_MS,
@@ -39,7 +39,7 @@ export function resolveIntegrityFetchControl(
 ): IntegrityFetchControl {
   const profileLoaded = loadStringConfig('GATEWAY_RESOURCE_PROFILE')
   const profile = resolveGatewayResourceProfile(profileLoaded.ok ? profileLoaded.value : undefined)
-  const profileDefaults = profile ? PROFILE_DEFAULTS[profile] : PROFILE_DEFAULTS.wedos_medium
+  const profileDefaults = profile ? PROFILE_DEFAULTS[profile] : PROFILE_DEFAULTS.vps_medium
 
   function readBoundedInteger(name: string, fallback: number, min: number, max: number): number {
     const loaded = loadIntegerConfig(name, { fallbackValue: fallback })

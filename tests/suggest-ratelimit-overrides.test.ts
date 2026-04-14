@@ -51,15 +51,15 @@ describe('suggest-ratelimit-overrides.js', () => {
       { prefix: 'inbox', p95Rps: 9, blockedRate: 0.03, burstFactor: 1.15 },
     ]
 
-    const small = buildRateLimitSuggestion(routes, 'wedos_small')
-    const medium = buildRateLimitSuggestion(routes, 'wedos_medium')
+    const small = buildRateLimitSuggestion(routes, 'vps_small')
+    const medium = buildRateLimitSuggestion(routes, 'vps_medium')
     const diskless = buildRateLimitSuggestion(routes, 'diskless')
 
     expect(small.suggestion).toBe('inbox=14,webhook=27')
     expect(medium.suggestion).toBe('inbox=16,webhook=31')
     expect(diskless.suggestion).toBe('inbox=14,webhook=26')
-    expect(medium.entries[0].rationale).toContain('profile=wedos_medium')
-    expect(medium.entries[1].rationale).toContain('profile=wedos_medium')
+    expect(medium.entries[0].rationale).toContain('profile=vps_medium')
+    expect(medium.entries[1].rationale).toContain('profile=vps_medium')
   })
 
   it('clamps values to the provided floor and ceiling', () => {
@@ -68,7 +68,7 @@ describe('suggest-ratelimit-overrides.js', () => {
       { prefix: 'beta', p95Rps: 100, blockedRate: 1, burstFactor: 3 },
     ]
 
-    const result = buildRateLimitSuggestion(routes, 'wedos_medium', { floor: 12, ceiling: 40 })
+    const result = buildRateLimitSuggestion(routes, 'vps_medium', { floor: 12, ceiling: 40 })
     expect(result.suggestion).toBe('alpha=12,beta=40')
     expect(result.entries[0].rationale).toContain('floor=12')
     expect(result.entries[0].rationale).toContain('final=12')
@@ -89,7 +89,7 @@ describe('suggest-ratelimit-overrides.js', () => {
       { prefix: 'inbox', p95Rps: 10, blockedRate: 0.01, burstFactor: 1.05 },
     ])
 
-    const res = runCli(['--input', input, '--profile', 'wedos_medium'])
+    const res = runCli(['--input', input, '--profile', 'vps_medium'])
     expect(res.status).toBe(0)
     expect(res.stdout.split('\n')[0]).toBe('inbox=16,webhook=31')
     expect(res.stdout).toContain('- prefix=inbox')
@@ -108,7 +108,7 @@ describe('suggest-ratelimit-overrides.js', () => {
 
     const parsed = JSON.parse(res.stdout)
     expect(parsed).toMatchObject({
-      profile: 'wedos_medium',
+      profile: 'vps_medium',
       suggestion: 'inbox=16,webhook=31',
       entries: [
         { prefix: 'inbox', value: 16, raw: 16 },

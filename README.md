@@ -106,7 +106,7 @@ Configuration (per site)
     - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS` (ignore older checkpoints; stale files are treated as absent)
     - `GATEWAY_INTEGRITY_DISKLESS=1` (force memory-only mode; disable checkpoint file reads/writes)
     - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless|disabled|memory-only` (equivalent explicit checkpoint disable mode)
-    - `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskless` (profiled defaults for integrity fetch/retry cadence)
+    - `GATEWAY_RESOURCE_PROFILE=vps_small|vps_medium|diskless` (profiled defaults for integrity fetch/retry cadence)
     - `AO_INTEGRITY_FETCH_TIMEOUT_MS`, `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS`, `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS` (AO/integrity fetch timeout + retry budget)
       - precedence: explicit fetch options > `AO_INTEGRITY_FETCH_*` env vars > `GATEWAY_RESOURCE_PROFILE` defaults
     - `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1` (fail closed unless cache entries are integrity-verified)
@@ -270,7 +270,7 @@ When cache admission limits are exceeded, cache PUT returns:
 ### Production-like controls: concise verification
 ```bash
 npm test -- --run tests/handler.test.ts tests/webhooks.test.ts tests/server-node-adapter.test.ts tests/template-host-site-binding.test.ts
-npm run ops:validate-hosting-readiness -- --profile wedos_medium --env-file config/example.env --strict --json
+npm run ops:validate-hosting-readiness -- --profile vps_medium --env-file config/example.env --strict --json
 GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)" \
 GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)" \
 GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)" \

@@ -42,7 +42,7 @@ on:
         required: false
         type: string
       consistency_profile:
-        description: Resource profile for drift-alert summary (wedos_small|wedos_medium|diskless)
+        description: Resource profile for drift-alert summary (vps_small|vps_medium|diskless)
         required: false
         type: string
       evidence_urls:
@@ -283,7 +283,7 @@ jobs:
       CONSISTENCY_URLS: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_urls || vars.CONSISTENCY_URLS }}
       CONSISTENCY_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
       CONSISTENCY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_mode || vars.CONSISTENCY_MODE || 'pairwise' }}
-      CONSISTENCY_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'wedos_medium' }}
+      CONSISTENCY_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'vps_medium' }}
       CONSISTENCY_ALLOW_ANON: ${{ vars.CONSISTENCY_ALLOW_ANON }}
       CONSISTENCY_MATRIX_JSON: ${{ runner.temp }}/consistency-matrix.json
       CONSISTENCY_REPORT_MD: ${{ runner.temp }}/consistency-drift-report.md
@@ -416,7 +416,7 @@ jobs:
       GATEWAY_INTEGRITY_STATE_TOKEN: ${{ inputs.evidence_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
       EVIDENCE_OUT_DIR: ${{ runner.temp }}/integrity-evidence-dry-run
       CONSISTENCY_MODE: ${{ inputs.consistency_mode || vars.CONSISTENCY_MODE || 'pairwise' }}
-      CONSISTENCY_PROFILE: ${{ inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'wedos_medium' }}
+      CONSISTENCY_PROFILE: ${{ inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'vps_medium' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -574,13 +574,13 @@ jobs:
           else
             echo "ops:check-ao-gate-evidence is not defined in package.json; skipping help check."
           fi
-      - name: "Help: validate WEDOS readiness"
+      - name: "Help: validate VPS readiness"
         run: |
           set -euo pipefail
-          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-wedos-readiness'] ? 0 : 1)"; then
-            npm run ops:validate-wedos-readiness -- --help
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-hosting-readiness'] ? 0 : 1)"; then
+            npm run ops:validate-hosting-readiness -- --help
           else
-            echo "ops:validate-wedos-readiness is not defined in package.json; skipping help check."
+            echo "ops:validate-hosting-readiness is not defined in package.json; skipping help check."
           fi
       - name: "Help: validate AO dependency gate"
         run: npm run ops:validate-ao-dependency-gate -- --help
@@ -713,7 +713,7 @@ jobs:
             '--consistency-mode',
             process.env.CONSISTENCY_MODE || 'pairwise',
             '--consistency-profile',
-            process.env.CONSISTENCY_PROFILE || 'wedos_medium',
+            process.env.CONSISTENCY_PROFILE || 'vps_medium',
             '--evidence-urls',
             urls.join(','),
             '--dry-run',
@@ -745,7 +745,7 @@ jobs:
       RELEASE_LABEL: ${{ inputs.release_label || '1.4.0' }}
       CONSISTENCY_URLS: ${{ inputs.consistency_urls }}
       CONSISTENCY_MODE: ${{ inputs.consistency_mode || vars.CONSISTENCY_MODE || 'pairwise' }}
-      CONSISTENCY_PROFILE: ${{ inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'wedos_medium' }}
+      CONSISTENCY_PROFILE: ${{ inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'vps_medium' }}
       CONSISTENCY_ARTIFACT_DIR: ${{ runner.temp }}/release-pack/consistency
       EVIDENCE_ARTIFACT_DIR: ${{ runner.temp }}/release-pack/evidence
       RELEASE_PACK_WORKDIR: ${{ runner.temp }}/release-pack/work

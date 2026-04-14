@@ -4,13 +4,13 @@
 - Integrity operations runbook: `ops/integrity-runbook.md`.
 - Worker secrets trust model: `ops/worker-secrets-trust-model.md`.
 - Resource budgets and limited-hosting guidance: `ops/resource-budgets.md`.
-- Default alert thresholds: `ops/alerts.md` (targets `wedos_medium`).
+- Default alert thresholds: `ops/alerts.md` (targets `vps_medium`).
 - Profile-specific alert thresholds and tuning notes: `ops/alerts-profiles.md`.
 - Compare-integrity operator tool: `npm run ops:compare-integrity` compares two gateway integrity snapshots for drift.
 - Multi-gateway matrix compare: `npm run ops:compare-integrity-matrix` supports `pairwise` and `all` drift checks.
 - Drift summary helper: `npm run ops:build-drift-alert-summary` turns matrix JSON into a profile-aware alert report.
-- Consistency preflight helper: `npm run ops:validate-consistency-preflight -- --urls <CSV> [--mode pairwise|all] [--profile wedos_small|wedos_medium|diskless] [--token <VALUE>|--allow-anon]`.
-- Consistency export helper: `npm run ops:export-consistency-report -- --matrix <FILE> --out-dir <DIR> [--profile wedos_small|wedos_medium|diskless] [--prefix <NAME>]` writes `*-drift-report.md` and `*-drift-summary.json`.
+- Consistency preflight helper: `npm run ops:validate-consistency-preflight -- --urls <CSV> [--mode pairwise|all] [--profile vps_small|vps_medium|diskless] [--token <VALUE>|--allow-anon]`.
+- Consistency export helper: `npm run ops:export-consistency-report -- --matrix <FILE> --out-dir <DIR> [--profile vps_small|vps_medium|diskless] [--prefix <NAME>]` writes `*-drift-report.md` and `*-drift-summary.json`.
 - Release sign-off helper: `npm run ops:build-release-evidence-pack` consolidates consistency + evidence artifacts into one release pack.
 - Release-drill archive manifest: `npm run ops:build-release-drill-manifest -- --dir <drill-dir> --out <release-drill-manifest.json>` plus `npm run ops:validate-release-drill-manifest -- --file <release-drill-manifest.json> --strict` writes and validates the machine-checked drill archive manifest used in sign-off.
 - Release-drill artifact completeness check: `npm run ops:check-release-drill-artifacts -- --dir <drill-dir> --strict --json` verifies the final mandatory artifact set and strict cross-file consistency.
@@ -29,7 +29,7 @@
 - Template signature-ref map checker: `npm run ops:check-template-signature-ref-map -- --strict --json` reads `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` from repo vars/secrets in CI; when it is unset, the checker reports a deterministic `blocked` status instead of guessing.
 - Template variant map checker: `npm run ops:check-template-variant-map -- --require-sites <csv> --strict --json` validates gateway template variant routing (`variant`, `templateTxId`, `manifestTxId`) from `GATEWAY_TEMPLATE_VARIANT_MAP`.
 - Template variant map config validator: `npm run ops:validate-template-variant-map-config -- --strict --require-sites <csv>` enforces txid shape + required-site coverage (used in CI/audit gates).
-- Site-variant smoke: `SITE_ID=site-alpha GATEWAY_TEMPLATE_VARIANT_MAP='{"site-alpha":{"variant":"signal","templateTxId":"tx-alpha","manifestTxId":"manifest-alpha"}}' bash ops/live-wedos/local-tools/prodlike-site-variant-smoke.sh https://gateway.blgateway.fun` checks `GET /template/config` -> `200` and `POST /template/call` -> `200/202/404` for the selected site's `templateTxId`.
+- Site-variant smoke: `SITE_ID=site-alpha GATEWAY_TEMPLATE_VARIANT_MAP='{"site-alpha":{"variant":"signal","templateTxId":"tx-alpha","manifestTxId":"manifest-alpha"}}' bash ops/live-vps/local-tools/prodlike-site-variant-smoke.sh https://gateway.blgateway.fun` checks `GET /template/config` -> `200` and `POST /template/call` -> `200/202/404` for the selected site's `templateTxId`.
 - Template variant rollback helper: `node scripts/build-template-variant-fallback-map.js --file ./tmp/template-variant-map.json --fallback-variant signal --sites site-alpha,site-beta --template-txid <txid> --manifest-txid <txid> > ./tmp/template-variant-map.rollback.json` rewrites selected sites to a known-safe fallback variant map.
 - Worker-secrets trust-model validator: `npm run ops:validate-worker-secrets-trust-model -- --help` is the companion machine check for `ops/worker-secrets-trust-model.md` and should stay a strict CI gate once wired.
 - Template secret-smuggling guard: `/template/call` recursively scans payloads for secret-like fields and fail-closes before any upstream fetch; keep the matching tests in `tests/runtime-template-secretGuard.test.ts` and `tests/template-api.test.ts` green.
@@ -42,7 +42,7 @@
 - Decommission closeout one-shot: `node scripts/run-decommission-closeout.js --dir <drill-dir> --ao-gate ops/decommission/ao-dependency-gate.json [--operator ...] [--decision pending|go|no-go] [--strict]` assembles the final machine closeout log, but AO/manual proofs may still be open and must be recorded separately as `ao-manual-pending` or `ao-manual-blocked` instead of generic blocked state.
 - Closeout validator order: generate the drill manifest, validate the manifest, run `check-decommission-manual-proofs`, check the archived drill artifacts, build the evidence ledger/log, then run readiness and AO gate evidence checks before signoff.
 - Evidence quality rule: keep machine verification and AO/manual proof links as separate artifacts in the closeout bundle; both are required before the final signoff record can move to `GO`.
-- profile readiness validator: `npm run ops:validate-hosting-readiness -- --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--strict]`.
+- profile readiness validator: `npm run ops:validate-hosting-readiness -- --profile vps_small|vps_medium|diskless [--env-file <FILE>] [--strict]`.
 - Legacy no-import evidence checker: `npm run ops:check-legacy-no-import-evidence -- [--root src] [--modules <csv>] [--strict] [--json]` scans `src/**` for references to retired legacy import roots (`libs/legacy/<module>`) and emits machine-readable evidence for the runtime boundary gate.
 - Retired path guard: `npm run ops:check-retired-path-references -- --strict --json` scans active automation surfaces (`.github/workflows`, `scripts`, `package.json`) for retired path usage such as `kernel-migration/` and old `security/crypto-manifests/`.
 - Runtime config boundary check: `npm run ops:check-config-loader-runtime-boundary -- [--root src] [--strict] [--json]` flags any raw `process.env` usage under `src/runtime/**` outside `src/runtime/config/loader.ts`; CI runs the strict form as a hard gate.
@@ -57,7 +57,7 @@
 - Pre-live decommission bootstrap (no live gateways yet): `npm run ops:bootstrap-prelive-decommission-artifacts:tmp -- --release 1.4.0` seeds a deterministic baseline artifact set under `tmp/decommission-prelive` so readiness can report `automation-complete` while AO checks remain open.
 - Release drill runbook: `ops/release-drill-runbook.md`.
 - Fresh-machine production bootstrap runbook: `ops/fresh-machine-production-bootstrap-runbook.md` (prereqs, env bootstrap, strict preflight, strict drill path).
-- live handoff folder: `ops/live-wedos/` (VPS + cloudflared rollout and production-like validation tooling).
+- live handoff folder: `ops/live-vps/` (VPS + cloudflared rollout and production-like validation tooling).
 - Production gaplist tracker for 1.4.0: `ops/decommission/PRODUCTION_READY_GAPLIST_1.4.0.md`.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
 - Bundle indexing/exchange pack: `npm run ops:index-evidence-bundles` and `npm run ops:build-attestation-exchange-pack` for portable review artifacts.
@@ -93,7 +93,7 @@
 ## Verification commands (concise)
 ```bash
 npm test -- --run tests/handler.test.ts tests/webhooks.test.ts tests/server-node-adapter.test.ts tests/template-host-site-binding.test.ts
-npm run ops:validate-hosting-readiness -- --profile wedos_medium --env-file config/example.env --strict --json
+npm run ops:validate-hosting-readiness -- --profile vps_medium --env-file config/example.env --strict --json
 GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)" \
 GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)" \
 GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)" \

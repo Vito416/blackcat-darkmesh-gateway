@@ -12,7 +12,7 @@ describe('integrity fetch control profile tuning', () => {
     process.env = { ...originalEnv }
   })
 
-  it('uses wedos_medium defaults when no profile is configured', () => {
+  it('uses vps_medium defaults when no profile is configured', () => {
     delete process.env.GATEWAY_RESOURCE_PROFILE
     delete process.env.AO_INTEGRITY_FETCH_TIMEOUT_MS
     delete process.env.AO_INTEGRITY_FETCH_RETRY_ATTEMPTS
@@ -26,8 +26,8 @@ describe('integrity fetch control profile tuning', () => {
     })
   })
 
-  it('uses wedos_small profile defaults for constrained hosts', () => {
-    process.env.GATEWAY_RESOURCE_PROFILE = 'wedos_small'
+  it('uses vps_small profile defaults for constrained hosts', () => {
+    process.env.GATEWAY_RESOURCE_PROFILE = 'vps_small'
 
     expect(resolveIntegrityFetchControl()).toEqual({
       timeoutMs: 4000,
@@ -38,7 +38,7 @@ describe('integrity fetch control profile tuning', () => {
   })
 
   it('normalizes profile aliases with whitespace and case differences', () => {
-    process.env.GATEWAY_RESOURCE_PROFILE = '  WeDoS-Medium  '
+    process.env.GATEWAY_RESOURCE_PROFILE = '  VPS-Medium  '
 
     expect(resolveIntegrityFetchControl()).toEqual({
       timeoutMs: 5000,
@@ -59,7 +59,7 @@ describe('integrity fetch control profile tuning', () => {
     })
   })
 
-  it('falls back to wedos_medium when the configured profile is unknown', () => {
+  it('falls back to vps_medium when the configured profile is unknown', () => {
     process.env.GATEWAY_RESOURCE_PROFILE = 'not-a-real-profile'
 
     expect(resolveIntegrityFetchControl()).toEqual({
@@ -71,7 +71,7 @@ describe('integrity fetch control profile tuning', () => {
   })
 
   it('lets AO_INTEGRITY_FETCH_* env vars override profile defaults', () => {
-    process.env.GATEWAY_RESOURCE_PROFILE = 'wedos_small'
+    process.env.GATEWAY_RESOURCE_PROFILE = 'vps_small'
     process.env.AO_INTEGRITY_FETCH_TIMEOUT_MS = '8000'
     process.env.AO_INTEGRITY_FETCH_RETRY_ATTEMPTS = '4'
     process.env.AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS = '250'
@@ -108,7 +108,7 @@ describe('integrity fetch control profile tuning', () => {
   })
 
   it('lets explicit function overrides win over env/profile defaults', () => {
-    process.env.GATEWAY_RESOURCE_PROFILE = 'wedos_small'
+    process.env.GATEWAY_RESOURCE_PROFILE = 'vps_small'
     process.env.AO_INTEGRITY_FETCH_TIMEOUT_MS = '8000'
     process.env.AO_INTEGRITY_FETCH_RETRY_ATTEMPTS = '4'
     process.env.AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS = '250'

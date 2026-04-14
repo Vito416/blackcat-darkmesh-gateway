@@ -1,7 +1,7 @@
 # Sample Prometheus alerts for Gateway
 
-Default thresholds below target the `wedos_medium` profile.
-For `wedos_small` and `diskless`, use the threshold matrix in `ops/alerts-profiles.md`.
+Default thresholds below target the `vps_medium` profile.
+For `vps_small` and `diskless`, use the threshold matrix in `ops/alerts-profiles.md`.
 Treat these as early warnings, not hard caps; the matching budget ceilings live in `ops/resource-budgets.md`.
 
 - alert: GatewayCacheLowHitRate

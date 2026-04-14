@@ -3,7 +3,7 @@
 import { pathToFileURL } from 'node:url'
 
 const VALID_MODES = new Set(['pairwise', 'all'])
-const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
+const VALID_PROFILES = new Set(['vps_small', 'vps_medium', 'diskless'])
 const VALID_PROTOCOLS = new Set(['http:', 'https:'])
 
 class CliError extends Error {
@@ -17,12 +17,12 @@ class CliError extends Error {
 function usageText() {
   return [
     'Usage:',
-    '  node scripts/validate-consistency-preflight.js --urls <csv> [--mode pairwise|all] [--profile wedos_small|wedos_medium|diskless] [--token <value>] [--allow-anon] [--json]',
+    '  node scripts/validate-consistency-preflight.js --urls <csv> [--mode pairwise|all] [--profile vps_small|vps_medium|diskless] [--token <value>] [--allow-anon] [--json]',
     '',
     'Options:',
     '  --urls <CSV>        Comma-separated gateway URLs (required, at least two)',
     '  --mode <MODE>       pairwise (default) or all',
-    '  --profile <NAME>    wedos_small|wedos_medium|diskless (default: wedos_medium)',
+    '  --profile <NAME>    vps_small|vps_medium|diskless (default: vps_medium)',
     '  --token <VALUE>     Optional integrity state token',
     '  --allow-anon        Allow public state endpoints without a token',
     '  --json              Print structured JSON only',
@@ -85,7 +85,7 @@ function parseArgs(argv) {
   const args = {
     urls: '',
     mode: 'pairwise',
-    profile: 'wedos_medium',
+    profile: 'vps_medium',
     token: '',
     allowAnon: false,
     json: false,

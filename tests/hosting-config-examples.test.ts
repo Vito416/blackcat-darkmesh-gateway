@@ -3,14 +3,14 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { runCli } from '../scripts/validate-wedos-readiness.js'
+import { runCli } from '../scripts/validate-hosting-readiness.js'
 
 const ROUTING_EXAMPLE_PATH = fileURLToPath(
   new URL('../config/template-worker-routing.example.json', import.meta.url),
 )
 const ENV_EXAMPLE_PATH = fileURLToPath(new URL('../config/example.env', import.meta.url))
 
-describe('WEDOS config examples', () => {
+describe('VPS config examples', () => {
   it('keeps worker routing example aligned to /sign contract', () => {
     const parsed = JSON.parse(readFileSync(ROUTING_EXAMPLE_PATH, 'utf8')) as Record<string, string>
     expect(Object.keys(parsed).length).toBeGreaterThan(0)
@@ -27,9 +27,9 @@ describe('WEDOS config examples', () => {
     }
   })
 
-  it('keeps example.env wedos_medium-ready for strict validation', () => {
+  it('keeps example.env vps_medium-ready for strict validation', () => {
     const result = runCli(
-      ['--profile', 'wedos_medium', '--env-file', ENV_EXAMPLE_PATH, '--strict', '--json'],
+      ['--profile', 'vps_medium', '--env-file', ENV_EXAMPLE_PATH, '--strict', '--json'],
       { env: {} },
     )
 
@@ -40,7 +40,7 @@ describe('WEDOS config examples', () => {
       counts: { critical: number; warning: number; total: number }
     }
 
-    expect(parsed.profile).toBe('wedos_medium')
+    expect(parsed.profile).toBe('vps_medium')
     expect(parsed.status).toBe('pass')
     expect(parsed.counts.critical).toBe(0)
     expect(parsed.counts.warning).toBe(0)

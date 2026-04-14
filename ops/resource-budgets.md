@@ -5,7 +5,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 ## Recommended profiles
 
 ### Profile A: constrained small (conservative)
-- `GATEWAY_RESOURCE_PROFILE=wedos_small`
+- `GATEWAY_RESOURCE_PROFILE=vps_small`
 - `GATEWAY_CACHE_TTL_MS=180000`
 - `GATEWAY_CACHE_MAX_ENTRY_BYTES=131072`
 - `GATEWAY_CACHE_MAX_ENTRIES=128`
@@ -32,7 +32,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS=43200`
 
 ### Profile B: balanced medium (balanced default)
-- `GATEWAY_RESOURCE_PROFILE=wedos_medium`
+- `GATEWAY_RESOURCE_PROFILE=vps_medium`
 - `GATEWAY_CACHE_TTL_MS=300000`
 - `GATEWAY_CACHE_MAX_ENTRY_BYTES=262144`
 - `GATEWAY_CACHE_MAX_ENTRIES=256`
@@ -87,16 +87,16 @@ Use these as deployment guardrails. The numbers below are starting points; tight
   1. explicit call overrides (`fetchIntegritySnapshot({ timeoutMs, retryAttempts, retryBackoffMs, retryJitterMs })`)
   2. env vars (`AO_INTEGRITY_FETCH_*`)
   3. profile defaults from `GATEWAY_RESOURCE_PROFILE`
-  4. fallback default profile (`wedos_medium`)
+  4. fallback default profile (`vps_medium`)
 - Profile defaults by `GATEWAY_RESOURCE_PROFILE`:
 
 | Profile | Timeout | Retry attempts | Retry backoff | Retry jitter |
 | --- | ---: | ---: | ---: | ---: |
-| `wedos_small` | `4000ms` | `2` | `75ms` | `25ms` |
-| `wedos_medium` | `5000ms` | `3` | `100ms` | `25ms` |
+| `vps_small` | `4000ms` | `2` | `75ms` | `25ms` |
+| `vps_medium` | `5000ms` | `3` | `100ms` | `25ms` |
 | `diskless` | `4000ms` | `2` | `75ms` | `25ms` |
 
-- `diskless` intentionally keeps the same conservative fetch cadence as `wedos_small` so ephemeral hosts do not accumulate long retry tails.
+- `diskless` intentionally keeps the same conservative fetch cadence as `vps_small` so ephemeral hosts do not accumulate long retry tails.
 - Use `AO_INTEGRITY_FETCH_*` only when you need a profile-specific exception without changing the whole deployment profile.
 - Keep `AO_INTEGRITY_FETCH_RETRY_JITTER_MS` in the same family as timeout/backoff/attempts; if you adjust one knob for stability, check the others before declaring the profile tuned.
 - Keep tuning deterministic: change one fetch knob at a time, then observe one full alert window before the next adjustment.
@@ -132,7 +132,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - If cache growth trends upward, shorten `GATEWAY_CACHE_TTL_MS` or tighten admission before scaling host memory.
 - Prefer a smaller stable cache over a large, bursty one on edge-class hosts.
 - If a tenant fans out heavily, lower `GATEWAY_CACHE_MAX_KEYS_PER_SUBJECT` before raising the global cache count so one subject cannot dominate the cache.
-- When retry bursts look noisy on `wedos_small` or `diskless`, prefer increasing `AO_INTEGRITY_FETCH_RETRY_JITTER_MS` before adding retry attempts; it smooths bursts without extending failure recovery too much.
+- When retry bursts look noisy on `vps_small` or `diskless`, prefer increasing `AO_INTEGRITY_FETCH_RETRY_JITTER_MS` before adding retry attempts; it smooths bursts without extending failure recovery too much.
 
 ## Rate-limit budget
 - Watch `gateway_ratelimit_buckets` for cardinality drift.
@@ -156,12 +156,12 @@ Use the validator before promoting a constrained deployment profile. It checks t
 
 ```bash
 node scripts/validate-hosting-readiness.js \
-  --profile wedos_small \
-  --env-file .env.wedos \
+  --profile vps_small \
+  --env-file .env.vps \
   --strict
 ```
 
-- `--profile wedos_small|wedos_medium|diskless` selects the hosting envelope to validate.
+- `--profile vps_small|vps_medium|diskless` selects the hosting envelope to validate.
 - `--env-file <FILE>` is optional; use it when you want to validate a deployment dotenv file instead of the live process environment.
 - `--strict` fails when critical constraints are violated; warnings stay visible but do not fail a healthy profile.
 - `--json` is useful for CI or release-drill archives.
