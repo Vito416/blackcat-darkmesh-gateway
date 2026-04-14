@@ -30,6 +30,8 @@ else
 fi
 
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_USER" "$INSTALL_DIR/tmp"
+install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_USER" /var/log/blackcat
 
 echo "[deploy] npm ci + build"
 sudo -u "$SERVICE_USER" npm --prefix "$INSTALL_DIR" ci
