@@ -2,6 +2,8 @@
 
 Use this runbook for a first-time production rollout on a new operator machine and for repeatable future release drills.
 
+Architecture baseline for this runbook: Node gateway service on VPS behind Cloudflare Tunnel, with AO/-write/-worker integrations over HTTP APIs.
+
 ## 1) Hard prerequisites
 
 - Access to the `blackcat-darkmesh-gateway` repo and release branch.
@@ -138,6 +140,8 @@ npm run ops:validate-consistency-preflight -- \
   --json
 ```
 
+Compatibility note: the validator command keeps the historical `validate-hosting-readiness` name, but it validates VPS deployment profiles.
+
 If `/integrity/state` is intentionally public, replace the token flag with `--allow-anon`.
 
 For real production maps (no placeholders), run the same validator without `--allow-placeholders`.
@@ -257,7 +261,7 @@ Note: strict closeout remains blocked until AO required checks and manual proof 
 | Failing command | Typical cause | First response |
 | --- | --- | --- |
 | `npm ci` | Node/npm mismatch or lockfile/network issue | Confirm Node `20.x`, npm `10.x`, retry with a clean network path. |
-| `ops:validate-hosting-readiness --strict` | Env values violate selected profile limits | Fix keys in `tmp/bootstrap/gateway.production.env` to match `GATEWAY_RESOURCE_PROFILE`. |
+| `ops:validate-hosting-readiness --strict` (deployment-profile readiness) | Env values violate selected profile limits | Fix keys in `tmp/bootstrap/gateway.production.env` to match `GATEWAY_RESOURCE_PROFILE`. |
 | `ops:check-template-worker-routing-config --strict` | URL/token map JSON malformed or missing coverage | Rebuild from `config/template-worker-routing.example.json` and `config/template-worker-token-map.example.json`; rerun strict check. |
 | `ops:check-template-worker-map-coherence --strict` | URL/token/signatureRef maps are out of sync | Ensure all three maps contain the same site keys before rerun. |
 | `ops:check-template-signature-ref-map --strict` | Missing signature refs for required sites | Fill `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` for every `REQUIRED_TEMPLATE_SITES` key. |

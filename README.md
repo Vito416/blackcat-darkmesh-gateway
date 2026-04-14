@@ -139,8 +139,14 @@ Configuration (per site)
   - `GATEWAY_TEMPLATE_UPSTREAM_AUTH_MODE` (`none`|`bearer`|`x-template-token`, default `none`)
   - `GATEWAY_TEMPLATE_UPSTREAM_TOKEN` (shared upstream auth token used when auth mode is enabled)
   - `GATEWAY_TEMPLATE_UPSTREAM_TOKEN_MAP` (optional per-site upstream auth token map, JSON)
-  - `GATEWAY_SITE_ID_BY_HOST_MAP` (runtime-optional JSON host->site binding map; when set, template calls fail-closed for unmapped hosts and block siteId mismatch)
-    - strict production-readiness checks require this map to be non-empty and well-formed
+  - `GATEWAY_SITE_ID_BY_HOST_MAP` (runtime-optional JSON host->site binding map; still used as highest-priority allowlist source)
+  - `GATEWAY_SITE_RESOLVE_MODE` (`map`|`ao`|`hybrid`, default `hybrid`; resolver order is map first, then AO)
+  - `GATEWAY_SITE_RESOLVE_AO_URL` (optional resolver base URL; gateway calls `${base}/api/public/site-by-host` with `{ "host": "<request-host>" }`)
+  - `GATEWAY_SITE_RESOLVE_TIMEOUT_MS` (AO resolver timeout, default `3000`)
+  - `GATEWAY_SITE_RESOLVE_CACHE_TTL_MS` (AO resolver cache TTL, default `30000`)
+  - `GATEWAY_SITE_RESOLVE_ALLOW_BODY_FALLBACK=1` (optional override; permits body-provided `siteId` fallback when resolvers fail/miss)
+    - production-like mode (`NODE_ENV=production` or `GATEWAY_PRODUCTION_LIKE=1`) fails closed when no resolver source is available unless this fallback override is set
+    - strict production-readiness checks can still require a non-empty host map for deterministic allowlisting
   - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
   - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.

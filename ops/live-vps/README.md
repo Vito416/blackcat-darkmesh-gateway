@@ -1,4 +1,4 @@
-# Live VPS (VPS) Runbook
+# Live VPS Runbook
 
 Canonical docs for the current production-like VPS model.
 

@@ -2,6 +2,8 @@
 
 Use this runbook before a release PR merge or staging promotion to verify gateway consistency, export evidence, and produce the final sign-off pack.
 
+Scope baseline: Node gateway runtime on VPS (Cloudflare Tunnel ingress) with AO/-write/-worker dependencies accessed through HTTP APIs.
+
 For a new host or clean-operator machine, run `ops/fresh-machine-production-bootstrap-runbook.md` first (install + env bootstrap + strict preflight).
 
 ## Fast path (one-shot orchestration)

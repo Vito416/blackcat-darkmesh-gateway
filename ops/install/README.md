@@ -6,7 +6,7 @@ This installer path is for the current gateway architecture:
 - Cloudflare Tunnel as public entrypoint
 - Tailscale admin path (no exposed public SSH)
 
-It intentionally does **not** include legacy PHP bridge deployment.
+Legacy context: older PHP-bridge / constrained webhosting experiments are intentionally out of scope for this installer.
 
 ## Minimum VPS profile
 

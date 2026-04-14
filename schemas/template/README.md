@@ -11,6 +11,7 @@ as the primary enforcement layer and treat these JSON schemas as contract docs +
 
 Current action schema pairs:
 - `public.resolve-route` -> `public.resolve-route.request.json`, `public.resolve-route.response.json`
+- `public.site-by-host` -> `public.site-by-host.request.json`, `public.site-by-host.response.json`
 - `public.get-page` -> `public.get-page.request.json`, `public.get-page.response.json`
 - `checkout.create-order` -> `checkout.create-order.request.json`, `checkout.create-order.response.json`
 - `checkout.create-payment-intent` -> `checkout.create-payment-intent.request.json`, `checkout.create-payment-intent.response.json`

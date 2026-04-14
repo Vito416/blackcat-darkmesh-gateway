@@ -3,7 +3,8 @@
 - Endpoint: `/metrics` (Prom text). Protect with `METRICS_BASIC_USER`/`METRICS_BASIC_PASS` or `METRICS_BEARER_TOKEN`; responds 401 if missing when set.
 - Integrity operations runbook: `ops/integrity-runbook.md`.
 - Worker secrets trust model: `ops/worker-secrets-trust-model.md`.
-- Resource budgets and limited-hosting guidance: `ops/resource-budgets.md`.
+- Runtime architecture: Node gateway service on VPS behind Cloudflare Tunnel; AO/-write/-worker interactions use HTTP APIs.
+- Resource budgets for VPS tiers and diskless/ephemeral deployments: `ops/resource-budgets.md`.
 - Default alert thresholds: `ops/alerts.md` (targets `vps_medium`).
 - Profile-specific alert thresholds and tuning notes: `ops/alerts-profiles.md`.
 - Compare-integrity operator tool: `npm run ops:compare-integrity` compares two gateway integrity snapshots for drift.
@@ -42,7 +43,7 @@
 - Decommission closeout one-shot: `node scripts/run-decommission-closeout.js --dir <drill-dir> --ao-gate ops/decommission/ao-dependency-gate.json [--operator ...] [--decision pending|go|no-go] [--strict]` assembles the final machine closeout log, but AO/manual proofs may still be open and must be recorded separately as `ao-manual-pending` or `ao-manual-blocked` instead of generic blocked state.
 - Closeout validator order: generate the drill manifest, validate the manifest, run `check-decommission-manual-proofs`, check the archived drill artifacts, build the evidence ledger/log, then run readiness and AO gate evidence checks before signoff.
 - Evidence quality rule: keep machine verification and AO/manual proof links as separate artifacts in the closeout bundle; both are required before the final signoff record can move to `GO`.
-- profile readiness validator: `npm run ops:validate-hosting-readiness -- --profile vps_small|vps_medium|diskless [--env-file <FILE>] [--strict]`.
+- deployment-profile readiness validator (legacy command name kept for compatibility): `npm run ops:validate-hosting-readiness -- --profile vps_small|vps_medium|diskless [--env-file <FILE>] [--strict]`.
 - Legacy no-import evidence checker: `npm run ops:check-legacy-no-import-evidence -- [--root src] [--modules <csv>] [--strict] [--json]` scans `src/**` for references to retired legacy import roots (`libs/legacy/<module>`) and emits machine-readable evidence for the runtime boundary gate.
 - Retired path guard: `npm run ops:check-retired-path-references -- --strict --json` scans active automation surfaces (`.github/workflows`, `scripts`, `package.json`) for retired path usage such as `kernel-migration/` and old `security/crypto-manifests/`.
 - Runtime config boundary check: `npm run ops:check-config-loader-runtime-boundary -- [--root src] [--strict] [--json]` flags any raw `process.env` usage under `src/runtime/**` outside `src/runtime/config/loader.ts`; CI runs the strict form as a hard gate.

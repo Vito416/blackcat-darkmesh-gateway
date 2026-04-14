@@ -28,6 +28,12 @@ export function validateGetPage(payload: unknown): ValidateResult {
   return { ok: true }
 }
 
+export function validateSiteByHost(payload: unknown): ValidateResult {
+  if (!isObj(payload)) return { ok: false, error: 'payload must be an object' }
+  if (!hasStr(payload, 'host')) return { ok: false, error: 'payload.host is required' }
+  return { ok: true }
+}
+
 export function validateCreateOrder(payload: unknown): ValidateResult {
   if (!isObj(payload)) return { ok: false, error: 'payload must be an object' }
   if (!hasStr(payload, 'siteId')) return { ok: false, error: 'payload.siteId is required' }

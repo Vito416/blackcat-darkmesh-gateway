@@ -108,7 +108,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 ## Checkpoint policy
 - Restore a signed checkpoint only when it verifies and is within `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS`.
 - Treat anything older as missing and refresh from AO instead of stretching local state.
-- On diskless or limited-hosting deployments, set `GATEWAY_INTEGRITY_DISKLESS=1` (or `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`) and keep checkpoint writes disabled.
+- On diskless or other resource-constrained deployments, set `GATEWAY_INTEGRITY_DISKLESS=1` (or `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless`) and keep checkpoint writes disabled.
 
 ## Template proxy budget
 - `GATEWAY_TEMPLATE_MAX_BODY_BYTES` caps serialized template-call payloads before they reach upstream.
@@ -151,8 +151,10 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_WEBHOOK_REPLAY_KEY_MAX_BYTES` fails closed on oversized replay keys before they can burn memory or CPU; keep the default unless a real provider key format needs more room.
 - Do not extend replay retention on small or diskless hosts unless the provider retry window really requires it.
 
-## hosting readiness validator
-Use the validator before promoting a constrained deployment profile. It checks the same hosting knobs documented above and returns a clear pass/warn/fail result.
+## Deployment-profile readiness validator
+Use the validator before promoting a constrained deployment profile. It checks the same profile knobs documented above and returns a clear pass/warn/fail result.
+
+Backward compatibility note: the command/script still uses the historical `validate-hosting-readiness` name.
 
 ```bash
 node scripts/validate-hosting-readiness.js \
@@ -161,7 +163,7 @@ node scripts/validate-hosting-readiness.js \
   --strict
 ```
 
-- `--profile vps_small|vps_medium|diskless` selects the hosting envelope to validate.
+- `--profile vps_small|vps_medium|diskless` selects the deployment profile envelope to validate.
 - `--env-file <FILE>` is optional; use it when you want to validate a deployment dotenv file instead of the live process environment.
 - `--strict` fails when critical constraints are violated; warnings stay visible but do not fail a healthy profile.
 - `--json` is useful for CI or release-drill archives.

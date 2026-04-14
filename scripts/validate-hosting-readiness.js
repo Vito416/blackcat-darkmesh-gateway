@@ -85,7 +85,7 @@ function usageText() {
     '  node scripts/validate-hosting-readiness.js --profile vps_small|vps_medium|diskless [--env-file <FILE>] [--json] [--strict] [--help]',
     '',
     'Options:',
-    '  --profile <NAME>  Hosting profile to validate (required)',
+    '  --profile <NAME>  Deployment profile to validate (required)',
     '  --env-file <FILE> Optional dotenv-style env file to load before validation',
     '  --json            Print JSON only',
     '  --strict          Fail on critical violations (warnings still pass)',
@@ -775,7 +775,7 @@ function evaluateReadiness(profile, env) {
 
 function renderHumanReport(result, meta = {}) {
   const lines = []
-  lines.push('# Hosting Readiness')
+  lines.push('# Deployment Profile Readiness')
   lines.push('')
   lines.push(`- Profile: \`${result.profile}\``)
   lines.push(`- Status: \`${result.status}\``)
@@ -785,7 +785,7 @@ function renderHumanReport(result, meta = {}) {
   lines.push('')
 
   if (result.issues.length === 0) {
-    lines.push('All required hosting knobs are within the requested profile budget.')
+    lines.push('All required deployment profile knobs are within the requested budget.')
     lines.push('')
     return `${lines.join('\n')}\n`
   }

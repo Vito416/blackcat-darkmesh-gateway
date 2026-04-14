@@ -5,6 +5,13 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const DEFAULT_WORKSPACE_ROOT = resolve(process.cwd(), '..')
+const REQUIRED_ACTION_SPECS = new Map([
+  ['public.resolve-route', { method: 'POST', path: '/api/public/resolve-route' }],
+  ['public.site-by-host', { method: 'POST', path: '/api/public/site-by-host' }],
+  ['public.get-page', { method: 'POST', path: '/api/public/page' }],
+  ['checkout.create-order', { method: 'POST', path: '/api/checkout/order' }],
+  ['checkout.create-payment-intent', { method: 'POST', path: '/api/checkout/payment-intent' }],
+])
 
 class CliError extends Error {
   constructor(message, exitCode = 64) {
@@ -179,6 +186,10 @@ function extractRoutePaths(text, pattern) {
   return routes
 }
 
+function extractAoPublicRoutes(text) {
+  return extractRoutePaths(text, String.raw`'(/api/public/[a-z0-9-]+)'`)
+}
+
 function renderHumanSummary(result, args) {
   const lines = []
 
@@ -226,7 +237,7 @@ function assessTemplateBridgeContract(options = {}) {
     contract: resolve(gatewayRoot, 'config/template-backend-contract.json'),
     gatewayActions: resolve(gatewayRoot, 'src/runtime/template/actions.ts'),
     aoPackage: resolve(aoRoot, 'package.json'),
-    aoWorker: resolve(aoRoot, 'worker/src/index.ts'),
+    aoPublicAdapter: resolve(aoRoot, 'scripts/http/public_api_server.mjs'),
     writePackage: resolve(writeRoot, 'package.json'),
     writeCheckout: resolve(writeRoot, 'scripts/http/checkout_api_server.mjs'),
   }
@@ -236,7 +247,7 @@ function assessTemplateBridgeContract(options = {}) {
   const contractRaw = readJson(files.contract, issues, 'gateway template backend contract')
   const gatewayActionsText = readText(files.gatewayActions, issues, 'gateway runtime template action catalog')
   const aoPackage = readJson(files.aoPackage, issues, 'AO worker package manifest')
-  const aoWorkerText = readText(files.aoWorker, issues, 'AO worker adapter')
+  const aoPublicAdapterText = readText(files.aoPublicAdapter, issues, 'AO public API adapter')
   const writePackage = readJson(files.writePackage, issues, 'write adapter package manifest')
   const writeCheckoutText = readText(files.writeCheckout, issues, 'write checkout adapter')
 
@@ -336,6 +347,34 @@ function assessTemplateBridgeContract(options = {}) {
     contractByName.set(actionName, { method, path })
   }
 
+  for (const [actionName, expected] of REQUIRED_ACTION_SPECS.entries()) {
+    const found = contractByName.get(actionName)
+    if (!found) {
+      issues.push({
+        code: 'required_contract_action_missing',
+        message: `bridge contract must include required action ${actionName} (${expected.method} ${expected.path})`,
+        files: [files.contract],
+      })
+      continue
+    }
+
+    if (found.method !== expected.method) {
+      issues.push({
+        code: 'required_contract_action_method_mismatch',
+        message: `bridge contract action ${actionName} must use method ${expected.method} (got ${found.method || 'empty'})`,
+        files: [files.contract],
+      })
+    }
+
+    if (found.path !== expected.path) {
+      issues.push({
+        code: 'required_contract_action_path_mismatch',
+        message: `bridge contract action ${actionName} must use path ${expected.path} (got ${found.path || 'empty'})`,
+        files: [files.contract],
+      })
+    }
+  }
+
   const gatewayPolicies = extractGatewayPolicies(gatewayActionsText)
   const gatewayByAction = new Map(gatewayPolicies.map((policy) => [policy.action, policy]))
 
@@ -377,13 +416,24 @@ function assessTemplateBridgeContract(options = {}) {
     }
   }
 
-  const workerRoutes = extractRoutePaths(aoWorkerText, String.raw`app\.post\('([^']+)'`)
-  for (const gatewayAction of gatewayPolicies) {
-    if (!workerRoutes.has(gatewayAction.path)) {
+  const aoPublicRoutes = extractAoPublicRoutes(aoPublicAdapterText)
+  for (const gatewayAction of gatewayPolicies.filter((action) => action.target === 'ao')) {
+    if (!aoPublicRoutes.has(gatewayAction.path)) {
       issues.push({
-        code: 'worker_route_missing',
-        message: `AO worker adapter is missing ${gatewayAction.path}; add the route in blackcat-darkmesh-ao/worker/src/index.ts so ${gatewayAction.action} stays reachable`,
-        files: [files.aoWorker, files.contract],
+        code: 'ao_public_route_missing',
+        message: `AO public API adapter is missing ${gatewayAction.path}; add the route in blackcat-darkmesh-ao/scripts/http/public_api_server.mjs so ${gatewayAction.action} stays reachable`,
+        files: [files.aoPublicAdapter, files.contract],
+      })
+    }
+  }
+
+  for (const [actionName, contractAction] of contractByName.entries()) {
+    if (!contractAction.path.startsWith('/api/public/')) continue
+    if (!aoPublicRoutes.has(contractAction.path)) {
+      issues.push({
+        code: 'ao_public_contract_route_missing',
+        message: `AO public API adapter is missing ${contractAction.path}; keep blackcat-darkmesh-ao/scripts/http/public_api_server.mjs in sync with bridge action ${actionName}`,
+        files: [files.aoPublicAdapter, files.contract],
       })
     }
   }

@@ -31,14 +31,19 @@ function buildWorkspace(
     'blackcat-darkmesh-gateway/config/template-backend-contract.json',
     JSON.stringify(
       {
-        schemaVersion: '1.0.0',
+        schemaVersion: '1.1.0',
         templateId: 'gateway-default',
-        templateVersion: '1.0.0',
+        templateVersion: '1.1.0',
         allowedActions: [
           {
             name: 'public.resolve-route',
             method: 'POST',
             path: '/api/public/resolve-route',
+          },
+          {
+            name: 'public.site-by-host',
+            method: 'POST',
+            path: '/api/public/site-by-host',
           },
           {
             name: 'public.get-page',
@@ -68,6 +73,7 @@ function buildWorkspace(
     [
       "export const templateActionPolicies = [",
       "  { action: 'public.resolve-route', kind: 'read', target: 'ao', path: '/api/public/resolve-route', method: 'POST' },",
+      "  { action: 'public.site-by-host', kind: 'read', target: 'ao', path: '/api/public/site-by-host', method: 'POST' },",
       `  { action: 'public.get-page', kind: 'read', target: 'ao', path: '${options.workerPageRoute ? '/api/public/page-v2' : '/api/public/page'}', method: 'POST' },`,
       "  { action: 'checkout.create-order', kind: 'write', target: 'write', path: '/api/checkout/order', method: 'POST' },",
       "  { action: 'checkout.create-payment-intent', kind: 'write', target: 'write', path: '/api/checkout/payment-intent', method: 'POST' },",
@@ -85,12 +91,11 @@ function buildWorkspace(
 
   writeFile(
     root,
-    'blackcat-darkmesh-ao/worker/src/index.ts',
+    'blackcat-darkmesh-ao/scripts/http/public_api_server.mjs',
     [
       "app.post('/api/public/resolve-route', async () => {})",
+      "app.post('/api/public/site-by-host', async () => {})",
       options.workerPageRoute ? '' : "app.post('/api/public/page', async () => {})",
-      "app.post('/api/checkout/order', async () => {})",
-      "app.post('/api/checkout/payment-intent', async () => {})",
       '',
     ]
       .filter(Boolean)
@@ -119,7 +124,7 @@ describe('check-template-bridge-contract.js', () => {
     const parsed = JSON.parse(res.stdout)
     expect(parsed.status).toBe('pass')
     expect(parsed.issueCount).toBe(0)
-    expect(parsed.contractVersion.templateVersion).toBe('1.0.0')
+    expect(parsed.contractVersion.templateVersion).toBe('1.1.0')
     expect(res.stderr).toBe('')
   })
 
@@ -130,7 +135,7 @@ describe('check-template-bridge-contract.js', () => {
     expect(res.exitCode).toBe(3)
     expect(res.stdout).toContain('Template bridge contract issues found')
     expect(res.stdout).toContain('gateway runtime action public.get-page uses path /api/public/page-v2')
-    expect(res.stdout).toContain('AO worker adapter is missing /api/public/page')
+    expect(res.stdout).toContain('AO public API adapter is missing /api/public/page')
     expect(res.stdout).toContain('write checkout adapter is missing /api/checkout/payment-intent')
     expect(res.stdout).toContain('blackcat-darkmesh-write/package.json major 2 does not match bridge templateVersion major 1')
     expect(res.stderr).toBe('')

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blackcat.darkmesh/schemas/template/public.site-by-host.response.json",
+  "title": "public.site-by-host response",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "siteId": {
+          "type": "string"
+        },
+        "activeVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "siteId"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

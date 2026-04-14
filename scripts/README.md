@@ -35,9 +35,16 @@ node scripts/check-forget-forward-config.js --strict
 ## Template bridge contract compatibility
 
 `scripts/check-template-bridge-contract.js` cross-checks the gateway template
-backend contract against the workspace copies of the AO worker adapter and the
-write checkout adapter. It treats the bridge contract and the adapter package
-majors as a compatibility family, then verifies the route paths still line up.
+backend contract against the workspace copies of the AO public API adapter and
+the write checkout adapter. It treats the bridge contract and the adapter
+package majors as a compatibility family, validates required method/path pairs,
+then verifies routes still line up.
+
+Required public bridge actions currently include:
+
+- `public.resolve-route` (`POST /api/public/resolve-route`)
+- `public.site-by-host` (`POST /api/public/site-by-host`)
+- `public.get-page` (`POST /api/public/page`)
 
 Usage:
 ```bash

@@ -142,15 +142,18 @@ function canonicalFieldFingerprint(sourceText) {
 }
 
 function extractAllowedKeys(workerText) {
-  const match = workerText.match(/allowedKeys\s*=\s*new Set\(\[(.*?)\]\)/s)
-  if (!match) return []
+  const matches = [...workerText.matchAll(/allowedKeys\s*=\s*new Set\(\[(.*?)\]\)/gs)]
+  if (matches.length === 0) return []
   const keys = []
   const regex = /'([^']+)'/g
-  let next
-  while ((next = regex.exec(match[1])) !== null) {
-    keys.push(next[1])
+  for (const match of matches) {
+    const block = match[1] || ''
+    let next
+    while ((next = regex.exec(block)) !== null) {
+      keys.push(next[1])
+    }
   }
-  return keys
+  return unique(keys)
 }
 
 function hasRequiredRoutes(text, routes) {
@@ -165,6 +168,7 @@ function assessCrossRepoDataflow(options = {}) {
     contract: resolve(gatewayRoot, 'config/template-backend-contract.json'),
     gatewayTemplateApi: resolve(gatewayRoot, 'src/templateApi.ts'),
     gatewayHandler: resolve(gatewayRoot, 'src/handler.ts'),
+    gatewaySiteResolver: resolve(gatewayRoot, 'src/runtime/template/siteResolver.ts'),
     aoPublicApi: resolve(workspaceRoot, 'blackcat-darkmesh-ao/scripts/http/public_api_server.mjs'),
     writeCheckoutApi: resolve(workspaceRoot, 'blackcat-darkmesh-write/scripts/http/checkout_api_server.mjs'),
     workerIndex: resolve(workspaceRoot, 'blackcat-darkmesh-ao/worker/src/index.ts'),
@@ -180,6 +184,7 @@ function assessCrossRepoDataflow(options = {}) {
   const contractRaw = readText(files.contract, findings)
   const templateApiText = readText(files.gatewayTemplateApi, findings)
   const handlerText = readText(files.gatewayHandler, findings)
+  const siteResolverText = readTextOptional(files.gatewaySiteResolver)
   const aoPublicApiText = readText(files.aoPublicApi, findings)
   const writeCheckoutApiText = readText(files.writeCheckoutApi, findings)
   const workerText = readText(files.workerIndex, findings)
@@ -206,6 +211,7 @@ function assessCrossRepoDataflow(options = {}) {
     const byName = new Map(contract.allowedActions.map((action) => [action?.name, action]))
     const requiredActions = [
       ['public.resolve-route', 'POST', '/api/public/resolve-route', 'public'],
+      ['public.site-by-host', 'POST', '/api/public/site-by-host', 'public'],
       ['public.get-page', 'POST', '/api/public/page', 'public'],
       ['checkout.create-order', 'POST', '/api/checkout/order', 'shop_admin'],
       ['checkout.create-payment-intent', 'POST', '/api/checkout/payment-intent', 'shop_admin'],
@@ -247,11 +253,11 @@ function assessCrossRepoDataflow(options = {}) {
   }
 
   if (isNonEmptyString(aoPublicApiText)) {
-    if (!hasRequiredRoutes(aoPublicApiText, ['/api/public/resolve-route', '/api/public/page', '/healthz'])) {
+    if (!hasRequiredRoutes(aoPublicApiText, ['/api/public/resolve-route', '/api/public/site-by-host', '/api/public/page', '/healthz'])) {
       findings.push({
         severity: 'P0',
         code: 'ao_read_routes_missing',
-        message: 'AO public API adapter is missing one or more required routes (/api/public/resolve-route, /api/public/page, /healthz).',
+        message: 'AO public API adapter is missing one or more required routes (/api/public/resolve-route, /api/public/site-by-host, /api/public/page, /healthz).',
       })
     }
   }
@@ -341,7 +347,10 @@ function assessCrossRepoDataflow(options = {}) {
     })
   }
 
-  if (!/GATEWAY_SITE_ID_BY_HOST_MAP/.test(handlerText) || !/site_id_host_mismatch/.test(handlerText)) {
+  const hostBindingEvidence =
+    /site_id_host_mismatch/.test(handlerText) &&
+    (/GATEWAY_SITE_ID_BY_HOST_MAP/.test(handlerText) || /GATEWAY_SITE_ID_BY_HOST_MAP/.test(siteResolverText))
+  if (!hostBindingEvidence) {
     findings.push({
       severity: 'P1',
       code: 'host_site_binding_missing',

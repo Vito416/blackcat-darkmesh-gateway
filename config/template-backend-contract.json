@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "templateId": "gateway-default",
-  "templateVersion": "1.0.0",
+  "templateVersion": "1.1.0",
   "allowedActions": [
     {
       "name": "public.resolve-route",
@@ -12,6 +12,21 @@
       },
       "requestSchemaRef": "schemas/template/public.resolve-route.request.json",
       "responseSchemaRef": "schemas/template/public.resolve-route.response.json",
+      "ratelimitProfile": "template_public_read",
+      "idempotency": {
+        "mode": "optional",
+        "keyHeader": "x-request-id"
+      }
+    },
+    {
+      "name": "public.site-by-host",
+      "method": "POST",
+      "path": "/api/public/site-by-host",
+      "auth": {
+        "requiredRole": "public"
+      },
+      "requestSchemaRef": "schemas/template/public.site-by-host.request.json",
+      "responseSchemaRef": "schemas/template/public.site-by-host.response.json",
       "ratelimitProfile": "template_public_read",
       "idempotency": {
         "mode": "optional",

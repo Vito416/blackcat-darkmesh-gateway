@@ -2,6 +2,7 @@ import {
   validateCreateOrder,
   validateCreatePaymentIntent,
   validateGetPage,
+  validateSiteByHost,
   validateResolveRoute,
 } from './validators.js'
 
@@ -25,6 +26,14 @@ export const templateActionPolicies: TemplateActionPolicy[] = [
     path: '/api/public/resolve-route',
     method: 'POST',
     validate: validateResolveRoute,
+  },
+  {
+    action: 'public.site-by-host',
+    kind: 'read',
+    target: 'ao',
+    path: '/api/public/site-by-host',
+    method: 'POST',
+    validate: validateSiteByHost,
   },
   {
     action: 'public.get-page',

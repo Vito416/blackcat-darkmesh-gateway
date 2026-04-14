@@ -19,7 +19,7 @@ export DRILL_DIR="./tmp/release-drills/live-${RELEASE_VERSION}-$(date -u +%Y%m%d
 # Token mode (recommended). For public /integrity/state use --allow-anon later.
 export GATEWAY_INTEGRITY_STATE_TOKEN="<real-integrity-state-token>"
 
-# Optional env file used by validate-hosting-readiness
+# Optional env file used by deployment-profile readiness validation
 export BOOTSTRAP_ENV_FILE="./tmp/bootstrap/gateway.production.env"
 
 # Real secret-backed maps (JSON strings)

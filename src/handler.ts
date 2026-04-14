@@ -39,6 +39,7 @@ import {
   readWorkerNotifyConfig,
   resolveWorkerNotifyBreakerKey,
 } from './runtime/config/handlerConfig.js'
+import { resolveTemplateSiteIdFromHost } from './runtime/template/siteResolver.js'
 import { templateActionPolicies } from './runtime/template/actions.js'
 import { getTemplateContractAction } from './templateContract.js'
 import type { IntegritySnapshot } from './integrity/types.js'
@@ -61,7 +62,7 @@ type IntegrityIncidentReplayRecord = IntegrityIncidentRecord & {
   seenAt: number
 }
 
-const templateReadActions = new Set(['public.resolve-route', 'public.get-page'])
+const templateReadActions = new Set(['public.resolve-route', 'public.site-by-host', 'public.get-page'])
 const templateWriteActions = new Set(['checkout.create-order', 'checkout.create-payment-intent'])
 const incidentSeverities = new Set<IntegrityIncidentSeverity>(['low', 'medium', 'high', 'critical'])
 const INTEGRITY_CACHE_DEFAULT_TTL_MS = 10_000
@@ -393,49 +394,6 @@ function templateBodyTooLargeResponse(): Response {
   return jsonErrorResponse(413, 'payload_too_large', { retryable: false })
 }
 
-function normalizeHostForMap(hostRaw: string): string {
-  const normalized = hostRaw.trim().toLowerCase()
-  const withoutPort = normalized.replace(/:\d+$/, '')
-  return withoutPort
-}
-
-function parseSiteIdByHostMap(raw: string): { ok: true; map: Record<string, string> } | { ok: false } {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    return { ok: false }
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false }
-
-  const map: Record<string, string> = {}
-  for (const [keyRaw, valueRaw] of Object.entries(parsed as Record<string, unknown>)) {
-    const key = normalizeHostForMap(String(keyRaw || ''))
-    const value = typeof valueRaw === 'string' ? valueRaw.trim() : ''
-    if (!key || !value) return { ok: false }
-    map[key] = value
-  }
-
-  return { ok: true, map }
-}
-
-function resolveSiteIdFromHost(hostRaw: string): { ok: true; siteId?: string } | { ok: false; status: number; error: string } {
-  const mapRaw = readHandlerEnvString('GATEWAY_SITE_ID_BY_HOST_MAP')
-  if (!mapRaw) return { ok: true }
-
-  const parsed = parseSiteIdByHostMap(mapRaw)
-  if (!parsed.ok) {
-    return { ok: false, status: 500, error: 'site_host_map_invalid' }
-  }
-
-  const host = normalizeHostForMap(hostRaw)
-  const mapped = parsed.map[host] || parsed.map.default
-  if (!mapped) {
-    return { ok: false, status: 403, error: 'site_host_not_allowed' }
-  }
-  return { ok: true, siteId: mapped }
-}
-
 function readIncidentSignatureRef(req: Request, body: unknown): string {
   const customHeaderName = readIntegrityIncidentAuthConfig().refHeaderName
   const headerRef = customHeaderName ? readHeaderToken(req, customHeaderName) : ''
@@ -632,7 +590,12 @@ async function handleCache(
   return respond('method', { status: 405 })
 }
 
-async function handleTemplateCall(req: Request, paused: boolean, requestHost: string): Promise<Response> {
+async function handleTemplateCall(
+  req: Request,
+  paused: boolean,
+  requestHost: string,
+  productionLikeMode: boolean,
+): Promise<Response> {
   inc('gateway_template_call')
   if (req.method !== 'POST') return respond('method', { status: 405 })
 
@@ -699,7 +662,7 @@ async function handleTemplateCall(req: Request, paused: boolean, requestHost: st
     markReadonlyFallback(true)
   }
 
-  const resolvedHostSite = resolveSiteIdFromHost(requestHost)
+  const resolvedHostSite = await resolveTemplateSiteIdFromHost(requestHost, productionLikeMode)
   if (resolvedHostSite.ok === false) {
     inc('gateway_template_call_blocked')
     return jsonErrorResponse(resolvedHostSite.status, resolvedHostSite.error)
@@ -1080,7 +1043,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       if (url.searchParams.size > 0) {
         return jsonErrorResponse(400, 'query_not_allowed')
       }
-      return handleTemplateCall(request, integrityPaused, url.host)
+      return handleTemplateCall(request, integrityPaused, url.host, productionLikeMode)
     }
     if (url.pathname === '/template/config') {
       if (url.searchParams.size > 0) {

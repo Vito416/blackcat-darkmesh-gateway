@@ -16,6 +16,12 @@ const CONTRACT_JSON = JSON.stringify(
         auth: { requiredRole: 'public' },
       },
       {
+        name: 'public.site-by-host',
+        method: 'POST',
+        path: '/api/public/site-by-host',
+        auth: { requiredRole: 'public' },
+      },
+      {
         name: 'public.get-page',
         method: 'POST',
         path: '/api/public/page',
@@ -67,11 +73,16 @@ function buildFixture(options: {
     'blackcat-darkmesh-gateway/src/handler.ts',
     'const x = process.env.GATEWAY_SITE_ID_BY_HOST_MAP\nconst y = "site_id_host_mismatch"\n',
   )
+  writeFile(
+    root,
+    'blackcat-darkmesh-gateway/src/runtime/template/siteResolver.ts',
+    'const x = process.env.GATEWAY_SITE_ID_BY_HOST_MAP\n',
+  )
 
   writeFile(
     root,
     'blackcat-darkmesh-ao/scripts/http/public_api_server.mjs',
-    "const routes = ['/api/public/resolve-route','/api/public/page','/healthz']\n",
+    "const routes = ['/api/public/resolve-route','/api/public/site-by-host','/api/public/page','/healthz']\n",
   )
   writeFile(
     root,

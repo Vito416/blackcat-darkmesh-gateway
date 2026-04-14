@@ -16,7 +16,7 @@ const DEFAULT_SIGNOFF_RECORD_PATH = resolve(REPO_ROOT, 'ops/decommission/SIGNOFF
 const STEP_SCRIPTS = {
   checkAoGateEvidence: resolve(SCRIPT_DIR, 'check-ao-gate-evidence.js'),
   checkDecommissionReadiness: resolve(SCRIPT_DIR, 'check-decommission-readiness.js'),
-  validateWedosReadiness: resolve(SCRIPT_DIR, 'validate-hosting-readiness.js'),
+  validateProfileReadiness: resolve(SCRIPT_DIR, 'validate-hosting-readiness.js'),
   validateFinalMigrationSummary: resolve(SCRIPT_DIR, 'validate-final-migration-summary.js'),
   validateSignoffRecord: resolve(SCRIPT_DIR, 'validate-signoff-record.js'),
   buildDecommissionEvidenceLog: resolve(SCRIPT_DIR, 'build-decommission-evidence-log.js'),
@@ -322,8 +322,8 @@ function buildCloseoutPlan(options = {}) {
       index: 3,
       label: profile ? `validate VPS readiness (${profile})` : 'validate VPS readiness',
       command: 'node',
-      scriptPath: STEP_SCRIPTS.validateWedosReadiness,
-      displayScriptPath: asRelativePath(STEP_SCRIPTS.validateWedosReadiness),
+      scriptPath: STEP_SCRIPTS.validateProfileReadiness,
+      displayScriptPath: asRelativePath(STEP_SCRIPTS.validateProfileReadiness),
       args: () => {
         if (!profile) return []
         const next = ['--profile', profile, '--json']

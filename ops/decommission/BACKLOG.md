@@ -9,7 +9,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Gateway-side implementation is complete for the current migration slice; the remaining blockers are AO-side registry/authority lifecycle work plus the final decommission evidence, and those AO blockers remain open.
 - Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.
 - Preferred operator path is `scripts/run-release-drill.js`; it captures the matrix, drift report/summary, AO gate validation output, release pack, signoff checklist, readiness JSON, drill manifest, strict manifest validation log, and drill artifact check JSON as one drill bundle.
-- Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-manual-proofs`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-hosting-readiness`, but the final state is still split as `automation-complete` plus `ao-manual-pending` until the AO/manual proofs land.
+- Closeout automation is complete via `run-decommission-closeout`, `build-release-evidence-ledger`, `build-decommission-evidence-log`, `check-decommission-manual-proofs`, `check-decommission-readiness`, `check-ao-gate-evidence`, and `validate-hosting-readiness` (deployment-profile readiness validator), but the final state is still split as `automation-complete` plus `ao-manual-pending` until the AO/manual proofs land.
 - `ops/decommission` now has a complete strict artifact set (matrix/report/pack/readiness/drill-manifest/drill-check/ledger), and machine checks report `automationState=complete` with AO-only blockers.
 - Worker-routing and secrets-boundary tooling is now being tracked alongside the gateway libs workstream: `check-template-worker-routing-config`, `init-template-worker-routing`, and `validate-worker-secrets-trust-model` form the public-template/worker boundary checks, but they are guardrails only and do not change AO blocker status.
 - SignatureRef pinning is now enforced at runtime for template workers, and the routing-map coherence validators keep the URL/token/signatureRef maps aligned before release artifacts are published; these remain gateway-side guardrails and do not alter the AO blocker state.
@@ -20,6 +20,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Release-drill strict artifact requirements are now centralized and shared across generator/checkers (`run-release-drill`, `check-release-drill-artifacts`, `check-decommission-readiness`) with alias-compatibility warnings for older artifact names.
 - Latest hardening notes: `/template/call` now fail-closes on recursive secret-smuggling fields, `/cache/forget` stays local-200 even when optional worker forwarding times out, the gateway-owned core hash primitive is backed by `src/runtime/core/hash.ts` and `tests/runtime-core-hash.test.ts`, and `tsconfig.json` has moved to `NodeNext` so the old `moduleResolution=node10` deprecation path is gone.
 - New cross-repo dataflow checker (`scripts/audit-cross-repo-dataflow.js`) now validates gateway<->AO<->write<->worker contract coherence; role-binding P0 was closed (worker + write canonical now include role, and worker `/sign` allowlist accepts role fields).
+- Host->site resolution now supports `map|ao|hybrid` mode with AO lookup endpoint `/api/public/site-by-host`, timeout/TTL controls, and production-like fail-closed behavior by default.
 - Baseline HTTP security headers now include HSTS + COOP + CORP, and sensitive control-plane routes (`/integrity/state`, `/integrity/incident`, `/cache/forget`, `/metrics`) now consistently return `cache-control: no-store`.
 - New operator shortcut: `ops:check-production-readiness` emits concise GO/NO-GO with actionable blocker groups (`automation` vs `aoManual`).
 - Fresh-machine rollout runbook now exists at `ops/fresh-machine-production-bootstrap-runbook.md` and is linked from `ops/README.md` and `ops/release-drill-runbook.md`.
@@ -261,7 +262,7 @@ Progress notes:
 ### P2.2 Resource budgets and limits
 - Cap verifier CPU/timeouts.
 - Bound cache size, ratelimit bucket cardinality, replay-window growth, and checkpoint history length.
-- Add stress tests for constrained memory and limited-hosting profiles.
+- Add stress tests for constrained memory and resource-constrained deployment profiles.
 
 Progress notes:
 - Cache admission bounds implemented (`GATEWAY_CACHE_MAX_ENTRY_BYTES`, `GATEWAY_CACHE_MAX_ENTRIES`).
