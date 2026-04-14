@@ -1,0 +1,244 @@
+=== Live strict drill config ===
+Release: 1.4.0
+Profile: vps_medium
+Mode: pairwise
+Required template sites: site-alpha,site-beta
+AO gate: ops/decommission/ao-dependency-gate.json
+Out dir: tmp/release-drills/live-1.4.0-20260414T084148Z-token
+Allow anon: 0
+Skip forget-forward check: 1
+Dry run: 0
+
+>>> npm run -s ops:validate-template-backend-contract -- --strict --json
+{
+  "status": "pass",
+  "file": "config/template-backend-contract.json",
+  "strict": true,
+  "allowedActionCount": 4,
+  "forbiddenCapabilityCount": 4,
+  "issueCount": 0,
+  "issues": []
+}
+>>> npm run -s ops:check-template-worker-routing-config -- --url-map {"site-alpha":"https://worker-alpha.example.com/sign","site-beta":"https://worker-beta.example.com/sign"} --token-map {"site-alpha":"worker-token-alpha","site-beta":"worker-token-beta"} --strict --json
+{
+  "status": "complete",
+  "issues": [],
+  "warnings": [],
+  "counts": {
+    "urlMapCount": 2,
+    "tokenMapCount": 2,
+    "coveredCount": 2,
+    "missingTokenCount": 0,
+    "extraTokenCount": 0
+  }
+}
+>>> npm run -s ops:check-template-worker-map-coherence -- --require-sites site-alpha,site-beta --require-token-map --require-signature-map --strict --json
+{
+  "ok": true,
+  "status": "complete",
+  "strict": true,
+  "envVars": {
+    "urlMap": "GATEWAY_TEMPLATE_WORKER_URL_MAP",
+    "tokenMap": "GATEWAY_TEMPLATE_WORKER_TOKEN_MAP",
+    "signatureRefMap": "GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP"
+  },
+  "requiredSites": [
+    "site-alpha",
+    "site-beta"
+  ],
+  "maps": {
+    "url": {
+      "site-alpha": "https://worker-alpha.example.com/sign",
+      "site-beta": "https://worker-beta.example.com/sign"
+    },
+    "token": {
+      "site-alpha": "worker-token-alpha",
+      "site-beta": "worker-token-beta"
+    },
+    "signatureRef": {
+      "site-alpha": "worker-ed25519-alpha-v1",
+      "site-beta": "worker-ed25519-beta-v1"
+    }
+  },
+  "counts": {
+    "urlMapCount": 2,
+    "tokenMapCount": 2,
+    "signatureRefMapCount": 2,
+    "requiredSiteCount": 2,
+    "missingRequiredSiteCount": 0,
+    "missingTokenCount": 0,
+    "missingSignatureRefCount": 0,
+    "extraTokenCount": 0,
+    "extraSignatureRefCount": 0
+  },
+  "issues": [],
+  "warnings": []
+}
+>>> npm run -s ops:check-template-signature-ref-map -- --require-sites site-alpha,site-beta --strict --json
+{
+  "ok": true,
+  "status": "complete",
+  "strict": true,
+  "envVar": "GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP",
+  "requiredSites": [
+    "site-alpha",
+    "site-beta"
+  ],
+  "providedSites": [
+    "site-alpha",
+    "site-beta"
+  ],
+  "missingSites": [],
+  "counts": {
+    "providedCount": 2,
+    "requiredCount": 2,
+    "missingCount": 0,
+    "emptyValueCount": 0
+  },
+  "issues": [],
+  "warnings": [],
+  "map": {
+    "site-alpha": "worker-ed25519-alpha-v1",
+    "site-beta": "worker-ed25519-beta-v1"
+  }
+}
+>>> npm run -s ops:validate-template-variant-map-config -- --strict --require-sites site-alpha,site-beta
+Status: `complete`
+Source: env:GATEWAY_TEMPLATE_VARIANT_MAP
+Strict: yes
+Allow placeholders: no
+Allowed variants: signal, bastion, horizon
+Provided sites: 2
+Required sites: 2
+Missing sites: none
+Malformed entries: 0
+Invalid txids: 0
+Placeholder values: 0
+>>> npm run -s ops:validate-consistency-preflight -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --mode pairwise --profile vps_medium --token live-audit-temp-token-not-secret
+Consistency preflight passed
+URLs: 2
+Mode: pairwise
+Profile: vps_medium
+Auth: token provided
+>>> npm run -s ops:run-release-drill -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --out-dir tmp/release-drills/live-1.4.0-20260414T084148Z-token --profile vps_medium --mode pairwise --release 1.4.0 --strict --token live-audit-temp-token-not-secret
+[1/20] validate consistency preflight
+Consistency preflight passed
+URLs: 2
+Mode: pairwise
+Profile: vps_medium
+Auth: token provided
+[1/20] validate consistency preflight done
+[2/20] compare integrity matrix
+{
+  "mode": "pairwise",
+  "pairingStrategy": "adjacent",
+  "urls": [
+    "https://gateway.blgateway.fun/",
+    "https://gateway.blgateway.fun/"
+  ],
+  "tokensMode": "shared",
+  "comparedFields": [
+    "policy.paused",
+    "policy.activeRoot",
+    "policy.activePolicyHash",
+    "release.version",
+    "release.root",
+    "audit.seqTo"
+  ],
+  "runPlan": [
+    {
+      "type": "pairwise",
+      "name": "pair-1",
+      "indices": [
+        0,
+        1
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "index": 1,
+      "mode": "pairwise",
+      "type": "pairwise",
+      "name": "pair-1",
+      "indices": [
+        0,
+        1
+      ],
+      "labels": [
+        "#1 gateway.blgateway.fun",
+        "#2 gateway.blgateway.fun"
+      ],
+      "urls": [
+        "https://gateway.blgateway.fun/",
+        "https://gateway.blgateway.fun/"
+      ],
+      "status": "FAIL",
+      "outcome": "failure",
+      "reason": "one or more snapshots were incomplete",
+      "mismatches": 0,
+      "invalid": true,
+      "totalFields": 6,
+      "report": {
+        "rows": [
+          {
+            "field": "policy.paused",
+            "status": "CONSENSUS",
+            "details": "#1 gateway.blgateway.fun=false | #2 gateway.blgateway.fun=false",
+            "values": [
+              false,
+              false
+            ]
+          },
+          {
+            "field": "policy.activeRoot",
+            "status": "CONSENSUS",
+            "details": "#1 gateway.blgateway.fun=null | #2 gateway.blgateway.fun=null",
+            "values": [
+              null,
+              null
+            ]
+          },
+          {
+            "field": "policy.activePolicyHash",
+            "status": "CONSENSUS",
+            "details": "#1 gateway.blgateway.fun=null | #2 gateway.blgateway.fun=null",
+            "values": [
+              null,
+              null
+            ]
+          },
+          {
+            "field": "release.version",
+            "status": "INVALID",
+            "details": "missing field in one or more snapshots",
+            "values": null
+          },
+          {
+            "field": "release.root",
+            "status": "INVALID",
+            "details": "missing field in one or more snapshots",
+            "values": null
+          },
+          {
+            "field": "audit.seqTo",
+            "status": "INVALID",
+            "details": "missing field in one or more snapshots",
+            "values": null
+          }
+        ],
+        "mismatches": 0,
+        "invalid": true,
+        "totalFields": 6
+      }
+    }
+  ],
+  "counts": {
+    "total": 1,
+    "pass": 0,
+    "mismatch": 0,
+    "failure": 1
+  },
+  "exitCode": 2
+}
+[2/20] compare integrity matrix failed with exit 3

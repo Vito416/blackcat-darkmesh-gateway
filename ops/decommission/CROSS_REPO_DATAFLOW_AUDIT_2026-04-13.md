@@ -3,6 +3,9 @@
 Date: 2026-04-13  
 Scope: `blackcat-darkmesh-gateway`, `blackcat-darkmesh-ao`, `blackcat-darkmesh-write`
 
+Follow-up live probe status is tracked in:
+- `ops/decommission/LIVE_PROBE_AUDIT_2026-04-14.md`
+
 ## 1) What was audited
 
 - Gateway runtime routing and template backend policy:

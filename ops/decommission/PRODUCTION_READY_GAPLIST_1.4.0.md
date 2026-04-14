@@ -10,6 +10,7 @@ Latest audit snapshot:
 - `npm run ops:audit-cross-repo-dataflow -- --strict --json` -> **ready_with_warnings** (P0=0, P1=0)
 - `node scripts/check-production-readiness-summary.js --json` -> **GO** (manual proof set complete)
 - Cross-repo dataflow audit: `ops/decommission/CROSS_REPO_DATAFLOW_AUDIT_2026-04-13.md`
+- Live runtime probe audit: `ops/decommission/LIVE_PROBE_AUDIT_2026-04-14.md` (runtime drift still present on live endpoint)
 
 ## P0 (must close before first real traffic)
 

@@ -1,0 +1,13 @@
+prod-like deep check
+BASE_URL=https://gateway.blgateway.fun
+CURL_TIMEOUT=20s
+
+PASS - GET /healthz -> 200
+PASS - GET /template/config -> 200
+PASS - POST /template/call (read) -> 404
+PASS - POST /template/call unknown action -> 403
+WARN - GET /template/config?probe=1 -> 200 (query passthrough enabled)
+PASS - POST /template/call text/plain -> 400 invalid_json
+PASS - GET /metrics with bearer -> 200
+
+Summary: PASS=6 WARN=1 FAIL=0
