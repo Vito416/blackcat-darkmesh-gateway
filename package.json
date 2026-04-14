@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run --testTimeout 15000",
+    "test:smoke:dataflow": "vitest run tests/e2e-template-dataflow-smoke.test.ts",
     "test:integrity-fast": "bash scripts/ci/integrity-gate.sh",
     "test:integrity-gate": "npm run test:integrity-fast",
     "ops:compare-integrity": "node scripts/compare-integrity-state.js",

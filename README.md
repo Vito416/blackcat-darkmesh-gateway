@@ -36,7 +36,10 @@ HOST=127.0.0.1 PORT=8080 npm start
 
 - `/health` and `/healthz` are lightweight liveness endpoints (no AO dependency lookup).
 - Keep the process private (`127.0.0.1`), then publish through Cloudflare Tunnel.
-- Optional domain lock: `GATEWAY_ALLOWED_HOSTS=domain1.cz,domain2.cz,gateway.example.com`
+- Domain lock (recommended): `GATEWAY_ALLOWED_HOSTS=gateway.example.com,store.example.com`
+- Trusted-proxy mode (secure default): `GATEWAY_TRUST_PROXY_MODE=off`
+  - Set `forwarded` only when all traffic comes from your trusted reverse proxy and host allowlisting is enabled.
+- Node adapter body cap (default `262144`): `GATEWAY_NODE_MAX_BODY_BYTES=262144` (enforced before handler routing).
 
 ## P3 operator tools
 ```bash
@@ -81,6 +84,18 @@ Configuration (per site)
     - `GATEWAY_RL_WINDOW_MS`, `GATEWAY_RL_MAX`, `GATEWAY_RL_MAX_BUCKETS`
     - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_REPLAY_MAX_KEYS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
     - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
+    - `GATEWAY_PRODUCTION_LIKE` (recommended `1` on staging/production; or auto-derived from `GATEWAY_MODE` / `APP_ENV` / `NODE_ENV` values `production|prod|staging|stage|preprod|pre-production`)
+    - Internal plane toggles (apply only in production-like mode; secure default is fail-closed):
+      - `GATEWAY_INTERNAL_PLANE_ALLOW_MUTATIONS=1` (opens `/cache/*`, `/cache/forget`, `/inbox` together)
+      - `GATEWAY_INTERNAL_PLANE_ALLOW_CACHE=1`, `GATEWAY_INTERNAL_PLANE_ALLOW_FORGET=1`, `GATEWAY_INTERNAL_PLANE_ALLOW_INBOX=1` (per-route opt-in)
+      - strict flag semantics: only literal `1` enables these toggles
+      - when `/cache/forget` is enabled in production-like mode, `GATEWAY_FORGET_TOKEN` must be configured or requests fail with `500 forget_auth_not_configured`
+    - `GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED` (boolean; default auto: enabled in production-like mode, disabled otherwise)
+      - set to `0` for verify-only staged rollout
+      - when enabled, configure `WORKER_NOTIFY_URL` and `WORKER_AUTH_TOKEN` (or `WORKER_NOTIFY_TOKEN`)
+    - `GATEWAY_ALLOWED_HOSTS` (recommended host allowlist for Node adapter mode)
+    - `GATEWAY_TRUST_PROXY_MODE=off|forwarded` (default `off`; only `forwarded` trusts `x-forwarded-host` / `x-forwarded-proto`)
+    - `GATEWAY_NODE_MAX_BODY_BYTES` (default `262144`; Node-layer payload guardrail before route handlers)
     - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
 - Integrity policy and snapshot:
     - `AO_INTEGRITY_URL` (AO endpoint for integrity snapshot)
@@ -113,9 +128,10 @@ Configuration (per site)
   - `WRITE_API_URL` (write upstream target for checkout/write actions)
   - `WORKER_API_URL` / `WORKER_SIGN_URL` (worker signer endpoint base for single-tenant/simple deployments; gateway calls `/sign`)
   - `WORKER_AUTH_TOKEN` / `WORKER_SIGN_TOKEN` (worker signer auth token)
-  - `GATEWAY_TEMPLATE_WORKER_URL_MAP` (multi-tenant worker signer routing map, JSON: `{ \"site-a\": \"https://worker-a.example\", \"site-b\": \"https://worker-b.example\" }`)
-  - `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP` (optional per-site signer token map, JSON with same keys as the URL map)
+  - `GATEWAY_TEMPLATE_WORKER_URL_MAP` (multi-tenant worker signer routing map, JSON: `{ \"site-a\": \"https://worker-a.example/sign\", \"site-b\": \"https://worker-b.example/sign\" }`)
+  - `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP` (optional runtime fallback map, JSON with same keys as the URL map)
     - when signer map is configured, write actions fail closed for unknown `siteId`
+    - strict production-readiness checks require URL/token map site coverage to stay aligned
   - `GATEWAY_TEMPLATE_VARIANT_MAP` (optional per-site template variant map, JSON `{ "<site>": { "variant": "signal|bastion|horizon", "templateTxId": "...", "manifestTxId": "..." } }`)
   - `GATEWAY_TEMPLATE_HMAC_SECRET` (optional HMAC signature header for forwarded template calls)
   - `GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS` (global fallback timeout)
@@ -123,7 +139,8 @@ Configuration (per site)
   - `GATEWAY_TEMPLATE_UPSTREAM_AUTH_MODE` (`none`|`bearer`|`x-template-token`, default `none`)
   - `GATEWAY_TEMPLATE_UPSTREAM_TOKEN` (shared upstream auth token used when auth mode is enabled)
   - `GATEWAY_TEMPLATE_UPSTREAM_TOKEN_MAP` (optional per-site upstream auth token map, JSON)
-  - `GATEWAY_SITE_ID_BY_HOST_MAP` (optional JSON host->site binding map; when set, template calls fail-closed for unmapped hosts and block siteId mismatch)
+  - `GATEWAY_SITE_ID_BY_HOST_MAP` (runtime-optional JSON host->site binding map; when set, template calls fail-closed for unmapped hosts and block siteId mismatch)
+    - strict production-readiness checks require this map to be non-empty and well-formed
   - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
   - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.
@@ -249,6 +266,16 @@ When cache admission limits are exceeded, cache PUT returns:
 - Metrics auth smoke: `npm test -- --run tests/metrics-auth.test.ts`
 - Webhook pen-tests: `npm test -- --run tests/webhook-pentest.test.ts`
 - Bez lokálního Node: `docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm test -- --run tests/webhook-pentest.test.ts"`
+
+### Production-like controls: concise verification
+```bash
+npm test -- --run tests/handler.test.ts tests/webhooks.test.ts tests/server-node-adapter.test.ts tests/template-host-site-binding.test.ts
+npm run ops:validate-wedos-readiness -- --profile wedos_medium --env-file config/example.env --strict --json
+GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)" \
+GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)" \
+GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)" \
+npm run ops:check-template-worker-map-coherence -- --require-sites site-alpha,site-beta --require-token-map --strict --json
+```
 
 ### Next execution order (P0 rollout)
 1. `npm test`

@@ -83,6 +83,23 @@
 - Scheduled consistency preflight: CI now fails fast on missing/invalid `CONSISTENCY_*` config and reports issues in job summary; for public state endpoints only, set `CONSISTENCY_ALLOW_ANON=1`.
 - CI release artifact: workflow job `release-evidence-pack` now downloads consistency/evidence artifacts and uploads the sign-off bundle (`release-evidence-pack`, AO gate validation, drill manifest/check, and release evidence ledger).
 
+## Production-like controls
+- Internal plane defaults fail-closed when `GATEWAY_PRODUCTION_LIKE=1` (or when env mode resolves to production/staging); open only with `GATEWAY_INTERNAL_PLANE_ALLOW_MUTATIONS=1` or per-route `...ALLOW_CACHE|FORGET|INBOX=1`.
+- `/cache/forget` in production-like mode requires `GATEWAY_FORGET_TOKEN`; if unset while route access is enabled, requests fail with `500 forget_auth_not_configured`.
+- Webhook write forwarding defaults to enabled in production-like mode unless `GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED=0`; keep `WORKER_NOTIFY_URL` plus `WORKER_AUTH_TOKEN`/`WORKER_NOTIFY_TOKEN` configured before enabling.
+- Node adapter secure defaults: `GATEWAY_TRUST_PROXY_MODE=off`, `GATEWAY_NODE_MAX_BODY_BYTES=262144`, and explicit `GATEWAY_ALLOWED_HOSTS` for public hostnames.
+- Host/site routing: runtime host map is optional, but strict readiness requires non-empty `GATEWAY_SITE_ID_BY_HOST_MAP`; strict checks also require coherent `GATEWAY_TEMPLATE_WORKER_URL_MAP` + `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP` site coverage.
+
+## Verification commands (concise)
+```bash
+npm test -- --run tests/handler.test.ts tests/webhooks.test.ts tests/server-node-adapter.test.ts tests/template-host-site-binding.test.ts
+npm run ops:validate-wedos-readiness -- --profile wedos_medium --env-file config/example.env --strict --json
+GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)" \
+GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)" \
+GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)" \
+npm run ops:check-template-worker-map-coherence -- --require-sites site-alpha,site-beta --require-token-map --strict --json
+```
+
 ## Template worker map preflight
 
 Use the non-secret example files in `config/` as a baseline, replace placeholder values, then run strict checks:
