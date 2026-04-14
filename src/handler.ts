@@ -79,6 +79,7 @@ const INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS = 30 * 60 * 1000
 const INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP = 256
 const traceContext = new AsyncLocalStorage<string>()
 const SAFE_TRACE_ID_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/
+const PRODUCTION_LIKE_MODES = new Set(['production', 'prod', 'staging', 'stage', 'preprod', 'pre-production'])
 
 type IntegrityRuntimeCache = {
   expiresAt: number
@@ -90,6 +91,45 @@ const integrityRuntime: IntegrityRuntimeCache = {
   expiresAt: 0,
   state: { paused: false, source: 'env' },
   snapshot: null,
+}
+
+function parseLooseBoolean(raw: string | undefined): boolean | undefined {
+  if (!raw) return undefined
+  const normalized = raw.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  return undefined
+}
+
+function isProductionLikeMode(): boolean {
+  const explicit = parseLooseBoolean(readHandlerEnvString('GATEWAY_PRODUCTION_LIKE'))
+  if (typeof explicit === 'boolean') return explicit
+  const mode =
+    readHandlerEnvString('GATEWAY_MODE') ||
+    readHandlerEnvString('APP_ENV') ||
+    readHandlerEnvString('NODE_ENV') ||
+    ''
+  return PRODUCTION_LIKE_MODES.has(mode.trim().toLowerCase())
+}
+
+function isInternalPlaneRouteEnabled(route: 'cache' | 'forget' | 'inbox', productionLikeMode: boolean): boolean {
+  if (!productionLikeMode) return true
+  if (readHandlerStrictEnabledFlag('GATEWAY_INTERNAL_PLANE_ALLOW_MUTATIONS')) return true
+  if (route === 'cache') return readHandlerStrictEnabledFlag('GATEWAY_INTERNAL_PLANE_ALLOW_CACHE')
+  if (route === 'forget') return readHandlerStrictEnabledFlag('GATEWAY_INTERNAL_PLANE_ALLOW_FORGET')
+  return readHandlerStrictEnabledFlag('GATEWAY_INTERNAL_PLANE_ALLOW_INBOX')
+}
+
+function internalPlaneBlockedResponse(route: 'cache' | 'forget' | 'inbox'): Response {
+  inc('gateway_internal_plane_blocked')
+  inc(`gateway_internal_plane_blocked_${route}`)
+  return plainErrorResponse(404, 'not found')
+}
+
+function isWebhookWriteForwardEnabled(productionLikeMode: boolean): boolean {
+  const explicit = parseLooseBoolean(readHandlerEnvString('GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED'))
+  if (typeof explicit === 'boolean') return explicit
+  return productionLikeMode
 }
 
 function respond(body?: BodyInit | null, init?: ResponseInit): Response {
@@ -452,6 +492,42 @@ async function wrapWebhook(provider: WebhookProvider, fn: () => Promise<Response
     recordWebhook5xx(provider)
     return respond('error', { status: 500 })
   }
+}
+
+async function forwardWorkerNotifyBody(body: string, provider?: string): Promise<Response> {
+  const workerNotify = readWorkerNotifyConfig()
+  if (!workerNotify.token) {
+    return respond('worker_notify_auth_not_configured', { status: 500 })
+  }
+
+  const breakerKey = resolveWorkerNotifyBreakerKey(workerNotify, provider)
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${workerNotify.token}`,
+    'content-type': 'application/json',
+    'x-breaker-key': breakerKey,
+  }
+  const currentTraceId = traceContext.getStore()
+  if (currentTraceId) headers['x-trace-id'] = currentTraceId
+  if (provider) headers['x-provider'] = provider
+  if (workerNotify.hmacSecret) {
+    const sig = crypto.createHmac('sha256', workerNotify.hmacSecret).update(body).digest('hex')
+    headers['X-Signature'] = sig
+  }
+
+  const resp = await fetch(workerNotify.target, { method: 'POST', headers, body })
+  if (resp.ok) return respond('forwarded', { status: 200 })
+  return respond('notify_failed', { status: 502 })
+}
+
+async function maybeForwardWebhookWrite(provider: WebhookProvider, body: string, productionLikeMode: boolean): Promise<Response | null> {
+  if (!isWebhookWriteForwardEnabled(productionLikeMode)) return null
+  const res = await forwardWorkerNotifyBody(body, provider)
+  if (res.status >= 200 && res.status < 300) {
+    inc('gateway_webhook_write_forward_ok')
+  } else {
+    inc('gateway_webhook_write_forward_fail')
+  }
+  return res
 }
 
 async function handleInbox(req: Request): Promise<Response> {
@@ -926,6 +1002,7 @@ export async function handleRequest(request: Request): Promise<Response> {
 
     const integrity = await resolveIntegrityContext()
     const integrityPaused = integrity.state.paused
+    const productionLikeMode = isProductionLikeMode()
 
     if (url.pathname === '/integrity/state') {
       markReadonlyFallback(integrityPaused)
@@ -936,9 +1013,15 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     if (url.pathname.startsWith('/cache/forget')) {
+      if (!isInternalPlaneRouteEnabled('forget', productionLikeMode)) {
+        return applyNoStoreCacheControl(internalPlaneBlockedResponse('forget'))
+      }
       if (request.method !== 'POST') return applyNoStoreCacheControl(respond('method', { status: 405 }))
       if (integrityPaused) return applyNoStoreCacheControl(policyPausedResponse())
       const token = readForgetToken()
+      if (productionLikeMode && !token) {
+        return applyNoStoreCacheControl(respond('forget_auth_not_configured', { status: 500 }))
+      }
       if (token) {
         const auth = request.headers.get('authorization') || ''
         const bearer = readBearerToken(request)
@@ -980,10 +1063,16 @@ export async function handleRequest(request: Request): Promise<Response> {
       )
     }
     if (url.pathname.startsWith('/cache/')) {
+      if (!isInternalPlaneRouteEnabled('cache', productionLikeMode)) {
+        return applyNoStoreCacheControl(internalPlaneBlockedResponse('cache'))
+      }
       const key = url.pathname.replace('/cache/', '')
       return handleCache(request, key, integrityPaused, integrity.snapshot)
     }
     if (url.pathname === '/inbox') {
+      if (!isInternalPlaneRouteEnabled('inbox', productionLikeMode)) {
+        return applyNoStoreCacheControl(internalPlaneBlockedResponse('inbox'))
+      }
       if (integrityPaused) return policyPausedResponse()
       return handleInbox(request)
     }
@@ -1048,6 +1137,8 @@ export async function handleRequest(request: Request): Promise<Response> {
         }
         const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
         if (id && markAndCheck(`stripe:${id}`)) return respond('replay', { status: 200 })
+        const forwarded = await maybeForwardWebhookWrite('stripe', body, productionLikeMode)
+        if (forwarded) return forwarded
         inc('gateway_webhook_stripe_ok')
         return respond('ok', { status: 200 })
       })
@@ -1075,6 +1166,8 @@ export async function handleRequest(request: Request): Promise<Response> {
         }
         const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
         if (replayKey && markAndCheck(`paypal:${replayKey}`)) return respond('replay', { status: 200 })
+        const forwarded = await maybeForwardWebhookWrite('paypal', body, productionLikeMode)
+        if (forwarded) return forwarded
         inc('gateway_webhook_paypal_ok')
         return respond('ok', { status: 200 })
       })
@@ -1104,6 +1197,8 @@ export async function handleRequest(request: Request): Promise<Response> {
           inc('gateway_webhook_replay')
           return respond(idempotency.body, { status: idempotency.httpStatus })
         }
+        const forwarded = await maybeForwardWebhookWrite('gopay', body, productionLikeMode)
+        if (forwarded) return forwarded
         inc('gateway_webhook_gopay_ok')
         return respond(idempotency.body, { status: idempotency.httpStatus })
       })
@@ -1123,16 +1218,10 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       const limited = rateLimitResponse(`demo-forward:${requestIp(request)}`)
       if (limited) return limited
-      const workerNotify = readWorkerNotifyConfig()
       const body = await request.text()
       if (bodyExceedsLimit(body, WEBHOOK_MAX_BODY_DEFAULT_BYTES)) {
         return webhookBodyTooLargeResponse()
       }
-      if (!workerNotify.token) {
-        return respond('worker_notify_auth_not_configured', { status: 500 })
-      }
-
-      // Pick breaker key by provider (query/header/body) with per-PSP overrides, fallback to generic.
       const provider = (() => {
         const q = url.searchParams.get('provider')
         if (q) return q.toLowerCase()
@@ -1144,23 +1233,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         } catch {}
         return undefined
       })()
-
-      const breakerKey = resolveWorkerNotifyBreakerKey(workerNotify, provider)
-
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${workerNotify.token}`,
-        'content-type': 'application/json',
-        'x-breaker-key': breakerKey,
-      }
-      const currentTraceId = traceContext.getStore()
-      if (currentTraceId) headers['x-trace-id'] = currentTraceId
-      if (workerNotify.hmacSecret) {
-        const sig = crypto.createHmac('sha256', workerNotify.hmacSecret).update(body).digest('hex')
-        headers['X-Signature'] = sig
-      }
-      const resp = await fetch(workerNotify.target, { method: 'POST', headers, body })
-      if (resp.ok) return respond('forwarded', { status: 200 })
-      return respond('notify_failed', { status: 502 })
+      return forwardWorkerNotifyBody(body, provider)
     }
     // periodic sweep
     sweep()

@@ -41,6 +41,33 @@ describe.sequential('handler gopay webhook route', () => {
     await expect(res.text()).resolves.toBe('ok')
   }, 15000)
 
+  it('forwards verified GoPay webhooks into worker/write notify path when enabled', async () => {
+    process.env.GOPAY_WEBHOOK_SECRET = webhookSecret
+    process.env.GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED = '1'
+    process.env.WORKER_NOTIFY_URL = 'http://worker:8787/notify'
+    process.env.WORKER_NOTIFY_TOKEN = 'notify-token'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+    try {
+      const { handleRequest } = await loadHandler()
+      const body = JSON.stringify({ id: 'event-forward', amount: 1000 })
+      const headers = new Headers({
+        'x-gopay-signature': gopaySignature(body, webhookSecret),
+        'x-gopay-event-id': 'gopay-event-forward',
+      })
+
+      const res = await handleRequest(new Request('http://gateway/webhook/gopay', { method: 'POST', body, headers }))
+      expect(res.status).toBe(200)
+      await expect(res.text()).resolves.toBe('forwarded')
+      expect(fetchSpy).toHaveBeenCalledTimes(1)
+      const init = fetchSpy.mock.calls[0][1] as RequestInit
+      const forwardedHeaders = new Headers(init.headers)
+      expect(forwardedHeaders.get('x-provider')).toBe('gopay')
+      expect(forwardedHeaders.get('x-breaker-key')).toBe('gopay')
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
   it('accepts a prefixed and padded gopay signature', async () => {
     process.env.GOPAY_WEBHOOK_SECRET = webhookSecret
     const { handleRequest } = await loadHandler()

@@ -54,6 +54,93 @@ describe('handler cache and shadow modes', () => {
     },
   )
 
+  it('fails closed for internal mutation routes by default in production-like mode', async () => {
+    process.env.GATEWAY_PRODUCTION_LIKE = '1'
+    const { handleRequest } = await import('../src/handler.js')
+
+    const cacheRes = await handleRequest(
+      new Request('http://gateway/cache/foo', {
+        method: 'PUT',
+        body: 'abc',
+        headers: { 'content-type': 'application/octet-stream' },
+      }),
+    )
+    expect(cacheRes.status).toBe(404)
+    expect(cacheRes.headers.get('cache-control')).toBe('no-store')
+
+    const forgetRes = await handleRequest(
+      new Request('http://gateway/cache/forget', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'foo' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(forgetRes.status).toBe(404)
+    expect(forgetRes.headers.get('cache-control')).toBe('no-store')
+
+    const inboxRes = await handleRequest(
+      new Request('http://gateway/inbox', {
+        method: 'POST',
+        body: '{}',
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(inboxRes.status).toBe(404)
+    expect(inboxRes.headers.get('cache-control')).toBe('no-store')
+  })
+
+  it('allows internal routes in production-like mode only with explicit opt-in toggles', async () => {
+    process.env.GATEWAY_PRODUCTION_LIKE = '1'
+    process.env.GATEWAY_INTERNAL_PLANE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_FORGET_TOKEN = 'secret'
+    const { handleRequest } = await import('../src/handler.js')
+
+    const cachePutRes = await handleRequest(
+      new Request('http://gateway/cache/foo', {
+        method: 'PUT',
+        body: 'abc',
+        headers: { 'content-type': 'application/octet-stream' },
+      }),
+    )
+    expect(cachePutRes.status).toBe(201)
+
+    const forgetRes = await handleRequest(
+      new Request('http://gateway/cache/forget', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'foo' }),
+        headers: { 'content-type': 'application/json', 'x-forget-token': 'secret' },
+      }),
+    )
+    expect(forgetRes.status).toBe(200)
+
+    const inboxRes = await handleRequest(
+      new Request('http://gateway/inbox', {
+        method: 'POST',
+        body: '{}',
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(inboxRes.status).toBe(200)
+  })
+
+  it('requires forget token configuration when production-like overrides are enabled', async () => {
+    process.env.GATEWAY_PRODUCTION_LIKE = '1'
+    process.env.GATEWAY_INTERNAL_PLANE_ALLOW_FORGET = '1'
+    delete process.env.GATEWAY_FORGET_TOKEN
+    const { handleRequest } = await import('../src/handler.js')
+
+    const forgetRes = await handleRequest(
+      new Request('http://gateway/cache/forget', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'foo' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(forgetRes.status).toBe(500)
+    expect(forgetRes.headers.get('cache-control')).toBe('no-store')
+    await expect(forgetRes.text()).resolves.toBe('forget_auth_not_configured')
+  })
+
   it(
     'forwards cache forget events when configured',
     { timeout: 15000 },

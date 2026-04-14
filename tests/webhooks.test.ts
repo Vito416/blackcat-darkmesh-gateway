@@ -53,6 +53,16 @@ afterEach(() => {
   delete process.env.PAYPAL_CLIENT_ID
   delete process.env.PAYPAL_CLIENT_SECRET
   delete process.env.GATEWAY_RL_MAX
+  delete process.env.GATEWAY_PRODUCTION_LIKE
+  delete process.env.GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED
+  delete process.env.WORKER_NOTIFY_URL
+  delete process.env.WORKER_AUTH_TOKEN
+  delete process.env.WORKER_NOTIFY_TOKEN
+  delete process.env.WORKER_NOTIFY_HMAC
+  delete process.env.WORKER_NOTIFY_BREAKER_KEY
+  delete process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE
+  delete process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL
+  delete process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY
   vi.resetModules()
 })
 
@@ -410,6 +420,84 @@ describe('webhook verification', () => {
     await expect(res.text()).resolves.toBe('ok')
   })
 
+  it('forwards verified stripe webhooks into worker/write notify path when enabled', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    process.env.GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED = '1'
+    process.env.WORKER_NOTIFY_URL = 'http://worker:8787/notify'
+    process.env.WORKER_NOTIFY_TOKEN = 'notify-secret'
+    process.env.WORKER_NOTIFY_HMAC = 'notify-hmac'
+    process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE = 'stripe-breaker'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'evt_forward_1', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({ 'Stripe-Signature': stripeSig(body, ts, stripeSecret) })
+    const res = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('forwarded')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://worker:8787/notify',
+      expect.objectContaining({
+        method: 'POST',
+        body,
+      }),
+    )
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    const forwardedHeaders = new Headers(init.headers)
+    expect(forwardedHeaders.get('authorization')).toBe('Bearer notify-secret')
+    expect(forwardedHeaders.get('x-breaker-key')).toBe('stripe-breaker')
+    expect(forwardedHeaders.get('x-provider')).toBe('stripe')
+    expect(forwardedHeaders.get('x-signature')).toBe(
+      crypto.createHmac('sha256', 'notify-hmac').update(body).digest('hex'),
+    )
+  })
+
+  it('enables webhook forwarding by default in production-like mode', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    process.env.GATEWAY_PRODUCTION_LIKE = '1'
+    process.env.WORKER_NOTIFY_URL = 'http://worker:8787/notify'
+    process.env.WORKER_NOTIFY_TOKEN = 'notify-secret'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'evt_forward_prod_default', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({ 'Stripe-Signature': stripeSig(body, ts, stripeSecret) })
+    const res = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('forwarded')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps replay protection when stripe webhook forwarding is enabled', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    process.env.GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED = '1'
+    process.env.WORKER_NOTIFY_URL = 'http://worker:8787/notify'
+    process.env.WORKER_NOTIFY_TOKEN = 'notify-secret'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'evt_forward_replay', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({ 'Stripe-Signature': stripeSig(body, ts, stripeSecret) })
+
+    const first = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+    expect(first.status).toBe(200)
+    await expect(first.text()).resolves.toBe('forwarded')
+
+    const second = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+    expect(second.status).toBe(200)
+    await expect(second.text()).resolves.toBe('replay')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('still accepts valid paypal webhook bodies under the size limit', async () => {
     process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
     const { handleRequest } = await loadHandler()
@@ -424,6 +512,34 @@ describe('webhook verification', () => {
     const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
     expect(res.status).toBe(200)
     await expect(res.text()).resolves.toBe('ok')
+  })
+
+  it('forwards verified paypal webhooks into worker/write notify path when enabled', async () => {
+    process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
+    process.env.GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED = '1'
+    process.env.WORKER_NOTIFY_URL = 'http://worker:8787/notify'
+    process.env.WORKER_NOTIFY_TOKEN = 'notify-secret'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'WH-forward', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const transmissionId = 'tx-forward'
+    const transmissionTime = '2026-04-09T00:00:00Z'
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': paypalSig(body, transmissionId, transmissionTime, 'ppsecret'),
+      'PayPal-Transmission-Id': transmissionId,
+      'PayPal-Transmission-Time': transmissionTime,
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+    })
+    const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('forwarded')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    const forwardedHeaders = new Headers(init.headers)
+    expect(forwardedHeaders.get('x-provider')).toBe('paypal')
+    expect(forwardedHeaders.get('x-breaker-key')).toBe('paypal')
   })
 
   it('rate limits stripe and paypal webhooks per IP before verification', async () => {

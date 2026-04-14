@@ -40,6 +40,21 @@ function baseEnv(profile: 'wedos_small' | 'wedos_medium' | 'diskless') {
     GATEWAY_RL_MAX: profile === 'wedos_medium' ? '120' : '80',
     GATEWAY_RL_MAX_BUCKETS: profile === 'wedos_medium' ? '10000' : '3000',
     GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS: profile === 'wedos_medium' ? '86400' : '43200',
+    GATEWAY_TEMPLATE_ALLOW_MUTATIONS: '0',
+    GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST:
+      'ao-read.example.com,ao-write.example.com,worker-alpha.example.com,worker-beta.example.com',
+    GATEWAY_SITE_ID_BY_HOST_MAP: JSON.stringify({
+      'gateway.example': 'site-alpha',
+      'store.example': 'site-beta',
+    }),
+    GATEWAY_TEMPLATE_WORKER_URL_MAP: JSON.stringify({
+      'site-alpha': 'https://worker-alpha.example.com/sign',
+      'site-beta': 'https://worker-beta.example.com/sign',
+    }),
+    GATEWAY_TEMPLATE_WORKER_TOKEN_MAP: JSON.stringify({
+      'site-alpha': 'worker-token-alpha',
+      'site-beta': 'worker-token-beta',
+    }),
   }
 
   if (profile === 'wedos_medium') {
@@ -124,6 +139,11 @@ describe('validate-wedos-readiness.js', () => {
       'GATEWAY_RL_MAX=80',
       'GATEWAY_RL_MAX_BUCKETS=3000',
       'GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS=43200',
+      'GATEWAY_TEMPLATE_ALLOW_MUTATIONS=0',
+      'GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST=ao-read.example.com,ao-write.example.com,worker-alpha.example.com,worker-beta.example.com',
+      `GATEWAY_SITE_ID_BY_HOST_MAP='${JSON.stringify({ 'gateway.example': 'site-alpha' })}'`,
+      `GATEWAY_TEMPLATE_WORKER_URL_MAP='${JSON.stringify({ 'site-alpha': 'https://worker-alpha.example.com/sign' })}'`,
+      `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP='${JSON.stringify({ 'site-alpha': 'worker-token-alpha' })}'`,
       '',
     ].join('\n'))
 
@@ -147,5 +167,61 @@ describe('validate-wedos-readiness.js', () => {
     expect(result.exitCode).toBe(64)
     expect(result.stdout).toContain('Usage:')
     expect(result.stderr).toContain('--profile is required')
+  })
+
+  it('fails when template upstream host allowlist is missing', () => {
+    const env = baseEnv('wedos_small')
+    delete env.GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST
+
+    const result = runCli(['--profile', 'wedos_small'], { env })
+
+    expect(result.exitCode).toBe(3)
+    expect(result.stdout).toContain('GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST is required')
+  })
+
+  it('fails when host->site binding map is missing', () => {
+    const env = baseEnv('wedos_small')
+    delete env.GATEWAY_SITE_ID_BY_HOST_MAP
+
+    const result = runCli(['--profile', 'wedos_small'], { env })
+
+    expect(result.exitCode).toBe(3)
+    expect(result.stdout).toContain('GATEWAY_SITE_ID_BY_HOST_MAP is required and must be a JSON object')
+  })
+
+  it('fails when worker routing map does not use /sign path', () => {
+    const env = baseEnv('wedos_small')
+    env.GATEWAY_TEMPLATE_WORKER_URL_MAP = JSON.stringify({
+      'site-alpha': 'https://worker-alpha.example.com/template/sign',
+      'site-beta': 'https://worker-beta.example.com/sign',
+    })
+
+    const result = runCli(['--profile', 'wedos_small'], { env })
+
+    expect(result.exitCode).toBe(3)
+    expect(result.stdout).toContain('worker signer route drift detected (expected /sign)')
+  })
+
+  it('fails when worker token map misses coverage for mapped sites', () => {
+    const env = baseEnv('wedos_small')
+    env.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP = JSON.stringify({
+      'site-alpha': 'worker-token-alpha',
+    })
+
+    const result = runCli(['--profile', 'wedos_small'], { env })
+
+    expect(result.exitCode).toBe(3)
+    expect(result.stdout).toContain('GATEWAY_TEMPLATE_WORKER_TOKEN_MAP is missing token coverage for: site-beta')
+  })
+
+  it('fails when template mutations are enabled without template token', () => {
+    const env = baseEnv('wedos_small')
+    env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    delete env.GATEWAY_TEMPLATE_TOKEN
+
+    const result = runCli(['--profile', 'wedos_small'], { env })
+
+    expect(result.exitCode).toBe(3)
+    expect(result.stdout).toContain('GATEWAY_TEMPLATE_TOKEN is required when GATEWAY_TEMPLATE_ALLOW_MUTATIONS is enabled')
   })
 })

@@ -12,6 +12,7 @@ class CliError extends Error {
 }
 
 const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
+const HOST_ALLOWLIST_ENTRY_RE = /^[A-Za-z0-9.-]+(?::\d+)?$/
 const PROFILE_SPECS = {
   wedos_small: {
     label: 'WEDOS small',
@@ -204,6 +205,19 @@ function parseIntStrict(value) {
   if (!isNonEmptyString(value) || !/^-?\d+$/.test(value.trim())) return null
   const parsed = Number.parseInt(value.trim(), 10)
   return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function parseBooleanEnv(value) {
+  if (!isNonEmptyString(value)) return false
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase())
+}
+
+function isHostAllowlistEntry(value) {
+  if (!isNonEmptyString(value)) return false
+  const normalized = value.trim()
+  if (normalized.includes('://')) return false
+  if (normalized.includes('/')) return false
+  return HOST_ALLOWLIST_ENTRY_RE.test(normalized)
 }
 
 function addIssue(issues, severity, key, message, fix, actual, expected) {
@@ -407,6 +421,328 @@ function validateDisklessGuidance(env, issues, profileSpec) {
   }
 }
 
+function validateTemplateTargetHostAllowlist(env, issues) {
+  const raw = env.GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST
+  const expected = 'comma-separated host allowlist, e.g. ao-read.example.com,ao-write.example.com,worker.example.com'
+
+  if (!isNonEmptyString(raw)) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST',
+      'GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST is required for production-ready upstream allowlisting',
+      `Set GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST to ${expected}.`,
+      'missing',
+      expected,
+    )
+    return
+  }
+
+  const entries = raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  if (entries.length === 0) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST',
+      'GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST must include at least one host',
+      `Set GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST to ${expected}.`,
+      raw,
+      expected,
+    )
+    return
+  }
+
+  const invalid = entries.filter((entry) => !isHostAllowlistEntry(entry))
+  if (invalid.length > 0) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST',
+      `GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST contains invalid host entries: ${invalid.join(', ')}`,
+      'Use host[:port] entries only (no scheme or path).',
+      raw,
+      expected,
+    )
+  }
+}
+
+function parseJsonObject(raw) {
+  if (!isNonEmptyString(raw)) return { ok: false, value: null, error: 'missing' }
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch (error) {
+    return { ok: false, value: null, error: error instanceof Error ? error.message : String(error) }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ok: false, value: null, error: 'must be a JSON object' }
+  }
+  return { ok: true, value: parsed, error: '' }
+}
+
+function validateSiteBindingMap(env, issues) {
+  const key = 'GATEWAY_SITE_ID_BY_HOST_MAP'
+  const expected = 'JSON object map of host -> siteId, e.g. {"gateway.example":"site-main","store.example":"site-store"}'
+  const parsed = parseJsonObject(env[key])
+
+  if (!parsed.ok || !parsed.value) {
+    addIssue(
+      issues,
+      'critical',
+      key,
+      `${key} is required and must be a JSON object`,
+      `Set ${key} to ${expected}.`,
+      isNonEmptyString(env[key]) ? parsed.error : 'missing',
+      expected,
+    )
+    return
+  }
+
+  const entries = Object.entries(parsed.value)
+  if (entries.length === 0) {
+    addIssue(
+      issues,
+      'critical',
+      key,
+      `${key} must contain at least one host binding`,
+      `Set ${key} to ${expected}.`,
+      '{}',
+      expected,
+    )
+    return
+  }
+
+  const invalidHosts = []
+  const invalidValues = []
+  for (const [host, siteId] of entries) {
+    const normalizedHost = host.trim().toLowerCase()
+    if (!normalizedHost) {
+      invalidHosts.push('(blank)')
+      continue
+    }
+    if (normalizedHost !== 'default' && !isHostAllowlistEntry(normalizedHost)) {
+      invalidHosts.push(host)
+    }
+    if (!isNonEmptyString(siteId)) {
+      invalidValues.push(host)
+    }
+  }
+
+  if (invalidHosts.length > 0) {
+    addIssue(
+      issues,
+      'critical',
+      key,
+      `${key} contains invalid host keys: ${invalidHosts.join(', ')}`,
+      'Use host[:port] keys (or "default") with non-empty site IDs.',
+      env[key],
+      expected,
+    )
+  }
+  if (invalidValues.length > 0) {
+    addIssue(
+      issues,
+      'critical',
+      key,
+      `${key} contains empty siteId values for: ${invalidValues.join(', ')}`,
+      'Each host key must map to a non-empty site ID string.',
+      env[key],
+      expected,
+    )
+  }
+}
+
+function validateTemplateMutationAuth(env, issues) {
+  const mutationsEnabled = parseBooleanEnv(env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS)
+  const mutationRaw = env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS
+  if (isNonEmptyString(mutationRaw)) {
+    const normalized = mutationRaw.trim().toLowerCase()
+    if (!['0', '1', 'true', 'false', 'yes', 'no', 'on', 'off'].includes(normalized)) {
+      addIssue(
+        issues,
+        'critical',
+        'GATEWAY_TEMPLATE_ALLOW_MUTATIONS',
+        'GATEWAY_TEMPLATE_ALLOW_MUTATIONS must be a boolean-like value',
+        'Set GATEWAY_TEMPLATE_ALLOW_MUTATIONS to 0 or 1.',
+        mutationRaw,
+        '0 or 1',
+      )
+      return
+    }
+  }
+
+  if (!mutationsEnabled) return
+
+  if (!isNonEmptyString(env.GATEWAY_TEMPLATE_TOKEN)) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_TOKEN',
+      'GATEWAY_TEMPLATE_TOKEN is required when GATEWAY_TEMPLATE_ALLOW_MUTATIONS is enabled',
+      'Set GATEWAY_TEMPLATE_TOKEN to a non-empty shared secret.',
+      'missing',
+      'non-empty secret',
+    )
+  }
+}
+
+function validateWorkerSignerRouting(env, issues) {
+  const mutationsEnabled = parseBooleanEnv(env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS)
+  const urlMapRaw = env.GATEWAY_TEMPLATE_WORKER_URL_MAP
+  const tokenMapRaw = env.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP
+  const validateMappedRouting = isNonEmptyString(urlMapRaw)
+
+  if (!validateMappedRouting) {
+    if (!mutationsEnabled) return
+
+    const workerBase = isNonEmptyString(env.WORKER_API_URL) ? env.WORKER_API_URL.trim() : env.WORKER_SIGN_URL?.trim()
+    if (!isNonEmptyString(workerBase)) {
+      addIssue(
+        issues,
+        'critical',
+        'WORKER_API_URL',
+        'worker signer URL is required when template mutations are enabled',
+        'Set WORKER_API_URL (or WORKER_SIGN_URL) to the worker base URL; runtime resolves /sign.',
+        'missing',
+        'absolute http(s) URL',
+      )
+    }
+    if (!isNonEmptyString(env.WORKER_AUTH_TOKEN) && !isNonEmptyString(env.WORKER_SIGN_TOKEN)) {
+      addIssue(
+        issues,
+        'critical',
+        'WORKER_AUTH_TOKEN',
+        'worker signer token is required when template mutations are enabled',
+        'Set WORKER_AUTH_TOKEN (or WORKER_SIGN_TOKEN) to a non-empty secret.',
+        'missing',
+        'non-empty secret',
+      )
+    }
+    return
+  }
+
+  const urlMapParsed = parseJsonObject(urlMapRaw)
+  if (!urlMapParsed.ok || !urlMapParsed.value) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_WORKER_URL_MAP',
+      'GATEWAY_TEMPLATE_WORKER_URL_MAP must be a JSON object',
+      'Set GATEWAY_TEMPLATE_WORKER_URL_MAP to {"site-a":"https://worker-a.example.com/sign"} format.',
+      urlMapParsed.error,
+      'JSON object with absolute /sign URLs',
+    )
+    return
+  }
+
+  const urlEntries = Object.entries(urlMapParsed.value)
+  if (urlEntries.length === 0) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_WORKER_URL_MAP',
+      'GATEWAY_TEMPLATE_WORKER_URL_MAP must contain at least one site',
+      'Add at least one site -> https://worker.example.com/sign entry.',
+      '{}',
+      'non-empty JSON object',
+    )
+    return
+  }
+
+  const invalidUrlKeys = []
+  const driftedPathKeys = []
+  for (const [siteId, value] of urlEntries) {
+    if (!isNonEmptyString(siteId) || !isNonEmptyString(value)) {
+      invalidUrlKeys.push(siteId || '(blank)')
+      continue
+    }
+    try {
+      const parsed = new URL(value.trim())
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        invalidUrlKeys.push(siteId)
+        continue
+      }
+      if (parsed.search || parsed.hash) {
+        invalidUrlKeys.push(siteId)
+        continue
+      }
+      if (parsed.pathname !== '/sign' && parsed.pathname !== '/sign/') {
+        driftedPathKeys.push(siteId)
+      }
+    } catch (_) {
+      invalidUrlKeys.push(siteId)
+    }
+  }
+
+  if (invalidUrlKeys.length > 0) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_WORKER_URL_MAP',
+      `GATEWAY_TEMPLATE_WORKER_URL_MAP contains invalid URL entries for: ${invalidUrlKeys.join(', ')}`,
+      'Use absolute http(s) URLs without query/hash fragments.',
+      urlMapRaw,
+      'site -> https://worker.example.com/sign',
+    )
+  }
+
+  if (driftedPathKeys.length > 0) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_WORKER_URL_MAP',
+      `worker signer route drift detected (expected /sign) for: ${driftedPathKeys.join(', ')}`,
+      'Update each mapped worker URL to end in /sign.',
+      urlMapRaw,
+      'site -> https://worker.example.com/sign',
+    )
+  }
+
+  const tokenMapParsed = parseJsonObject(tokenMapRaw)
+  if (!tokenMapParsed.ok || !tokenMapParsed.value) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_WORKER_TOKEN_MAP',
+      'GATEWAY_TEMPLATE_WORKER_TOKEN_MAP is required alongside worker URL map',
+      'Set GATEWAY_TEMPLATE_WORKER_TOKEN_MAP to a JSON object with non-empty per-site tokens.',
+      tokenMapParsed.error,
+      'JSON object with token per site key',
+    )
+    return
+  }
+
+  const missingCoverage = []
+  for (const [siteId] of urlEntries) {
+    const token = tokenMapParsed.value[siteId]
+    if (!isNonEmptyString(token)) {
+      missingCoverage.push(siteId)
+    }
+  }
+
+  if (missingCoverage.length > 0) {
+    addIssue(
+      issues,
+      'critical',
+      'GATEWAY_TEMPLATE_WORKER_TOKEN_MAP',
+      `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP is missing token coverage for: ${missingCoverage.join(', ')}`,
+      'Add non-empty token entries for every site key in GATEWAY_TEMPLATE_WORKER_URL_MAP.',
+      tokenMapRaw,
+      'token entry for every worker URL map site key',
+    )
+  }
+}
+
+function validateOperationalAuthAndBinding(env, issues) {
+  validateTemplateTargetHostAllowlist(env, issues)
+  validateSiteBindingMap(env, issues)
+  validateTemplateMutationAuth(env, issues)
+  validateWorkerSignerRouting(env, issues)
+}
+
 function evaluateReadiness(profile, env) {
   const profileSpec = PROFILE_SPECS[profile]
   if (!profileSpec) throw new CliError(`unknown profile: ${profile}`, 64)
@@ -420,6 +756,7 @@ function evaluateReadiness(profile, env) {
 
   validateOverrides(env, issues, profileSpec)
   validateDisklessGuidance(env, issues, profileSpec)
+  validateOperationalAuthAndBinding(env, issues)
 
   const criticalCount = issues.filter((issue) => issue.severity === 'critical').length
   const warningCount = issues.filter((issue) => issue.severity === 'warning').length
