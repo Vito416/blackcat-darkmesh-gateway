@@ -4,9 +4,9 @@ CURL_TIMEOUT=20s
 
 PASS - GET /healthz -> 200
 PASS - GET /template/config -> 200
-PASS - POST /template/call (read) -> 404
+WARN - POST /template/call (read) -> 504 (upstream timeout tolerated in prod-like mode)
 PASS - POST /template/call unknown action -> 403
-WARN - GET /template/config?probe=1 -> 200 (query passthrough enabled)
+PASS - GET /template/config?probe=1 -> 400
 PASS - POST /template/call text/plain -> 400 invalid_json
 PASS - GET /metrics with bearer -> 200
 

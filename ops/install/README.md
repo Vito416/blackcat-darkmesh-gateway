@@ -103,13 +103,21 @@ bash ops/install/bin/remote-install-via-tailscale.sh adminops@blackcat-gateway-v
 ```bash
 systemctl status blackcat-gateway --no-pager
 systemctl status cloudflared --no-pager
-curl -fsS http://127.0.0.1:8080/healthz
+curl -fsS -H "Host: gateway.example.com" http://127.0.0.1:8080/healthz
 ```
 
 Optional public check:
 
 ```bash
 PUBLIC_URL=https://gateway.example.com bash ops/install/bin/40-verify.sh
+```
+
+If host allowlisting is strict, you can also pin local verify host explicitly:
+
+```bash
+PUBLIC_URL=https://gateway.example.com \
+LOCAL_HEALTH_HOST_HEADER=gateway.example.com \
+bash ops/install/bin/40-verify.sh
 ```
 
 See also: `ops/install/SCENARIOS.md` for ready-to-run flows (existing VPS, fresh ISO VPS, team test branch).

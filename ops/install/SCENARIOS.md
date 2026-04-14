@@ -12,7 +12,7 @@ Then verify:
 
 ```bash
 tailscale ssh adminops@blackcat-gateway-vps "systemctl status blackcat-gateway --no-pager"
-tailscale ssh adminops@blackcat-gateway-vps "curl -fsS http://127.0.0.1:8080/healthz"
+tailscale ssh adminops@blackcat-gateway-vps "curl -fsS -H 'Host: gateway.example.com' http://127.0.0.1:8080/healthz"
 ```
 
 ## B) Fresh VPS from ISO (minimal manual + automated rest)
