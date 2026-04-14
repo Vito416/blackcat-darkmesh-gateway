@@ -81,6 +81,7 @@ sudo mkdir -p /opt/blackcat
 if [[ ! -d "\${INSTALL_DIR}/.git" ]]; then
   sudo git clone --branch "\${REPO_REF}" --single-branch "\${REPO_URL}" "\${INSTALL_DIR}"
 else
+  sudo git config --global --add safe.directory "\${INSTALL_DIR}" || true
   sudo git -C "\${INSTALL_DIR}" fetch --all --tags --prune
   sudo git -C "\${INSTALL_DIR}" checkout "\${REPO_REF}"
   sudo git -C "\${INSTALL_DIR}" pull --ff-only origin "\${REPO_REF}"
