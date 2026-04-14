@@ -71,6 +71,13 @@ TUNNEL_ID=<uuid> TUNNEL_HOSTNAME=gateway.example.com \
 bash ops/install/bin/remote-install-via-tailscale.sh adminops@blackcat-gateway-vps
 ```
 
+If `tailscale` is not on PATH (common in WSL), set `TAILSCALE_BIN`:
+
+```bash
+TAILSCALE_BIN="/mnt/c/Program Files/Tailscale/tailscale.exe" \
+bash ops/install/bin/remote-install-via-tailscale.sh adminops@blackcat-gateway-vps
+```
+
 ## Environment and service files
 
 - Gateway runtime template: `ops/install/env/gateway.env.example`

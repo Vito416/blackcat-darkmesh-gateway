@@ -34,6 +34,16 @@ ALLOW_TAILSCALE_SSH="${ALLOW_TAILSCALE_SSH:-1}"
 TUNNEL_ID="${TUNNEL_ID:-}"
 TUNNEL_HOSTNAME="${TUNNEL_HOSTNAME:-}"
 PUBLIC_URL="${PUBLIC_URL:-}"
+TAILSCALE_BIN="${TAILSCALE_BIN:-tailscale}"
+
+if ! command -v "$TAILSCALE_BIN" >/dev/null 2>&1; then
+  if [[ -x "/mnt/c/Program Files/Tailscale/tailscale.exe" ]]; then
+    TAILSCALE_BIN="/mnt/c/Program Files/Tailscale/tailscale.exe"
+  else
+    echo "error: tailscale CLI not found (set TAILSCALE_BIN or install tailscale)" >&2
+    exit 127
+  fi
+fi
 
 q() {
   printf "%q" "$1"
@@ -49,7 +59,7 @@ TUNNEL_ID_Q="$(q "$TUNNEL_ID")"
 TUNNEL_HOSTNAME_Q="$(q "$TUNNEL_HOSTNAME")"
 PUBLIC_URL_Q="$(q "$PUBLIC_URL")"
 
-cat <<EOF | tailscale ssh "$TARGET" "bash -s"
+cat <<EOF | "$TAILSCALE_BIN" ssh "$TARGET" "bash -s"
 set -euo pipefail
 REPO_URL=${REPO_URL_Q}
 REPO_REF=${REPO_REF_Q}
@@ -82,4 +92,3 @@ sudo REPO_URL="\${REPO_URL}" REPO_REF="\${REPO_REF}" SERVICE_USER="\${SERVICE_US
   TUNNEL_HOSTNAME="\${TUNNEL_HOSTNAME}" PUBLIC_URL="\${PUBLIC_URL}" \\
   bash ops/install/bin/install-all.sh
 EOF
-
