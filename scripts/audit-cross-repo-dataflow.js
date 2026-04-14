@@ -338,7 +338,7 @@ function assessCrossRepoDataflow(options = {}) {
   const warnings = findings.filter((finding) => finding.severity === 'P1')
   const niceToHave = [
     'Add an end-to-end smoke that verifies site->variant->templateTxId flow through /template/config and /template/call.',
-    'Add request tracing headers (x-trace-id) propagated across gateway -> worker -> write adapter -> AO result.',
+    'Add an end-to-end smoke that proves x-trace-id propagation across gateway -> worker -> write adapter -> AO result.',
     'Add synthetic chaos probes for read fallback behavior (AO dryrun vs scheduler fallback) with evidence export.',
   ]
   const futureProof = [
