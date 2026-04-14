@@ -19,9 +19,10 @@ fi
 
 echo "[deploy] syncing repository: $REPO_URL @ $REPO_REF"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  git -C "$INSTALL_DIR" fetch --all --tags --prune
-  git -C "$INSTALL_DIR" checkout "$REPO_REF"
-  git -C "$INSTALL_DIR" pull --ff-only origin "$REPO_REF"
+  chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+  sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" fetch --all --tags --prune
+  sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" checkout "$REPO_REF"
+  sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" pull --ff-only origin "$REPO_REF"
 else
   rm -rf "$INSTALL_DIR"
   install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_USER" "$(dirname "$INSTALL_DIR")"
