@@ -155,6 +155,10 @@ Expected output:
 
 Common live blocker:
 - If matrix output reports `one or more snapshots were incomplete` with invalid fields like `release.version`, `release.root`, or `audit.seqTo`, the gateway is serving a partial `/integrity/state` snapshot. Fix the integrity snapshot source first, then rerun the drill.
+- For production-like bring-up (before AO integrity source is wired), bootstrap a signed checkpoint snapshot and set:
+  - `GATEWAY_INTEGRITY_CHECKPOINT_PATH`
+  - `GATEWAY_INTEGRITY_CHECKPOINT_SECRET`
+  - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS`
 
 Artifacts:
 - `$DRILL_DIR/consistency-matrix.json`

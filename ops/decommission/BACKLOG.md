@@ -330,8 +330,8 @@ Use this checklist before merge/release sign-off.
 
 - Live strict drill snapshot (`2026-04-14T13:00Z`, `gateway.blgateway.fun`):
   - Prod-like deep check is green (`PASS=7`, `WARN=0`, `FAIL=0`).
-  - Strict release drill still blocks at matrix compare: `/integrity/state` returns incomplete snapshot fields (`release.version`, `release.root`, `audit.seqTo` missing/null).
-  - Next action: populate full integrity snapshot source (release + audit surfaces) before rerunning `scripts/run-live-strict-drill.sh`.
+  - `/integrity/state` now serves a complete snapshot (`policy` + `release` + `authority` + `audit`) from checkpoint fallback, so matrix compare passes.
+  - Live strict drill now completes through artifact + readiness checks; remaining blocker is manual proof log (`decommission-evidence-log.json`) for final GO.
 
 - [ ] AO registry/authority lifecycle items are complete (`publish/revoke/query/pause`, `root/upgrade/emergency/reporter`, audit sequence surface).
 - [ ] `ops/decommission/ao-dependency-gate.json` required checks are updated to `closed` with evidence links.

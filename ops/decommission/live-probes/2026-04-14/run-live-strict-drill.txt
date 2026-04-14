@@ -4,7 +4,7 @@ Profile: vps_medium
 Mode: pairwise
 Required template sites: site-alpha
 AO gate: ops/decommission/ao-dependency-gate.json
-Out dir: tmp/release-drills/live-1.4.0-20260414T1300Z
+Out dir: tmp/release-drills/live-1.4.0-20260414T1310Z
 Allow anon: 0
 Skip forget-forward check: 1
 Dry run: 0
@@ -107,13 +107,13 @@ Missing sites: none
 Malformed entries: 0
 Invalid txids: 0
 Placeholder values: 0
->>> npm run -s ops:validate-consistency-preflight -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --mode pairwise --profile vps_medium --token state-public-check
+>>> npm run -s ops:validate-consistency-preflight -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --mode pairwise --profile vps_medium --token <redacted-integrity-state-token>
 Consistency preflight passed
 URLs: 2
 Mode: pairwise
 Profile: vps_medium
 Auth: token provided
->>> npm run -s ops:run-release-drill -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --out-dir tmp/release-drills/live-1.4.0-20260414T1300Z --profile vps_medium --mode pairwise --release 1.4.0 --strict --token state-public-check
+>>> npm run -s ops:run-release-drill -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --out-dir tmp/release-drills/live-1.4.0-20260414T1310Z --profile vps_medium --mode pairwise --release 1.4.0 --strict --token <redacted-integrity-state-token>
 [1/20] validate consistency preflight
 Consistency preflight passed
 URLs: 2
@@ -166,11 +166,11 @@ Auth: token provided
         "https://gateway.blgateway.fun/",
         "https://gateway.blgateway.fun/"
       ],
-      "status": "FAIL",
-      "outcome": "failure",
-      "reason": "one or more snapshots were incomplete",
+      "status": "PASS",
+      "outcome": "pass",
+      "reason": "all compared fields match",
       "mismatches": 0,
-      "invalid": true,
+      "invalid": false,
       "totalFields": 6,
       "report": {
         "rows": [
@@ -186,52 +186,1034 @@ Auth: token provided
           {
             "field": "policy.activeRoot",
             "status": "CONSENSUS",
-            "details": "#1 gateway.blgateway.fun=null | #2 gateway.blgateway.fun=null",
+            "details": "#1 gateway.blgateway.fun=\"wNHRxZAHXeTKlWhWxgzeX7SQPAW5IhZ2khsCDnhDX74\" | #2 gateway.blgateway.fun=\"wNHRxZAHXeTKlWhWxgzeX7SQPAW5IhZ2khsCDnhDX74\"",
             "values": [
-              null,
-              null
+              "wNHRxZAHXeTKlWhWxgzeX7SQPAW5IhZ2khsCDnhDX74",
+              "wNHRxZAHXeTKlWhWxgzeX7SQPAW5IhZ2khsCDnhDX74"
             ]
           },
           {
             "field": "policy.activePolicyHash",
             "status": "CONSENSUS",
-            "details": "#1 gateway.blgateway.fun=null | #2 gateway.blgateway.fun=null",
+            "details": "#1 gateway.blgateway.fun=\"sha256:gateway-policy-live-v1\" | #2 gateway.blgateway.fun=\"sha256:gateway-policy-live-v1\"",
             "values": [
-              null,
-              null
+              "sha256:gateway-policy-live-v1",
+              "sha256:gateway-policy-live-v1"
             ]
           },
           {
             "field": "release.version",
-            "status": "INVALID",
-            "details": "missing field in one or more snapshots",
-            "values": null
+            "status": "CONSENSUS",
+            "details": "#1 gateway.blgateway.fun=\"1.4.0-live\" | #2 gateway.blgateway.fun=\"1.4.0-live\"",
+            "values": [
+              "1.4.0-live",
+              "1.4.0-live"
+            ]
           },
           {
             "field": "release.root",
-            "status": "INVALID",
-            "details": "missing field in one or more snapshots",
-            "values": null
+            "status": "CONSENSUS",
+            "details": "#1 gateway.blgateway.fun=\"wNHRxZAHXeTKlWhWxgzeX7SQPAW5IhZ2khsCDnhDX74\" | #2 gateway.blgateway.fun=\"wNHRxZAHXeTKlWhWxgzeX7SQPAW5IhZ2khsCDnhDX74\"",
+            "values": [
+              "wNHRxZAHXeTKlWhWxgzeX7SQPAW5IhZ2khsCDnhDX74",
+              "wNHRxZAHXeTKlWhWxgzeX7SQPAW5IhZ2khsCDnhDX74"
+            ]
           },
           {
             "field": "audit.seqTo",
-            "status": "INVALID",
-            "details": "missing field in one or more snapshots",
-            "values": null
+            "status": "CONSENSUS",
+            "details": "#1 gateway.blgateway.fun=1 | #2 gateway.blgateway.fun=1",
+            "values": [
+              1,
+              1
+            ]
           }
         ],
         "mismatches": 0,
-        "invalid": true,
+        "invalid": false,
         "totalFields": 6
       }
     }
   ],
   "counts": {
     "total": 1,
-    "pass": 0,
+    "pass": 1,
     "mismatch": 0,
-    "failure": 1
+    "failure": 0
   },
-  "exitCode": 2
+  "exitCode": 0
 }
-[2/20] compare integrity matrix failed with exit 3
+[2/20] compare integrity matrix done
+[3/20] export consistency report
+[export-consistency-report] wrote drift report to /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/consistency-drift-report.md
+[export-consistency-report] wrote drift summary to /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/consistency-drift-summary.json
+[3/20] export consistency report done
+[4/20] export integrity evidence bundle
+[export-integrity-evidence] wrote evidence bundle to /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/evidence/2026-04-14T13-10-57Z-42546-542b20
+[4/20] export integrity evidence bundle done
+[5/20] select latest evidence bundle
+{
+  "root": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/evidence",
+  "selectedDirName": "2026-04-14T13-10-57Z-42546-542b20",
+  "bundleDir": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/evidence/2026-04-14T13-10-57Z-42546-542b20",
+  "comparePath": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/evidence/2026-04-14T13-10-57Z-42546-542b20/compare.txt",
+  "attestationPath": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/evidence/2026-04-14T13-10-57Z-42546-542b20/attestation.json",
+  "manifestPath": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/evidence/2026-04-14T13-10-57Z-42546-542b20/manifest.json",
+  "missingFiles": []
+}
+[5/20] select latest evidence bundle done
+[6/20] validate latest evidence bundle
+valid evidence bundle: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/evidence/2026-04-14T13-10-57Z-42546-542b20 (strict)
+[6/20] validate latest evidence bundle done
+[7/20] validate AO dependency gate
+valid dependency gate: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/ops/decommission/ao-dependency-gate.json
+[7/20] validate AO dependency gate done
+[8/20] check legacy core extraction evidence
+{
+  "ok": true,
+  "status": "pass",
+  "root": ".",
+  "resolvedRoot": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway",
+  "strict": true,
+  "requiredRuntimeFileCount": 8,
+  "requiredTestCount": 7,
+  "runtimeFileCount": 8,
+  "testCount": 7,
+  "importFindingCount": 0,
+  "runtimeMissing": [],
+  "testMissing": [],
+  "importScan": {
+    "sourceRoot": "src",
+    "scanned": true,
+    "findingCount": 0,
+    "findings": [],
+    "issue": ""
+  },
+  "importFindings": [],
+  "runtimeFiles": [
+    {
+      "path": "src/runtime/core/bytes.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/core/json.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/core/canonicalJson.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/core/hash.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/core/index.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/template/actions.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/template/secretGuard.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/template/validators.ts",
+      "exists": true
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/runtime-core-bytes.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-core-json.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-core-canonicalJson.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-core-hash.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-template-secretGuard.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/template-api.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/validate-template-backend-contract.test.ts",
+      "exists": true
+    }
+  ]
+}
+[8/20] check legacy core extraction evidence done
+[9/20] check legacy crypto boundary evidence
+{
+  "ok": true,
+  "status": "pass",
+  "root": ".",
+  "resolvedRoot": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway",
+  "strict": true,
+  "requiredRuntimeFileCount": 5,
+  "requiredTestCount": 5,
+  "runtimeFileCount": 5,
+  "testCount": 5,
+  "importFindingCount": 0,
+  "forbiddenSigningFindingCount": 0,
+  "runtimeMissing": [],
+  "testMissing": [],
+  "importScan": {
+    "sourceRoot": "src",
+    "scanned": true,
+    "findingCount": 0,
+    "findings": [],
+    "issue": ""
+  },
+  "importFindings": [],
+  "forbiddenSigningFindings": [],
+  "runtimeFiles": [
+    {
+      "path": "src/runtime/crypto/boundary.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/crypto/hmac.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/crypto/safeCompare.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/crypto/signatureRefs.ts",
+      "exists": true
+    },
+    {
+      "path": "src/webhooks.ts",
+      "exists": true
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/runtime-crypto-safeCompare.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-crypto-hmac.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-crypto-signatureRefs.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-crypto-boundary.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/webhooks.test.ts",
+      "exists": true
+    }
+  ]
+}
+[9/20] check legacy crypto boundary evidence done
+[10/20] check template worker map coherence
+{
+  "ok": true,
+  "status": "complete",
+  "strict": true,
+  "envVars": {
+    "urlMap": "GATEWAY_TEMPLATE_WORKER_URL_MAP",
+    "tokenMap": "GATEWAY_TEMPLATE_WORKER_TOKEN_MAP",
+    "signatureRefMap": "GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP"
+  },
+  "requiredSites": [],
+  "maps": {
+    "url": {
+      "site-alpha": "https://blackcat-inbox-production.vitek-pasek.workers.dev/sign"
+    },
+    "token": {
+      "site-alpha": "<redacted-worker-token>"
+    },
+    "signatureRef": {
+      "site-alpha": "worker-ed25519"
+    }
+  },
+  "counts": {
+    "urlMapCount": 1,
+    "tokenMapCount": 1,
+    "signatureRefMapCount": 1,
+    "requiredSiteCount": 0,
+    "missingRequiredSiteCount": 0,
+    "missingTokenCount": 0,
+    "missingSignatureRefCount": 0,
+    "extraTokenCount": 0,
+    "extraSignatureRefCount": 0
+  },
+  "issues": [],
+  "warnings": []
+}
+[10/20] check template worker map coherence done
+[11/20] check forget-forward config
+{
+  "ok": false,
+  "strict": false,
+  "status": "pending",
+  "envVars": {
+    "url": "GATEWAY_FORGET_FORWARD_URL",
+    "token": "GATEWAY_FORGET_FORWARD_TOKEN",
+    "timeoutMs": "GATEWAY_FORGET_FORWARD_TIMEOUT_MS"
+  },
+  "values": {
+    "url": "",
+    "token": "",
+    "timeoutMs": 3000,
+    "timeoutSource": "default"
+  },
+  "present": {
+    "url": false,
+    "token": false,
+    "timeoutMs": false
+  },
+  "counts": {
+    "configuredCount": 0,
+    "issueCount": 0,
+    "warningCount": 1
+  },
+  "issues": [],
+  "warnings": [
+    "forget-forward relay is disabled because the URL is not set"
+  ]
+}
+[11/20] check forget-forward config done
+[12/20] check template signature-ref map
+{
+  "ok": true,
+  "status": "complete",
+  "strict": true,
+  "envVar": "GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP",
+  "requiredSites": [
+    "site-alpha"
+  ],
+  "providedSites": [
+    "site-alpha"
+  ],
+  "missingSites": [],
+  "counts": {
+    "providedCount": 1,
+    "requiredCount": 1,
+    "missingCount": 0,
+    "emptyValueCount": 0
+  },
+  "issues": [],
+  "warnings": [],
+  "map": {
+    "site-alpha": "worker-ed25519"
+  }
+}
+[12/20] check template signature-ref map done
+[13/20] check template variant map
+{
+  "ok": true,
+  "status": "complete",
+  "strict": true,
+  "envVar": "GATEWAY_TEMPLATE_VARIANT_MAP",
+  "requiredSites": [
+    "site-alpha"
+  ],
+  "allowedVariants": [
+    "signal",
+    "bastion",
+    "horizon"
+  ],
+  "providedSites": [
+    "site-alpha"
+  ],
+  "missingSites": [],
+  "counts": {
+    "providedCount": 1,
+    "requiredCount": 1,
+    "missingCount": 0
+  },
+  "issues": [],
+  "warnings": [],
+  "map": {
+    "site-alpha": {
+      "variant": "signal",
+      "templateTxId": "vCH7fxmbzfkby6_cGpfn3yY4H-shOalUhOr9n4zJJuM",
+      "manifestTxId": "wNHRxZAHXeTKlWhWxgzeX7SQPAW5IhZ2khsCDnhDX74"
+    }
+  }
+}
+[13/20] check template variant map done
+[14/20] build release evidence pack
+# Release Evidence Pack
+
+- Release: 1.4.0
+- Generated: 2026-04-14T13:10:59.776Z
+- Status: **READY**
+
+## Consistency
+- Present: yes
+- Status: pass
+- Reason: all runs matched
+- Counts: total=1, pass=1, mismatch=0, failure=0
+- Drift report: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/consistency-drift-report.md
+
+## Evidence bundle
+- Present: yes
+- Status: pass
+- Reason: latest bundle strict markers are ok
+- Latest bundle: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/evidence/2026-04-14T13-10-57Z-42546-542b20
+
+## AO dependency gate
+- Present: yes
+- Status: pass
+- Reason: all required AO dependency checks are closed
+- Gate file: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/ops/decommission/ao-dependency-gate.json
+- Required checks:
+  - p0_1_registry_contract_surface (P0.1 AO integrity registry contract surface): closed [evidence: ops/decommission/BACKLOG.md#v140-release-ready-checklist]
+  - p1_1_authority_rotation_workflow (P1.1 Authority separation and rotation workflow): closed [evidence: ops/decommission/DECOMMISSION_CHECKLIST.md#3-role--authority-separation]
+  - p1_2_audit_commitments_stream (P1.2 Audit commitments stream): closed [evidence: ops/decommission/DECOMMISSION_CHECKLIST.md#5-observability--auditability]
+
+## Optional evidence
+- Core extraction evidence:
+  - Present: yes
+  - Status: pass
+  - Reason: all required runtime files, tests, and import scans passed
+  - File: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/legacy-core-extraction-evidence.json
+- Legacy crypto boundary evidence:
+  - Present: yes
+  - Status: pass
+  - Reason: runtime crypto boundary is verification-only and legacy imports are absent
+  - File: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/legacy-crypto-boundary-evidence.json
+- Template signature-ref map evidence:
+  - Present: yes
+  - Status: pass
+  - Reason: all required signature refs are present
+  - File: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/template-signature-ref-map.json
+- Template worker map coherence evidence:
+  - Present: yes
+  - Status: pass
+  - Reason: template worker URL/token/signatureRef maps are coherent
+  - File: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/template-worker-map-coherence.json
+- Forget-forward config evidence:
+  - Present: yes
+  - Status: pass
+  - Reason: forget-forward relay is disabled (optional)
+  - File: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/forget-forward-config.json
+
+## Sign-off hints
+- Attach this pack with consistency and evidence artifacts to the release PR.
+- Ensure AO-side registry/authority/audit dependencies are closed before final merge.
+
+[14/20] build release evidence pack done
+[15/20] build release sign-off checklist
+# Release Sign-off Checklist
+
+- Pack: `/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-evidence-pack.json`
+- Release: `1.4.0`
+- Generated: `2026-04-14T13:10:59.776Z`
+- Pack status: `ready`
+
+## Status
+- AO gate: `pass` — all required AO dependency checks are closed
+- Consistency: `pass` — all runs matched
+- Evidence bundle: `pass` — latest bundle strict markers are ok
+
+## Checklist
+- [ ] Confirm AO gate is acceptable
+- [ ] Confirm consistency is acceptable
+- [ ] Confirm evidence bundle is acceptable
+- [ ] Review blockers and warnings below
+
+## Blockers
+- [x] None
+
+## Warnings
+- [x] None
+
+[15/20] build release sign-off checklist done
+[16/20] check release readiness
+{
+  "status": "ready",
+  "blockerCount": 0,
+  "warningCount": 0,
+  "release": "1.4.0",
+  "blockers": [],
+  "warnings": []
+}
+[16/20] check release readiness done
+[17/20] build release drill manifest
+# Release Drill Manifest
+
+- Drill dir: `/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z`
+- Output: `/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-drill-manifest.json`
+- Created: `2026-04-14T13:11:00.266Z`
+- Release: `1.4.0`
+- Status: `ready`
+- Artifacts: 13
+[17/20] build release drill manifest done
+[18/20] validate release drill manifest
+valid release drill manifest: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-drill-manifest.json
+[18/20] validate release drill manifest done
+[19/20] check release drill artifacts
+{
+  "checkedAt": "2026-04-14T13:11:00.528Z",
+  "dir": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z",
+  "strict": true,
+  "requiredCount": 18,
+  "presentCount": 18,
+  "missing": [],
+  "warnings": [],
+  "issues": [],
+  "files": [
+    {
+      "key": "consistency-matrix",
+      "name": "consistency-matrix.json",
+      "actualName": "consistency-matrix.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/consistency-matrix.json",
+      "sizeBytes": 3314
+    },
+    {
+      "key": "consistency-drift-report",
+      "name": "consistency-drift-report.md",
+      "actualName": "consistency-drift-report.md",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/consistency-drift-report.md",
+      "sizeBytes": 744
+    },
+    {
+      "key": "consistency-drift-summary",
+      "name": "consistency-drift-summary.json",
+      "actualName": "consistency-drift-summary.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/consistency-drift-summary.json",
+      "sizeBytes": 674
+    },
+    {
+      "key": "latest-evidence-bundle",
+      "name": "latest-evidence-bundle.json",
+      "actualName": "latest-evidence-bundle.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/latest-evidence-bundle.json",
+      "sizeBytes": 993
+    },
+    {
+      "key": "ao-dependency-gate-validation",
+      "name": "ao-dependency-gate.validation.txt",
+      "actualName": "ao-dependency-gate.validation.txt",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/ao-dependency-gate.validation.txt",
+      "sizeBytes": 137
+    },
+    {
+      "key": "release-evidence-pack-markdown",
+      "name": "release-evidence-pack.md",
+      "actualName": "release-evidence-pack.md",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-evidence-pack.md",
+      "sizeBytes": 3105
+    },
+    {
+      "key": "release-evidence-pack-json",
+      "name": "release-evidence-pack.json",
+      "actualName": "release-evidence-pack.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-evidence-pack.json",
+      "sizeBytes": 6284
+    },
+    {
+      "key": "release-signoff-checklist",
+      "name": "release-signoff-checklist.md",
+      "actualName": "release-signoff-checklist.md",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-signoff-checklist.md",
+      "sizeBytes": 678
+    },
+    {
+      "key": "release-readiness",
+      "name": "release-readiness.json",
+      "actualName": "release-readiness.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-readiness.json",
+      "sizeBytes": 124
+    },
+    {
+      "key": "legacy-core-extraction-evidence",
+      "name": "legacy-core-extraction-evidence.json",
+      "actualName": "legacy-core-extraction-evidence.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/legacy-core-extraction-evidence.json",
+      "sizeBytes": 1792
+    },
+    {
+      "key": "legacy-crypto-boundary-evidence",
+      "name": "legacy-crypto-boundary-evidence.json",
+      "actualName": "legacy-crypto-boundary-evidence.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/legacy-crypto-boundary-evidence.json",
+      "sizeBytes": 1435
+    },
+    {
+      "key": "template-worker-map-coherence",
+      "name": "template-worker-map-coherence.json",
+      "actualName": "template-worker-map-coherence.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/template-worker-map-coherence.json",
+      "sizeBytes": 903
+    },
+    {
+      "key": "forget-forward-config",
+      "name": "forget-forward-config.json",
+      "actualName": "forget-forward-config.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/forget-forward-config.json",
+      "sizeBytes": 596
+    },
+    {
+      "key": "template-signature-ref-map",
+      "name": "template-signature-ref-map.json",
+      "actualName": "template-signature-ref-map.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/template-signature-ref-map.json",
+      "sizeBytes": 446
+    },
+    {
+      "key": "template-variant-map",
+      "name": "template-variant-map.json",
+      "actualName": "template-variant-map.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/template-variant-map.json",
+      "sizeBytes": 633
+    },
+    {
+      "key": "release-drill-checks",
+      "name": "release-drill-checks.json",
+      "actualName": "release-drill-checks.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-drill-checks.json",
+      "sizeBytes": 6668
+    },
+    {
+      "key": "release-drill-manifest",
+      "name": "release-drill-manifest.json",
+      "actualName": "release-drill-manifest.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-drill-manifest.json",
+      "sizeBytes": 2407
+    },
+    {
+      "key": "release-drill-manifest-validation",
+      "name": "release-drill-manifest.validation.txt",
+      "actualName": "release-drill-manifest.validation.txt",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-drill-manifest.validation.txt",
+      "sizeBytes": 176
+    }
+  ],
+  "strictChecks": {
+    "performed": true,
+    "aliasFallbackCount": 0
+  },
+  "ok": true
+}
+[19/20] check release drill artifacts done
+[20/20] build release evidence ledger
+# Release Evidence Ledger
+
+- Created (UTC): `2026-04-14T13:11:00.852Z`
+- Operator: `jaine`
+- Decision: `pending`
+- Release: `1.4.0`
+- Overall status: `ready`
+
+## Checks
+- Pack ready: yes
+- Readiness ready: yes
+- Drill check OK: yes
+- Manifest validated: yes
+- AO gate validated: yes
+
+## Artifacts
+| Artifact | Path | Size (bytes) | SHA-256 |
+| --- | --- | ---: | --- |
+| consistency-matrix.json | `consistency-matrix.json` | 3314 | `3e563c6c936222327564a1237fea4a946296863e3a2303596ff9e7380324e2f9` |
+| consistency-drift-report.md | `consistency-drift-report.md` | 744 | `b012412c837f17b0221a0f9b2439b677641175a972f56be1c219491641ba8dba` |
+| consistency-drift-summary.json | `consistency-drift-summary.json` | 674 | `2256f752d47d7829a6dd0f7a8215a5a161dd9af88b878205c0b2d65b5c014948` |
+| latest-evidence-bundle.json | `latest-evidence-bundle.json` | 993 | `8f090ccd449329df15b679e978dc196d6823c1406580b722e28b3871f18c6010` |
+| ao-dependency-gate.validation.txt | `ao-dependency-gate.validation.txt` | 137 | `e98f6f433db8fa654acedf96d11caed6f9a7647fcc204063b7b214b9f4b95413` |
+| release-evidence-pack.md | `release-evidence-pack.md` | 3105 | `cc360bcd86725461c2e97dcd7b6ae2d89dca07f5cd153cd839ab7365c0326bcb` |
+| release-evidence-pack.json | `release-evidence-pack.json` | 6284 | `691a3ed8142fd989d7a8641665f5138967fcce7dbe205ed453796bbe6591aa56` |
+| release-signoff-checklist.md | `release-signoff-checklist.md` | 678 | `6d0b6ce62b64fe0fcb7b8d472ea86edc3d508218d3592d2f2453561a665bfefa` |
+| release-readiness.json | `release-readiness.json` | 124 | `4f163b5638b6ff17f59fe70d02218a9a31b957d2f67ecbfa32ea4f4e37d764a4` |
+| legacy-core-extraction-evidence.json | `legacy-core-extraction-evidence.json` | 1792 | `7e94cabd84fbeaf089b0d42d135e828012a38dacb2889def33d34c9ec2cf1590` |
+| legacy-crypto-boundary-evidence.json | `legacy-crypto-boundary-evidence.json` | 1435 | `af7b068a2eb2ffed038c58212428689f020fc5ac29f156e0e68b50453d995695` |
+| release-drill-checks.json | `release-drill-checks.json` | 6668 | `7ed0ea4fe5626a7905aef1ea97751714e60d014efd9e43487a4e6ba98bd6f2b7` |
+| release-drill-manifest.json | `release-drill-manifest.json` | 2407 | `b7e7ed8b6de257fa49ebb75714043e725a941ea3ac29cc56edbe32597de5e7ad` |
+| release-drill-manifest.validation.txt | `release-drill-manifest.validation.txt` | 176 | `d8912500687f9c7c88246270722703b3c4a0492a84b17359736e478c659d3b99` |
+| release-drill-check.json | `release-drill-check.json` | 7030 | `4a7e5b4a0b6e51991860fb23a134573d3b2034fa55733af420c7f0e1f800a06e` |
+
+## Notes
+- Latest evidence bundle dir: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/evidence/2026-04-14T13-10-57Z-42546-542b20
+
+[20/20] build release evidence ledger done
+>>> npm run -s ops:check-release-drill-artifacts -- --dir tmp/release-drills/live-1.4.0-20260414T1310Z --strict --json
+{
+  "checkedAt": "2026-04-14T13:11:01.250Z",
+  "dir": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z",
+  "strict": true,
+  "requiredCount": 18,
+  "presentCount": 18,
+  "missing": [],
+  "warnings": [],
+  "issues": [],
+  "files": [
+    {
+      "key": "consistency-matrix",
+      "name": "consistency-matrix.json",
+      "actualName": "consistency-matrix.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/consistency-matrix.json",
+      "sizeBytes": 3314
+    },
+    {
+      "key": "consistency-drift-report",
+      "name": "consistency-drift-report.md",
+      "actualName": "consistency-drift-report.md",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/consistency-drift-report.md",
+      "sizeBytes": 744
+    },
+    {
+      "key": "consistency-drift-summary",
+      "name": "consistency-drift-summary.json",
+      "actualName": "consistency-drift-summary.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/consistency-drift-summary.json",
+      "sizeBytes": 674
+    },
+    {
+      "key": "latest-evidence-bundle",
+      "name": "latest-evidence-bundle.json",
+      "actualName": "latest-evidence-bundle.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/latest-evidence-bundle.json",
+      "sizeBytes": 993
+    },
+    {
+      "key": "ao-dependency-gate-validation",
+      "name": "ao-dependency-gate.validation.txt",
+      "actualName": "ao-dependency-gate.validation.txt",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/ao-dependency-gate.validation.txt",
+      "sizeBytes": 137
+    },
+    {
+      "key": "release-evidence-pack-markdown",
+      "name": "release-evidence-pack.md",
+      "actualName": "release-evidence-pack.md",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-evidence-pack.md",
+      "sizeBytes": 3105
+    },
+    {
+      "key": "release-evidence-pack-json",
+      "name": "release-evidence-pack.json",
+      "actualName": "release-evidence-pack.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-evidence-pack.json",
+      "sizeBytes": 6284
+    },
+    {
+      "key": "release-signoff-checklist",
+      "name": "release-signoff-checklist.md",
+      "actualName": "release-signoff-checklist.md",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-signoff-checklist.md",
+      "sizeBytes": 678
+    },
+    {
+      "key": "release-readiness",
+      "name": "release-readiness.json",
+      "actualName": "release-readiness.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-readiness.json",
+      "sizeBytes": 124
+    },
+    {
+      "key": "legacy-core-extraction-evidence",
+      "name": "legacy-core-extraction-evidence.json",
+      "actualName": "legacy-core-extraction-evidence.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/legacy-core-extraction-evidence.json",
+      "sizeBytes": 1792
+    },
+    {
+      "key": "legacy-crypto-boundary-evidence",
+      "name": "legacy-crypto-boundary-evidence.json",
+      "actualName": "legacy-crypto-boundary-evidence.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/legacy-crypto-boundary-evidence.json",
+      "sizeBytes": 1435
+    },
+    {
+      "key": "template-worker-map-coherence",
+      "name": "template-worker-map-coherence.json",
+      "actualName": "template-worker-map-coherence.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/template-worker-map-coherence.json",
+      "sizeBytes": 903
+    },
+    {
+      "key": "forget-forward-config",
+      "name": "forget-forward-config.json",
+      "actualName": "forget-forward-config.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/forget-forward-config.json",
+      "sizeBytes": 596
+    },
+    {
+      "key": "template-signature-ref-map",
+      "name": "template-signature-ref-map.json",
+      "actualName": "template-signature-ref-map.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/template-signature-ref-map.json",
+      "sizeBytes": 446
+    },
+    {
+      "key": "template-variant-map",
+      "name": "template-variant-map.json",
+      "actualName": "template-variant-map.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/template-variant-map.json",
+      "sizeBytes": 633
+    },
+    {
+      "key": "release-drill-checks",
+      "name": "release-drill-checks.json",
+      "actualName": "release-drill-checks.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-drill-checks.json",
+      "sizeBytes": 6668
+    },
+    {
+      "key": "release-drill-manifest",
+      "name": "release-drill-manifest.json",
+      "actualName": "release-drill-manifest.json",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-drill-manifest.json",
+      "sizeBytes": 2407
+    },
+    {
+      "key": "release-drill-manifest-validation",
+      "name": "release-drill-manifest.validation.txt",
+      "actualName": "release-drill-manifest.validation.txt",
+      "usedAlias": false,
+      "path": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/release-drill-manifest.validation.txt",
+      "sizeBytes": 176
+    }
+  ],
+  "strictChecks": {
+    "performed": true,
+    "aliasFallbackCount": 0
+  },
+  "ok": true
+}
+>>> npm run -s ops:check-decommission-readiness -- --dir tmp/release-drills/live-1.4.0-20260414T1310Z --ao-gate ops/decommission/ao-dependency-gate.json --strict --json
+{
+  "checkedAtUtc": "2026-04-14T13:11:01.778Z",
+  "dir": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z",
+  "aoGateFile": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/ops/decommission/ao-dependency-gate.json",
+  "release": "1.4.0",
+  "status": "ready",
+  "closeoutState": "ready",
+  "automationState": "complete",
+  "aoManualState": "complete",
+  "blockerCount": 0,
+  "warningCount": 0,
+  "blockers": [],
+  "warnings": [],
+  "automationBlockers": [],
+  "automationWarnings": [],
+  "aoManualBlockers": [],
+  "checks": {
+    "automation": {
+      "status": "complete",
+      "blockerCount": 0,
+      "warningCount": 0,
+      "blockers": [],
+      "warnings": [],
+      "artifactCount": 12,
+      "releaseAligned": true
+    },
+    "aoManual": {
+      "status": "complete",
+      "blockerCount": 0,
+      "blockers": [],
+      "requiredCount": 3,
+      "closedCount": 3,
+      "openCount": 0,
+      "missingRequiredChecks": [],
+      "openChecks": []
+    },
+    "releaseEvidencePack": {
+      "present": true,
+      "valid": true,
+      "file": "release-evidence-pack.json",
+      "usedAlias": false,
+      "status": "ready",
+      "release": "1.4.0"
+    },
+    "releaseReadiness": {
+      "present": true,
+      "valid": true,
+      "file": "release-readiness.json",
+      "usedAlias": false,
+      "status": "ready",
+      "blockerCount": 0,
+      "warningCount": 0,
+      "release": "1.4.0"
+    },
+    "legacyCoreExtractionEvidence": {
+      "present": true,
+      "valid": true,
+      "file": "legacy-core-extraction-evidence.json",
+      "usedAlias": false,
+      "status": "pass",
+      "ok": true
+    },
+    "legacyCryptoBoundaryEvidence": {
+      "present": true,
+      "valid": true,
+      "file": "legacy-crypto-boundary-evidence.json",
+      "usedAlias": false,
+      "status": "pass",
+      "ok": true
+    },
+    "templateWorkerMapCoherence": {
+      "present": true,
+      "valid": true,
+      "file": "template-worker-map-coherence.json",
+      "usedAlias": false,
+      "status": "complete",
+      "ok": true
+    },
+    "forgetForwardConfig": {
+      "present": true,
+      "valid": true,
+      "file": "forget-forward-config.json",
+      "usedAlias": false,
+      "status": "pending",
+      "ok": false
+    },
+    "templateSignatureRefMap": {
+      "present": true,
+      "valid": true,
+      "file": "template-signature-ref-map.json",
+      "usedAlias": false,
+      "status": "complete",
+      "ok": true
+    },
+    "templateVariantMap": {
+      "present": true,
+      "valid": true,
+      "file": "template-variant-map.json",
+      "usedAlias": false,
+      "status": "complete",
+      "ok": true
+    },
+    "releaseDrillChecks": {
+      "present": true,
+      "valid": true,
+      "file": "release-drill-checks.json",
+      "usedAlias": false,
+      "release": "1.4.0",
+      "profile": "vps_medium",
+      "mode": "pairwise",
+      "strict": true
+    },
+    "releaseDrillManifest": {
+      "present": true,
+      "valid": true,
+      "file": "release-drill-manifest.json",
+      "usedAlias": false,
+      "status": "ready",
+      "artifactsCount": 13,
+      "release": "1.4.0"
+    },
+    "releaseDrillCheck": {
+      "present": true,
+      "valid": true,
+      "file": "release-drill-check.json",
+      "usedAlias": false,
+      "ok": true,
+      "missingCount": 0,
+      "issueCount": 0
+    },
+    "releaseEvidenceLedger": {
+      "present": true,
+      "valid": true,
+      "file": "release-evidence-ledger.json",
+      "usedAlias": false,
+      "status": "ready",
+      "release": "1.4.0"
+    },
+    "aoGate": {
+      "present": true,
+      "valid": true,
+      "release": "1.4.0",
+      "requiredCount": 3,
+      "closedCount": 3,
+      "openCount": 0,
+      "missingRequiredChecks": [],
+      "openChecks": [],
+      "status": "complete"
+    }
+  }
+}
+>>> npm run -s ops:check-production-readiness -- --dir tmp/release-drills/live-1.4.0-20260414T1310Z --ao-gate ops/decommission/ao-dependency-gate.json --json
+{
+  "checkedAtUtc": "2026-04-14T13:11:02.312Z",
+  "decision": "NO-GO",
+  "status": "blocked",
+  "release": "1.4.0",
+  "closeoutState": "ao-manual-blocked",
+  "automationState": "complete",
+  "aoManualState": "blocked",
+  "manualProofState": "blocked",
+  "blockerCount": 1,
+  "blockers": [
+    "Generate decommission-evidence-log.json with manual proof placeholders, then fill all required links."
+  ],
+  "blockerGroups": {
+    "automation": [],
+    "aoManual": [],
+    "manualProofs": [
+      "Generate decommission-evidence-log.json with manual proof placeholders, then fill all required links."
+    ]
+  },
+  "manualProofs": {
+    "file": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/decommission-evidence-log.json",
+    "status": "blocked",
+    "requiredCount": 0,
+    "providedCount": 0,
+    "missingCount": 0,
+    "missingProofLabels": []
+  },
+  "sources": {
+    "decommissionDir": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z",
+    "aoGateFile": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/ops/decommission/ao-dependency-gate.json",
+    "manualProofFile": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/tmp/release-drills/live-1.4.0-20260414T1310Z/decommission-evidence-log.json"
+  }
+}
