@@ -328,6 +328,11 @@ Use this checklist before merge/release sign-off.
   - Release/decommission closeout is blocked until drill artifacts are generated in `ops/decommission/` and linked in the final evidence pack.
   - AO dependency gate required checks remain `in_progress` and prevent a GO decision.
 
+- Live strict drill snapshot (`2026-04-14T13:00Z`, `gateway.blgateway.fun`):
+  - Prod-like deep check is green (`PASS=7`, `WARN=0`, `FAIL=0`).
+  - Strict release drill still blocks at matrix compare: `/integrity/state` returns incomplete snapshot fields (`release.version`, `release.root`, `audit.seqTo` missing/null).
+  - Next action: populate full integrity snapshot source (release + audit surfaces) before rerunning `scripts/run-live-strict-drill.sh`.
+
 - [ ] AO registry/authority lifecycle items are complete (`publish/revoke/query/pause`, `root/upgrade/emergency/reporter`, audit sequence surface).
 - [ ] `ops/decommission/ao-dependency-gate.json` required checks are updated to `closed` with evidence links.
 - [ ] Gateway `main` CI is green on full tests, integrity gate, and smoke jobs.

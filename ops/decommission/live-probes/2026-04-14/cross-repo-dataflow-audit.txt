@@ -1,0 +1,14 @@
+Cross-repo dataflow audit: ready_with_warnings
+Workspace: /mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS
+Checked: 2026-04-14T13:01:39.533Z
+Blockers: 0
+Warnings: 0
+
+Nice-to-have:
+
+Future-proof:
+- Publish template bundles as signed release manifests and gate startup on verified variant-map signatures.
+- Bind signer identity to authorization intent (signatureRef -> allowed actions/roles map) and enforce in write runtime.
+- Introduce versioned bridge contracts for gateway<->worker and gateway<->AO adapters with compatibility checks in CI.
+
+Strict mode: off

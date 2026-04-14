@@ -2,9 +2,9 @@
 Release: 1.4.0
 Profile: vps_medium
 Mode: pairwise
-Required template sites: site-alpha,site-beta
+Required template sites: site-alpha
 AO gate: ops/decommission/ao-dependency-gate.json
-Out dir: tmp/release-drills/live-1.4.0-20260414T084148Z-token
+Out dir: tmp/release-drills/live-1.4.0-20260414T1300Z
 Allow anon: 0
 Skip forget-forward check: 1
 Dry run: 0
@@ -19,20 +19,20 @@ Dry run: 0
   "issueCount": 0,
   "issues": []
 }
->>> npm run -s ops:check-template-worker-routing-config -- --url-map {"site-alpha":"https://worker-alpha.example.com/sign","site-beta":"https://worker-beta.example.com/sign"} --token-map {"site-alpha":"worker-token-alpha","site-beta":"worker-token-beta"} --strict --json
+>>> npm run -s ops:check-template-worker-routing-config -- --url-map {"site-alpha":"https://blackcat-inbox-production.vitek-pasek.workers.dev/sign"} --token-map {"site-alpha":"<redacted-worker-token>"} --strict --json
 {
   "status": "complete",
   "issues": [],
   "warnings": [],
   "counts": {
-    "urlMapCount": 2,
-    "tokenMapCount": 2,
-    "coveredCount": 2,
+    "urlMapCount": 1,
+    "tokenMapCount": 1,
+    "coveredCount": 1,
     "missingTokenCount": 0,
     "extraTokenCount": 0
   }
 }
->>> npm run -s ops:check-template-worker-map-coherence -- --require-sites site-alpha,site-beta --require-token-map --require-signature-map --strict --json
+>>> npm run -s ops:check-template-worker-map-coherence -- --require-sites site-alpha --require-token-map --require-signature-map --strict --json
 {
   "ok": true,
   "status": "complete",
@@ -43,28 +43,24 @@ Dry run: 0
     "signatureRefMap": "GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP"
   },
   "requiredSites": [
-    "site-alpha",
-    "site-beta"
+    "site-alpha"
   ],
   "maps": {
     "url": {
-      "site-alpha": "https://worker-alpha.example.com/sign",
-      "site-beta": "https://worker-beta.example.com/sign"
+      "site-alpha": "https://blackcat-inbox-production.vitek-pasek.workers.dev/sign"
     },
     "token": {
-      "site-alpha": "worker-token-alpha",
-      "site-beta": "worker-token-beta"
+      "site-alpha": "<redacted-worker-token>"
     },
     "signatureRef": {
-      "site-alpha": "worker-ed25519-alpha-v1",
-      "site-beta": "worker-ed25519-beta-v1"
+      "site-alpha": "worker-ed25519"
     }
   },
   "counts": {
-    "urlMapCount": 2,
-    "tokenMapCount": 2,
-    "signatureRefMapCount": 2,
-    "requiredSiteCount": 2,
+    "urlMapCount": 1,
+    "tokenMapCount": 1,
+    "signatureRefMapCount": 1,
+    "requiredSiteCount": 1,
     "missingRequiredSiteCount": 0,
     "missingTokenCount": 0,
     "missingSignatureRefCount": 0,
@@ -74,53 +70,50 @@ Dry run: 0
   "issues": [],
   "warnings": []
 }
->>> npm run -s ops:check-template-signature-ref-map -- --require-sites site-alpha,site-beta --strict --json
+>>> npm run -s ops:check-template-signature-ref-map -- --require-sites site-alpha --strict --json
 {
   "ok": true,
   "status": "complete",
   "strict": true,
   "envVar": "GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP",
   "requiredSites": [
-    "site-alpha",
-    "site-beta"
+    "site-alpha"
   ],
   "providedSites": [
-    "site-alpha",
-    "site-beta"
+    "site-alpha"
   ],
   "missingSites": [],
   "counts": {
-    "providedCount": 2,
-    "requiredCount": 2,
+    "providedCount": 1,
+    "requiredCount": 1,
     "missingCount": 0,
     "emptyValueCount": 0
   },
   "issues": [],
   "warnings": [],
   "map": {
-    "site-alpha": "worker-ed25519-alpha-v1",
-    "site-beta": "worker-ed25519-beta-v1"
+    "site-alpha": "worker-ed25519"
   }
 }
->>> npm run -s ops:validate-template-variant-map-config -- --strict --require-sites site-alpha,site-beta
+>>> npm run -s ops:validate-template-variant-map-config -- --strict --require-sites site-alpha
 Status: `complete`
 Source: env:GATEWAY_TEMPLATE_VARIANT_MAP
 Strict: yes
 Allow placeholders: no
 Allowed variants: signal, bastion, horizon
-Provided sites: 2
-Required sites: 2
+Provided sites: 1
+Required sites: 1
 Missing sites: none
 Malformed entries: 0
 Invalid txids: 0
 Placeholder values: 0
->>> npm run -s ops:validate-consistency-preflight -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --mode pairwise --profile vps_medium --token live-audit-temp-token-not-secret
+>>> npm run -s ops:validate-consistency-preflight -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --mode pairwise --profile vps_medium --token state-public-check
 Consistency preflight passed
 URLs: 2
 Mode: pairwise
 Profile: vps_medium
 Auth: token provided
->>> npm run -s ops:run-release-drill -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --out-dir tmp/release-drills/live-1.4.0-20260414T084148Z-token --profile vps_medium --mode pairwise --release 1.4.0 --strict --token live-audit-temp-token-not-secret
+>>> npm run -s ops:run-release-drill -- --urls https://gateway.blgateway.fun,https://gateway.blgateway.fun --out-dir tmp/release-drills/live-1.4.0-20260414T1300Z --profile vps_medium --mode pairwise --release 1.4.0 --strict --token state-public-check
 [1/20] validate consistency preflight
 Consistency preflight passed
 URLs: 2

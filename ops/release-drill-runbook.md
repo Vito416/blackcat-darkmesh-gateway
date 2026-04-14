@@ -153,6 +153,9 @@ Expected output:
 - JSON with `counts.total`, `counts.pass`, `counts.mismatch`, `counts.failure`, and `exitCode`
 - Exit code `0` on full match, `3` on mismatch, `2` on fetch/runtime failure
 
+Common live blocker:
+- If matrix output reports `one or more snapshots were incomplete` with invalid fields like `release.version`, `release.root`, or `audit.seqTo`, the gateway is serving a partial `/integrity/state` snapshot. Fix the integrity snapshot source first, then rerun the drill.
+
 Artifacts:
 - `$DRILL_DIR/consistency-matrix.json`
 
