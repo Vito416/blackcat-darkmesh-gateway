@@ -112,6 +112,15 @@ function readText(path, issues) {
   }
 }
 
+function readTextOptional(path) {
+  if (!existsSync(path)) return ''
+  try {
+    return readFileSync(path, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 function canonicalFieldFingerprint(sourceText) {
   const fields = []
   const pairs = [
@@ -161,6 +170,7 @@ function assessCrossRepoDataflow(options = {}) {
     workerIndex: resolve(workspaceRoot, 'blackcat-darkmesh-ao/worker/src/index.ts'),
     writeAuth: resolve(workspaceRoot, 'blackcat-darkmesh-write/ao/shared/auth.lua'),
     writeSignScript: resolve(workspaceRoot, 'blackcat-darkmesh-write/scripts/sign-write.js'),
+    gatewayE2ESmoke: resolve(gatewayRoot, 'scripts/e2e-template-dataflow-smoke.js'),
   }
 
   const findings = []
@@ -173,6 +183,7 @@ function assessCrossRepoDataflow(options = {}) {
   const workerText = readText(files.workerIndex, findings)
   const writeAuthText = readText(files.writeAuth, findings)
   const writeSignScriptText = readText(files.writeSignScript, findings)
+  const gatewayE2ESmokeText = readTextOptional(files.gatewayE2ESmoke)
 
   let contract = null
   if (isNonEmptyString(contractRaw)) {
@@ -338,9 +349,19 @@ function assessCrossRepoDataflow(options = {}) {
   const warnings = findings.filter((finding) => finding.severity === 'P1')
   const niceToHave = [
     'Add an end-to-end smoke that verifies site->variant->templateTxId flow through /template/config and /template/call.',
-    'Add an end-to-end smoke that proves x-trace-id propagation across gateway -> worker -> write adapter -> AO result.',
     'Add synthetic chaos probes for read fallback behavior (AO dryrun vs scheduler fallback) with evidence export.',
   ]
+  const hasTracePropagationSmoke =
+    isNonEmptyString(gatewayE2ESmokeText) &&
+    /x-trace-id/.test(gatewayE2ESmokeText) &&
+    /validateReadForward\(/.test(gatewayE2ESmokeText) &&
+    /validateSignerForward\(/.test(gatewayE2ESmokeText) &&
+    /validateWriteForward\(/.test(gatewayE2ESmokeText)
+  if (!hasTracePropagationSmoke) {
+    niceToHave.push(
+      'Add an end-to-end smoke that proves x-trace-id propagation across gateway -> worker -> write adapter -> AO result.',
+    )
+  }
   const futureProof = [
     'Publish template bundles as signed release manifests and gate startup on verified variant-map signatures.',
     'Bind signer identity to authorization intent (signatureRef -> allowed actions/roles map) and enforce in write runtime.',

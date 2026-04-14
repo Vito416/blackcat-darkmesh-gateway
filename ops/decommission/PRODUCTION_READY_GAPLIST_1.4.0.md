@@ -1,6 +1,6 @@
 # Gateway 1.4.0 Production-Ready Gaplist
 
-Status date: 2026-04-13
+Status date: 2026-04-14
 
 This is the practical gaplist for moving from "code/tests green" to "live rollout ready" on the new VPS deployment model.
 
@@ -8,7 +8,7 @@ Latest audit snapshot:
 - `npm run build` -> pass
 - Targeted hardening tests -> pass (`template-config-route`, `template-host-site-binding`, cross-repo audit tests)
 - `npm run ops:audit-cross-repo-dataflow -- --strict --json` -> **ready_with_warnings** (P0=0, P1=0)
-- `node scripts/check-production-readiness-summary.js --json` -> **NO-GO** (manual proof links still missing)
+- `node scripts/check-production-readiness-summary.js --json` -> **GO** (manual proof set complete)
 - Cross-repo dataflow audit: `ops/decommission/CROSS_REPO_DATAFLOW_AUDIT_2026-04-13.md`
 
 ## P0 (must close before first real traffic)
@@ -25,7 +25,7 @@ Latest audit snapshot:
 ## P1 (high-value hardening right after go-live)
 
 - [ ] Add one e2e smoke that verifies `site -> variant -> templateTxId -> /template/call` path.
-- [ ] Add end-to-end trace propagation (`x-trace-id`) across gateway -> worker -> write adapter -> AO result.
+- [x] Add end-to-end trace propagation (`x-trace-id`) across gateway -> worker -> write adapter -> AO result.
 - [ ] Add live release-drill evidence bundle from real gateway endpoints and archive links in release docs.
 - [ ] Add write-intent policy map (`signatureRef -> allowed actions/roles`) and enforce it in write/runtime boundary.
 

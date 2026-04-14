@@ -1,5 +1,5 @@
 {
-  "checkedAtUtc": "2026-04-13T16:45:40.510Z",
+  "checkedAtUtc": "2026-04-14T08:22:17.492Z",
   "workspaceRoot": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS",
   "gatewayRoot": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway",
   "status": "ready_with_warnings",
@@ -15,7 +15,8 @@
     "writeCheckoutApi": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/scripts/http/checkout_api_server.mjs",
     "workerIndex": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-ao/worker/src/index.ts",
     "writeAuth": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/ao/shared/auth.lua",
-    "writeSignScript": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/scripts/sign-write.js"
+    "writeSignScript": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/scripts/sign-write.js",
+    "gatewayE2ESmoke": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/scripts/e2e-template-dataflow-smoke.js"
   },
   "diagnostics": {
     "workerAllowedKeys": [
@@ -32,6 +33,12 @@
       "role",
       "Role",
       "Actor-Role",
+      "siteId",
+      "SiteId",
+      "Site-Id",
+      "signatureRef",
+      "SignatureRef",
+      "Signature-Ref",
       "payload",
       "Payload",
       "requestId",
@@ -71,7 +78,6 @@
   },
   "niceToHave": [
     "Add an end-to-end smoke that verifies site->variant->templateTxId flow through /template/config and /template/call.",
-    "Add request tracing headers (x-trace-id) propagated across gateway -> worker -> write adapter -> AO result.",
     "Add synthetic chaos probes for read fallback behavior (AO dryrun vs scheduler fallback) with evidence export."
   ],
   "futureProof": [

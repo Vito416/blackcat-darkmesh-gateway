@@ -45,7 +45,7 @@ function writeFile(root: string, relPath: string, text: string) {
   writeFileSync(file, text)
 }
 
-function buildFixture(options: { roleSigned: boolean; gatewayCallerRole: boolean }) {
+function buildFixture(options: { roleSigned: boolean; gatewayCallerRole: boolean; traceSmoke?: boolean }) {
   const root = mkdtempSync(join(tmpdir(), 'bc-cross-flow-'))
 
   writeFile(root, 'blackcat-darkmesh-gateway/config/template-backend-contract.json', CONTRACT_JSON)
@@ -137,6 +137,24 @@ function buildFixture(options: { roleSigned: boolean; gatewayCallerRole: boolean
     ].join('\n'),
   )
 
+  if (options.traceSmoke) {
+    writeFile(
+      root,
+      'blackcat-darkmesh-gateway/scripts/e2e-template-dataflow-smoke.js',
+      [
+        "function validateReadForward(record, traceId) {",
+        "  const h = 'x-trace-id'",
+        "}",
+        "function validateSignerForward(record, traceId) {",
+        "  const h = 'x-trace-id'",
+        "}",
+        "function validateWriteForward(record, traceId) {",
+        "  const h = 'x-trace-id'",
+        "}",
+      ].join('\n'),
+    )
+  }
+
   return root
 }
 
@@ -169,6 +187,16 @@ describe('audit-cross-repo-dataflow.js', () => {
       expect(cli.exitCode).toBe(0)
       const parsed = JSON.parse(cli.stdout)
       expect(parsed.blockerCount).toBe(0)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('drops trace smoke nice-to-have when trace smoke evidence exists', () => {
+    const root = buildFixture({ roleSigned: true, gatewayCallerRole: false, traceSmoke: true })
+    try {
+      const summary = assessCrossRepoDataflow({ workspaceRoot: root })
+      expect(summary.niceToHave.some((item) => item.includes('x-trace-id'))).toBe(false)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
