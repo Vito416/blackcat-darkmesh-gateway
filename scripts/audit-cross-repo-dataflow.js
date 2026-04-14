@@ -171,6 +171,8 @@ function assessCrossRepoDataflow(options = {}) {
     writeAuth: resolve(workspaceRoot, 'blackcat-darkmesh-write/ao/shared/auth.lua'),
     writeSignScript: resolve(workspaceRoot, 'blackcat-darkmesh-write/scripts/sign-write.js'),
     gatewayE2ESmoke: resolve(gatewayRoot, 'scripts/e2e-template-dataflow-smoke.js'),
+    gatewaySiteVariantSmoke: resolve(gatewayRoot, 'tests/template-site-variant-smoke.test.ts'),
+    gatewayAoFallbackProbe: resolve(gatewayRoot, 'scripts/probe-ao-read-fallback.js'),
   }
 
   const findings = []
@@ -184,6 +186,8 @@ function assessCrossRepoDataflow(options = {}) {
   const writeAuthText = readText(files.writeAuth, findings)
   const writeSignScriptText = readText(files.writeSignScript, findings)
   const gatewayE2ESmokeText = readTextOptional(files.gatewayE2ESmoke)
+  const gatewaySiteVariantSmokeText = readTextOptional(files.gatewaySiteVariantSmoke)
+  const gatewayAoFallbackProbeText = readTextOptional(files.gatewayAoFallbackProbe)
 
   let contract = null
   if (isNonEmptyString(contractRaw)) {
@@ -347,10 +351,16 @@ function assessCrossRepoDataflow(options = {}) {
 
   const blockers = findings.filter((finding) => finding.severity === 'P0')
   const warnings = findings.filter((finding) => finding.severity === 'P1')
-  const niceToHave = [
-    'Add an end-to-end smoke that verifies site->variant->templateTxId flow through /template/config and /template/call.',
-    'Add synthetic chaos probes for read fallback behavior (AO dryrun vs scheduler fallback) with evidence export.',
-  ]
+  const niceToHave = []
+  const hasSiteVariantSmoke =
+    isNonEmptyString(gatewaySiteVariantSmokeText) &&
+    /\/template\/config/.test(gatewaySiteVariantSmokeText) &&
+    /\/template\/call/.test(gatewaySiteVariantSmokeText) &&
+    /templateVariant/.test(gatewaySiteVariantSmokeText) &&
+    /templateTxId/.test(gatewaySiteVariantSmokeText)
+  if (!hasSiteVariantSmoke) {
+    niceToHave.push('Add an end-to-end smoke that verifies site->variant->templateTxId flow through /template/config and /template/call.')
+  }
   const hasTracePropagationSmoke =
     isNonEmptyString(gatewayE2ESmokeText) &&
     /x-trace-id/.test(gatewayE2ESmokeText) &&
@@ -361,6 +371,16 @@ function assessCrossRepoDataflow(options = {}) {
     niceToHave.push(
       'Add an end-to-end smoke that proves x-trace-id propagation across gateway -> worker -> write adapter -> AO result.',
     )
+  }
+  const hasAoFallbackChaosProbe =
+    isNonEmptyString(gatewayAoFallbackProbeText) &&
+    /\/api\/public\/resolve-route/.test(gatewayAoFallbackProbeText) &&
+    /\/api\/public\/page/.test(gatewayAoFallbackProbeText) &&
+    /dryrun/.test(gatewayAoFallbackProbeText) &&
+    /scheduler/.test(gatewayAoFallbackProbeText) &&
+    /evidence/i.test(gatewayAoFallbackProbeText)
+  if (!hasAoFallbackChaosProbe) {
+    niceToHave.push('Add synthetic chaos probes for read fallback behavior (AO dryrun vs scheduler fallback) with evidence export.')
   }
   const futureProof = [
     'Publish template bundles as signed release manifests and gate startup on verified variant-map signatures.',

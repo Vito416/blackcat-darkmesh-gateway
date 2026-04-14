@@ -45,7 +45,13 @@ function writeFile(root: string, relPath: string, text: string) {
   writeFileSync(file, text)
 }
 
-function buildFixture(options: { roleSigned: boolean; gatewayCallerRole: boolean; traceSmoke?: boolean }) {
+function buildFixture(options: {
+  roleSigned: boolean
+  gatewayCallerRole: boolean
+  traceSmoke?: boolean
+  siteVariantSmoke?: boolean
+  aoFallbackProbe?: boolean
+}) {
   const root = mkdtempSync(join(tmpdir(), 'bc-cross-flow-'))
 
   writeFile(root, 'blackcat-darkmesh-gateway/config/template-backend-contract.json', CONTRACT_JSON)
@@ -155,6 +161,33 @@ function buildFixture(options: { roleSigned: boolean; gatewayCallerRole: boolean
     )
   }
 
+  if (options.siteVariantSmoke) {
+    writeFile(
+      root,
+      'blackcat-darkmesh-gateway/tests/template-site-variant-smoke.test.ts',
+      [
+        "const a = '/template/config'",
+        "const b = '/template/call'",
+        "const c = 'templateVariant'",
+        "const d = 'templateTxId'",
+      ].join('\n'),
+    )
+  }
+
+  if (options.aoFallbackProbe) {
+    writeFile(
+      root,
+      'blackcat-darkmesh-gateway/scripts/probe-ao-read-fallback.js',
+      [
+        "const a = '/api/public/resolve-route'",
+        "const b = '/api/public/page'",
+        "const c = 'dryrun'",
+        "const d = 'scheduler'",
+        "const e = 'evidence'",
+      ].join('\n'),
+    )
+  }
+
   return root
 }
 
@@ -197,6 +230,22 @@ describe('audit-cross-repo-dataflow.js', () => {
     try {
       const summary = assessCrossRepoDataflow({ workspaceRoot: root })
       expect(summary.niceToHave.some((item) => item.includes('x-trace-id'))).toBe(false)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('clears all current nice-to-have probes when smoke evidence files are present', () => {
+    const root = buildFixture({
+      roleSigned: true,
+      gatewayCallerRole: false,
+      traceSmoke: true,
+      siteVariantSmoke: true,
+      aoFallbackProbe: true,
+    })
+    try {
+      const summary = assessCrossRepoDataflow({ workspaceRoot: root })
+      expect(summary.niceToHave).toHaveLength(0)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

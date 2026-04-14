@@ -24,7 +24,7 @@ Latest audit snapshot:
 
 ## P1 (high-value hardening right after go-live)
 
-- [ ] Add one e2e smoke that verifies `site -> variant -> templateTxId -> /template/call` path.
+- [x] Add one e2e smoke that verifies `site -> variant -> templateTxId -> /template/call` path.
 - [x] Add end-to-end trace propagation (`x-trace-id`) across gateway -> worker -> write adapter -> AO result.
 - [ ] Add live release-drill evidence bundle from real gateway endpoints and archive links in release docs.
 - [ ] Add write-intent policy map (`signatureRef -> allowed actions/roles`) and enforce it in write/runtime boundary.
