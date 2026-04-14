@@ -25,6 +25,8 @@ Thumbs.db
 **/.vscode/ftp-sync.json
 ops/live-vps/*.local.*
 ops/live-vps/**/*.local.*
+ops/install/*.local.*
+ops/install/**/*.local.*
 
 # Local operator artifacts / drill outputs
 tmp/

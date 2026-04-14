@@ -37,6 +37,14 @@ npm run build
 npm run test:integrity-fast
 ```
 
+Installer alternative (Node-only VPS path):
+
+```bash
+bash ops/install/bin/install-all.sh
+```
+
+See `ops/install/README.md` for manual steps that stay outside automation (Tailscale + cloudflared account login).
+
 ## 3) Environment bootstrap using repo examples
 
 Create a non-committed env file from `config/example.env`:

@@ -57,6 +57,7 @@
 - Pre-live decommission bootstrap (no live gateways yet): `npm run ops:bootstrap-prelive-decommission-artifacts:tmp -- --release 1.4.0` seeds a deterministic baseline artifact set under `tmp/decommission-prelive` so readiness can report `automation-complete` while AO checks remain open.
 - Release drill runbook: `ops/release-drill-runbook.md`.
 - Fresh-machine production bootstrap runbook: `ops/fresh-machine-production-bootstrap-runbook.md` (prereqs, env bootstrap, strict preflight, strict drill path).
+- Node-only VPS installer path: `ops/install/README.md` (bootstrap + hardening + systemd + cloudflared wiring).
 - live handoff folder: `ops/live-vps/` (VPS + cloudflared rollout and production-like validation tooling).
 - Production gaplist tracker for 1.4.0: `ops/decommission/PRODUCTION_READY_GAPLIST_1.4.0.md`.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
