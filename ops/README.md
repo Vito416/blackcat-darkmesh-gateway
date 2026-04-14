@@ -42,7 +42,7 @@
 - Decommission closeout one-shot: `node scripts/run-decommission-closeout.js --dir <drill-dir> --ao-gate ops/decommission/ao-dependency-gate.json [--operator ...] [--decision pending|go|no-go] [--strict]` assembles the final machine closeout log, but AO/manual proofs may still be open and must be recorded separately as `ao-manual-pending` or `ao-manual-blocked` instead of generic blocked state.
 - Closeout validator order: generate the drill manifest, validate the manifest, run `check-decommission-manual-proofs`, check the archived drill artifacts, build the evidence ledger/log, then run readiness and AO gate evidence checks before signoff.
 - Evidence quality rule: keep machine verification and AO/manual proof links as separate artifacts in the closeout bundle; both are required before the final signoff record can move to `GO`.
-- WEDOS profile readiness validator: `npm run ops:validate-wedos-readiness -- --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--strict]`.
+- profile readiness validator: `npm run ops:validate-hosting-readiness -- --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--strict]`.
 - Legacy no-import evidence checker: `npm run ops:check-legacy-no-import-evidence -- [--root src] [--modules <csv>] [--strict] [--json]` scans `src/**` for references to retired legacy import roots (`libs/legacy/<module>`) and emits machine-readable evidence for the runtime boundary gate.
 - Retired path guard: `npm run ops:check-retired-path-references -- --strict --json` scans active automation surfaces (`.github/workflows`, `scripts`, `package.json`) for retired path usage such as `kernel-migration/` and old `security/crypto-manifests/`.
 - Runtime config boundary check: `npm run ops:check-config-loader-runtime-boundary -- [--root src] [--strict] [--json]` flags any raw `process.env` usage under `src/runtime/**` outside `src/runtime/config/loader.ts`; CI runs the strict form as a hard gate.
@@ -57,7 +57,7 @@
 - Pre-live decommission bootstrap (no live gateways yet): `npm run ops:bootstrap-prelive-decommission-artifacts:tmp -- --release 1.4.0` seeds a deterministic baseline artifact set under `tmp/decommission-prelive` so readiness can report `automation-complete` while AO checks remain open.
 - Release drill runbook: `ops/release-drill-runbook.md`.
 - Fresh-machine production bootstrap runbook: `ops/fresh-machine-production-bootstrap-runbook.md` (prereqs, env bootstrap, strict preflight, strict drill path).
-- WEDOS live handoff folder: `ops/live-wedos/` (VPS + cloudflared rollout and production-like validation tooling).
+- live handoff folder: `ops/live-wedos/` (VPS + cloudflared rollout and production-like validation tooling).
 - Production gaplist tracker for 1.4.0: `ops/decommission/PRODUCTION_READY_GAPLIST_1.4.0.md`.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
 - Bundle indexing/exchange pack: `npm run ops:index-evidence-bundles` and `npm run ops:build-attestation-exchange-pack` for portable review artifacts.
@@ -93,7 +93,7 @@
 ## Verification commands (concise)
 ```bash
 npm test -- --run tests/handler.test.ts tests/webhooks.test.ts tests/server-node-adapter.test.ts tests/template-host-site-binding.test.ts
-npm run ops:validate-wedos-readiness -- --profile wedos_medium --env-file config/example.env --strict --json
+npm run ops:validate-hosting-readiness -- --profile wedos_medium --env-file config/example.env --strict --json
 GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)" \
 GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)" \
 GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)" \

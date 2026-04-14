@@ -270,7 +270,7 @@ When cache admission limits are exceeded, cache PUT returns:
 ### Production-like controls: concise verification
 ```bash
 npm test -- --run tests/handler.test.ts tests/webhooks.test.ts tests/server-node-adapter.test.ts tests/template-host-site-binding.test.ts
-npm run ops:validate-wedos-readiness -- --profile wedos_medium --env-file config/example.env --strict --json
+npm run ops:validate-hosting-readiness -- --profile wedos_medium --env-file config/example.env --strict --json
 GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)" \
 GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)" \
 GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)" \

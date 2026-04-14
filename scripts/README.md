@@ -708,13 +708,13 @@ npm run ops:validate-decommission-closeout -- \
   --strict
 ```
 
-## WEDOS readiness validator
+## hosting readiness validator
 
-`scripts/validate-wedos-readiness.js` validates constrained-hosting env settings against `wedos_small`, `wedos_medium`, or `diskless` budget envelopes.
+`scripts/validate-hosting-readiness.js` validates constrained-hosting env settings against `wedos_small`, `wedos_medium`, or `diskless` budget envelopes.
 
 Usage:
 ```bash
-npm run ops:validate-wedos-readiness -- \
+npm run ops:validate-hosting-readiness -- \
   --profile wedos_small \
   --env-file ./.env.wedos \
   --strict

@@ -80,7 +80,7 @@ describe('validate-wedos-readiness.js', () => {
     const result = runCli(['--profile', 'wedos_small'], { env: baseEnv('wedos_small') })
 
     expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain('# WEDOS Readiness')
+    expect(result.stdout).toContain('# Hosting Readiness')
     expect(result.stdout).toContain('Profile: `wedos_small`')
     expect(result.stdout).toContain('Status: `pass`')
     expect(result.stderr).toBe('')
@@ -94,7 +94,7 @@ describe('validate-wedos-readiness.js', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('Status: `warn`')
-    expect(result.stdout).toContain('GATEWAY_RL_MAX_OVERRIDES is not set for WEDOS medium')
+    expect(result.stdout).toContain('GATEWAY_RL_MAX_OVERRIDES is not set for balanced')
     expect(result.stdout).toContain('Set GATEWAY_RL_MAX_OVERRIDES=inbox=80,webhook=240,template=120')
   })
 
@@ -118,13 +118,13 @@ describe('validate-wedos-readiness.js', () => {
     const result = runCli(['--profile', 'wedos_small'], { env })
 
     expect(result.exitCode).toBe(3)
-    expect(result.stdout).toContain('AO_INTEGRITY_FETCH_TIMEOUT_MS is too large for WEDOS small (found 9001)')
+    expect(result.stdout).toContain('AO_INTEGRITY_FETCH_TIMEOUT_MS is too large for constrained-small (found 9001)')
     expect(result.stdout).toContain('Lower AO_INTEGRITY_FETCH_TIMEOUT_MS to <= 4000.')
   })
 
   it('loads env values from --env-file and prints JSON when requested', () => {
     const envFile = makeTempEnvFile([
-      '# WEDOS config',
+      '# Hosting config',
       'export GATEWAY_RESOURCE_PROFILE="wedos_small"',
       'AO_INTEGRITY_FETCH_TIMEOUT_MS=4000',
       'AO_INTEGRITY_FETCH_RETRY_ATTEMPTS=2',

@@ -2,12 +2,12 @@
 
 Use this document with `ops/alerts.md` to tune thresholds per deployment profile.
 
-`ops/alerts.md` reflects **WEDOS medium** defaults. For smaller or diskless hosts, replace only the numeric thresholds using the matrix below; do not mix rows across profiles.
+`ops/alerts.md` reflects **balanced medium** defaults. For smaller or diskless hosts, replace only the numeric thresholds using the matrix below; do not mix rows across profiles.
 Select the profile with `GATEWAY_RESOURCE_PROFILE=wedos_small|wedos_medium|diskless`.
 
 ## Threshold matrix
 
-| Signal | WEDOS small (`wedos_small`) | WEDOS medium (`wedos_medium`) | Diskless (`diskless`) |
+| Signal | constrained small (`wedos_small`) | balanced medium (`wedos_medium`) | Diskless (`diskless`) |
 | --- | ---: | ---: | ---: |
 | `gateway_cache_size` high | `> 110` | `> 220` | `> 90` |
 | `increase(gateway_cache_store_reject_total[10m])` | `> 10` | `> 20` | `> 8` |
@@ -59,7 +59,7 @@ Use this when a rollout is in flight and you are deciding whether to tighten or 
 
 Use these as starter `for:` values when you need profile-specific alert rules. They reduce flapping without hiding a real regression. Do not widen all alerts at once; widen the noisiest signal first.
 
-| Signal family | WEDOS small (`wedos_small`) | WEDOS medium (`wedos_medium`) | Diskless (`diskless`) |
+| Signal family | constrained small (`wedos_small`) | balanced medium (`wedos_medium`) | Diskless (`diskless`) |
 | --- | --- | --- | --- |
 | Mirror mismatch / mirror fetch fail | `for: 2m` | `for: 1m` | `for: 1m` |
 | Audit lag | `for: 12m` | `for: 8m` | `for: 10m` |

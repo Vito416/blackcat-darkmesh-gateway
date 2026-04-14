@@ -240,7 +240,7 @@ Progress notes:
 - Replay/idempotency dedupe and the smoke helper are in place; remaining work is operator automation and final staging evidence.
 - Operator automation now includes helper scripts for evidence export/validation/bundle checks plus workflow dispatch dry-run (`dispatch-consistency-smoke`, `latest-evidence-bundle`, `check-evidence-bundle`).
 
-## P2 - Performance and platform polish (WEDOS-first)
+## P2 - Performance and platform polish (shared-VPS-first)
 
 ### P2.1 Verification scheduling optimizations
 - Verify on startup/cache-fill/state-change only.
@@ -324,7 +324,7 @@ Use this checklist before merge/release sign-off.
 
 - Automation complete, awaiting AO/manual proofs: the closeout helpers can build the final evidence bundle, but AO gate closure and manual proof links still need to be recorded before decommission sign-off.
 - Current blocker snapshot (`2026-04-12T16:35:12Z`):
-  - Implementation health is green (`npm test`, strict legacy boundary checks, strict template contract checks, strict WEDOS profile check against `config/example.env`).
+  - Implementation health is green (`npm test`, strict legacy boundary checks, strict template contract checks, strict profile check against `config/example.env`).
   - Release/decommission closeout is blocked until drill artifacts are generated in `ops/decommission/` and linked in the final evidence pack.
   - AO dependency gate required checks remain `in_progress` and prevent a GO decision.
 

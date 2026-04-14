@@ -1,6 +1,6 @@
-# Live WEDOS (VPS) Runbook
+# Live VPS (VPS) Runbook
 
-Canonical docs for the current WEDOS production-like model.
+Canonical docs for the current production-like VPS model.
 
 ## Status
 

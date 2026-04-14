@@ -5,7 +5,7 @@
 - Tightened template proxy limits with body-size, timeout, and host allowlist guardrails.
 - Added replay pruning, webhook/body size caps, and clearer integrity metrics.
 - Split CI into build/tests and the dedicated integrity gate for faster diagnosis.
-- Tuned integrity fetch cadence and alert profiles for WEDOS-style hosting limits.
+- Tuned integrity fetch cadence and alert profiles for shared-VPS hosting limits.
 - Documented the template secret-smuggling guard, the optional forget-forward relay semantics, the gateway-owned core hash primitive evidence, and the TS `NodeNext` migration so operator docs match the current runtime shape.
 - Added runtime `signatureRef` pinning for mapped template workers, the routing-map coherence validator, the forget-forward config validator, and the expanded release-drill evidence metadata so release checks stay machine-auditable.
 

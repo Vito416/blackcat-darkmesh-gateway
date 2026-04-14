@@ -96,7 +96,7 @@ Run these before the release drill. All commands should exit `0`.
 ```bash
 npm run ops:validate-template-backend-contract -- --strict --json
 
-npm run ops:validate-wedos-readiness -- \
+npm run ops:validate-hosting-readiness -- \
   --profile "$GATEWAY_RESOURCE_PROFILE" \
   --env-file "$BOOTSTRAP_ENV_FILE" \
   --strict --json
@@ -249,7 +249,7 @@ Note: strict closeout remains blocked until AO required checks and manual proof 
 | Failing command | Typical cause | First response |
 | --- | --- | --- |
 | `npm ci` | Node/npm mismatch or lockfile/network issue | Confirm Node `20.x`, npm `10.x`, retry with a clean network path. |
-| `ops:validate-wedos-readiness --strict` | Env values violate selected profile limits | Fix keys in `tmp/bootstrap/gateway.production.env` to match `GATEWAY_RESOURCE_PROFILE`. |
+| `ops:validate-hosting-readiness --strict` | Env values violate selected profile limits | Fix keys in `tmp/bootstrap/gateway.production.env` to match `GATEWAY_RESOURCE_PROFILE`. |
 | `ops:check-template-worker-routing-config --strict` | URL/token map JSON malformed or missing coverage | Rebuild from `config/template-worker-routing.example.json` and `config/template-worker-token-map.example.json`; rerun strict check. |
 | `ops:check-template-worker-map-coherence --strict` | URL/token/signatureRef maps are out of sync | Ensure all three maps contain the same site keys before rerun. |
 | `ops:check-template-signature-ref-map --strict` | Missing signature refs for required sites | Fill `GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP` for every `REQUIRED_TEMPLATE_SITES` key. |

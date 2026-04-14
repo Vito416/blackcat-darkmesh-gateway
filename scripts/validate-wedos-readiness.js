@@ -15,7 +15,7 @@ const VALID_PROFILES = new Set(['wedos_small', 'wedos_medium', 'diskless'])
 const HOST_ALLOWLIST_ENTRY_RE = /^[A-Za-z0-9.-]+(?::\d+)?$/
 const PROFILE_SPECS = {
   wedos_small: {
-    label: 'WEDOS small',
+    label: 'constrained-small',
     recommendedOverrides: null,
     diskless: false,
     rules: [
@@ -36,7 +36,7 @@ const PROFILE_SPECS = {
     ],
   },
   wedos_medium: {
-    label: 'WEDOS medium',
+    label: 'balanced',
     recommendedOverrides: 'inbox=80,webhook=240,template=120',
     diskless: false,
     rules: [
@@ -83,6 +83,7 @@ function usageText() {
   return [
     'Usage:',
     '  node scripts/validate-wedos-readiness.js --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--json] [--strict] [--help]',
+    '  node scripts/validate-hosting-readiness.js --profile wedos_small|wedos_medium|diskless [--env-file <FILE>] [--json] [--strict] [--help]',
     '',
     'Options:',
     '  --profile <NAME>  Hosting profile to validate (required)',
@@ -775,7 +776,7 @@ function evaluateReadiness(profile, env) {
 
 function renderHumanReport(result, meta = {}) {
   const lines = []
-  lines.push('# WEDOS Readiness')
+  lines.push('# Hosting Readiness')
   lines.push('')
   lines.push(`- Profile: \`${result.profile}\``)
   lines.push(`- Status: \`${result.status}\``)

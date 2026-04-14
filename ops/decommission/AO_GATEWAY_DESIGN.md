@@ -66,7 +66,7 @@ Triggered on startup, cache miss, version bump, policy change:
 
 This keeps shared-hosting CPU stable and avoids expensive per-request verification.
 
-## 4) WEDOS/shared-hosting constraints
+## 4) shared-hosting constraints
 
 Design assumptions:
 - no mandatory background queue required for correctness

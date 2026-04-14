@@ -4,7 +4,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 
 ## Recommended profiles
 
-### Profile A: WEDOS small (conservative)
+### Profile A: constrained small (conservative)
 - `GATEWAY_RESOURCE_PROFILE=wedos_small`
 - `GATEWAY_CACHE_TTL_MS=180000`
 - `GATEWAY_CACHE_MAX_ENTRY_BYTES=131072`
@@ -31,7 +31,7 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP=128`
 - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS=43200`
 
-### Profile B: WEDOS medium (balanced default)
+### Profile B: balanced medium (balanced default)
 - `GATEWAY_RESOURCE_PROFILE=wedos_medium`
 - `GATEWAY_CACHE_TTL_MS=300000`
 - `GATEWAY_CACHE_MAX_ENTRY_BYTES=262144`
@@ -151,11 +151,11 @@ Use these as deployment guardrails. The numbers below are starting points; tight
 - `GATEWAY_WEBHOOK_REPLAY_KEY_MAX_BYTES` fails closed on oversized replay keys before they can burn memory or CPU; keep the default unless a real provider key format needs more room.
 - Do not extend replay retention on small or diskless hosts unless the provider retry window really requires it.
 
-## WEDOS readiness validator
+## hosting readiness validator
 Use the validator before promoting a constrained deployment profile. It checks the same hosting knobs documented above and returns a clear pass/warn/fail result.
 
 ```bash
-node scripts/validate-wedos-readiness.js \
+node scripts/validate-hosting-readiness.js \
   --profile wedos_small \
   --env-file .env.wedos \
   --strict
