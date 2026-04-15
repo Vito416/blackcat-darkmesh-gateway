@@ -194,10 +194,18 @@ function mergeRuntimeHints(
 function parseResolverBody(body: unknown): { siteId?: string; runtimeHints?: RuntimeRoutingHints } {
   const record = asRecord(body)
   if (!record) return {}
+  const payload = asRecord(record.payload)
   const data = asRecord(record.data)
+  const bodyData = payload || data
 
-  const siteId = trimString(record.siteId) || trimString(data?.siteId)
-  const runtimeHints = mergeRuntimeHints(collectRuntimeHintsFromRecord(data), collectRuntimeHintsFromRecord(record))
+  const siteId =
+    trimString(record.siteId) ||
+    trimString(payload?.siteId) ||
+    trimString(data?.siteId)
+  const runtimeHints = mergeRuntimeHints(
+    collectRuntimeHintsFromRecord(bodyData),
+    collectRuntimeHintsFromRecord(record),
+  )
   return {
     ...(siteId ? { siteId } : {}),
     ...(runtimeHints ? { runtimeHints } : {}),

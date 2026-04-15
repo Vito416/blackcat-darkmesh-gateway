@@ -294,6 +294,15 @@ function resolveSignerBaseUrl(siteId: string, runtimeWorkerUrl?: string): Resolv
 }
 
 function resolveSignerToken(siteId: string): ResolveResult {
+  const mode = (
+    readStringEnv('GATEWAY_RUNTIME_MODE') ||
+    readStringEnv('NODE_ENV') ||
+    readStringEnv('ENVIRONMENT') ||
+    ''
+  )
+    .trim()
+    .toLowerCase()
+  const productionLike = mode === 'production' || mode === 'staging' || mode === 'prod-like'
   const mapRaw = readStringEnv('GATEWAY_TEMPLATE_WORKER_TOKEN_MAP')
   if (mapRaw) {
     const parsed = parseStringMap(mapRaw, 'GATEWAY_TEMPLATE_WORKER_TOKEN_MAP')
@@ -307,9 +316,28 @@ function resolveSignerToken(siteId: string): ResolveResult {
     }
     const mapped = parsed.map[siteId]
     if (mapped) return { ok: true, value: mapped }
+    if (productionLike) {
+      return {
+        ok: false,
+        status: 503,
+        error: 'worker_token_not_configured',
+        detail: { siteId },
+      }
+    }
   }
 
-  const fallback = readStringEnv('WORKER_AUTH_TOKEN') || readStringEnv('WORKER_SIGN_TOKEN')
+  if (productionLike && !mapRaw) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'worker_token_map_required',
+      detail: { siteId },
+    }
+  }
+
+  const fallback =
+    readStringEnv('WORKER_SIGN_TOKEN') ||
+    (productionLike ? undefined : readStringEnv('WORKER_AUTH_TOKEN'))
   if (!fallback) {
     return {
       ok: false,
@@ -322,8 +350,25 @@ function resolveSignerToken(siteId: string): ResolveResult {
 }
 
 function resolveExpectedSignatureRef(siteId: string): ResolveResult {
+  const mode = (
+    readStringEnv('GATEWAY_RUNTIME_MODE') ||
+    readStringEnv('NODE_ENV') ||
+    readStringEnv('ENVIRONMENT') ||
+    ''
+  )
+    .trim()
+    .toLowerCase()
+  const productionLike = mode === 'production' || mode === 'staging' || mode === 'prod-like'
   const mapRaw = readStringEnv('GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP')
   if (!mapRaw) {
+    if (productionLike) {
+      return {
+        ok: false,
+        status: 503,
+        error: 'worker_signature_ref_map_required',
+        detail: { siteId },
+      }
+    }
     return { ok: true, value: '' }
   }
 
@@ -340,6 +385,14 @@ function resolveExpectedSignatureRef(siteId: string): ResolveResult {
 
   const expected = parsed.map[siteId]
   if (!expected) {
+    if (productionLike) {
+      return {
+        ok: false,
+        status: 503,
+        error: 'worker_signature_ref_not_configured',
+        detail: { siteId },
+      }
+    }
     return { ok: true, value: '' }
   }
 

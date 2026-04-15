@@ -16,9 +16,15 @@
       "items": {
         "type": "object",
         "additionalProperties": true,
+        "required": ["sku"],
+        "anyOf": [
+          { "required": ["quantity"] },
+          { "required": ["qty"] }
+        ],
         "properties": {
           "id": { "type": "string" },
           "sku": { "type": "string" },
+          "qty": { "type": "number", "minimum": 0.000001 },
           "quantity": { "type": "number", "minimum": 0.000001 },
           "price": { "type": "number" }
         }

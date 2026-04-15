@@ -23,11 +23,14 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "paymentId": { "type": "string" },
         "paymentIntentId": { "type": "string" },
         "provider": { "type": "string" },
         "orderId": { "type": "string" },
         "clientSecret": { "type": "string" },
         "approvalUrl": { "type": "string" },
+        "providerPaymentId": { "type": "string" },
+        "gatewayUrl": { "type": "string" },
         "status": { "type": "string" }
       }
     }

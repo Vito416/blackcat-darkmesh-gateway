@@ -26,7 +26,8 @@
         "orderId": { "type": "string" },
         "siteId": { "type": "string" },
         "currency": { "type": "string" },
-        "total": { "type": "number" }
+        "total": { "type": "number" },
+        "totalAmount": { "type": "number" }
       }
     }
   }

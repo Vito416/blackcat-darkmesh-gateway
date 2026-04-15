@@ -4,7 +4,7 @@
   "title": "checkout.create-payment-intent request",
   "type": "object",
   "additionalProperties": true,
-  "required": ["orderId", "provider"],
+  "required": ["orderId"],
   "properties": {
     "orderId": {
       "type": "string",
