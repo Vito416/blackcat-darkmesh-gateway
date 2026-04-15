@@ -685,7 +685,19 @@ async function handleTemplateCall(
     inc('gateway_template_call_blocked')
     return jsonErrorResponse(resolvedHostSite.status, resolvedHostSite.error)
   }
+  const bodyFallbackAllowed =
+    readHandlerStrictEnabledFlag('GATEWAY_SITE_RESOLVE_ALLOW_BODY_FALLBACK') ||
+    (!productionLikeMode && !readHandlerEnvString('GATEWAY_SITE_ID_BY_HOST_MAP'))
   const mappedSiteId = resolvedHostSite.siteId
+  const fallbackSiteId = bodySiteId || payloadSiteId
+  if (!mappedSiteId && writeAction && !bodyFallbackAllowed) {
+    inc('gateway_template_call_blocked')
+    return jsonErrorResponse(403, 'site_not_bound_for_host')
+  }
+  if (!mappedSiteId && fallbackSiteId && !bodyFallbackAllowed) {
+    inc('gateway_template_call_blocked')
+    return jsonErrorResponse(400, 'site_id_without_host_binding')
+  }
   if (mappedSiteId) {
     if (bodySiteId && bodySiteId !== mappedSiteId) {
       inc('gateway_template_call_blocked')
@@ -697,16 +709,18 @@ async function handleTemplateCall(
     }
   }
 
+  const effectiveSiteId = mappedSiteId || (bodyFallbackAllowed ? fallbackSiteId : '')
+
   let effectivePayload = payload
-  if (mappedSiteId && payload && typeof payload === 'object' && !Array.isArray(payload) && !payloadSiteId) {
-    effectivePayload = { ...(payload as Record<string, unknown>), siteId: mappedSiteId }
+  if (effectiveSiteId && payload && typeof payload === 'object' && !Array.isArray(payload) && !payloadSiteId) {
+    effectivePayload = { ...(payload as Record<string, unknown>), siteId: effectiveSiteId }
   }
 
   const res = await proxyTemplateCall({
     action,
     payload: effectivePayload,
     requestId: typeof (body as any).requestId === 'string' ? (body as any).requestId : undefined,
-    siteId: mappedSiteId || bodySiteId || undefined,
+    siteId: effectiveSiteId || undefined,
     runtimeHints: resolvedHostSite.runtimeHints,
     actor: typeof (body as any).actor === 'string' ? (body as any).actor : undefined,
     role: typeof (body as any).role === 'string' ? (body as any).role : undefined,
