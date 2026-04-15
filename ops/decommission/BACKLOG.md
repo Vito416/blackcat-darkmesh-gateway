@@ -7,7 +7,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 - P1 operator/runbook debt is tracked explicitly in `ops/decommission/P1_RUNBOOK_DEBT_BACKLOG.md` (P1-01..P1-06).
 - Latest P1 hardening evidence batch is tracked in `ops/decommission/P1_FIX_BATCH_2026-04-15.md` (P1-03/P1-04 closed, P1-01/P1-02 advanced).
-- Latest live worker drill snapshot is tracked in `ops/decommission/P1_WORKER_DRILLS_2026-04-15.md` (P1-02 currently failing live replay contention; strong-lock source fix pending deploy/re-drill).
+- Latest live worker drill snapshot is tracked in `ops/decommission/P1_WORKER_DRILLS_2026-04-15.md` (P1-01 + P1-02 both closed after live redeploy/re-drill).
 - P1-01/P1-02 now have concrete runbooks in `blackcat-darkmesh-ao/worker/ops/runbooks/` and evidence templates in `ops/decommission/evidence/`.
 
 - Gateway-side implementation is complete for the current migration slice; the remaining blockers are AO-side registry/authority lifecycle work plus the final decommission evidence, and those AO blockers remain open.
