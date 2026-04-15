@@ -80,7 +80,7 @@ describe('validate-hosting-readiness.js', () => {
     const result = runCli(['--profile', 'vps_small'], { env: baseEnv('vps_small') })
 
     expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain('# Hosting Readiness')
+    expect(result.stdout).toContain('# Deployment Profile Readiness')
     expect(result.stdout).toContain('Profile: `vps_small`')
     expect(result.stdout).toContain('Status: `pass`')
     expect(result.stderr).toBe('')
