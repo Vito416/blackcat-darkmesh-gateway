@@ -13,12 +13,17 @@ Legend:
 - Owner: worker ops (`blackcat-darkmesh-ao/worker`).
 - Evidence target: staged rotation transcript + `worker` test run in release artifacts.
 - Latest hardening batch: `ops/decommission/P1_FIX_BATCH_2026-04-15.md` (token-topology fail-closed checks landed).
+- Runbook: `blackcat-darkmesh-ao/worker/ops/runbooks/token-scope-rotation.md`
+- Evidence template: `ops/decommission/P1_WORKER_TOKEN_ROTATION_EVIDENCE_TEMPLATE.md`
 
 ## P1-02 Worker replay contention drill
 - [~] Add operator drill for replay guard contention path (claim collision, expected `409 replay`, recovery expectations, metric interpretation).
 - Owner: worker ops.
 - Evidence target: replay drill log with before/after metrics snapshot.
 - Latest hardening batch: `ops/decommission/P1_FIX_BATCH_2026-04-15.md` (claim-marker ownership check + concurrency regression test landed).
+- Runbook: `blackcat-darkmesh-ao/worker/ops/runbooks/replay-contention-drill.md`
+- Drill helper: `blackcat-darkmesh-ao/worker/ops/loadtest/replay-contention-drill.mjs`
+- Evidence template: `ops/decommission/P1_WORKER_REPLAY_CONTENTION_EVIDENCE_TEMPLATE.md`
 
 ## P1-03 Gateway AO outage behavior drill
 - [x] Validate and document AO resolver outage path (negative-cache TTL + circuit-breaker open/close windows).
