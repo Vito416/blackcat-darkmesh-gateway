@@ -17,6 +17,16 @@ type CachedAoResolution = {
   runtimeHints?: RuntimeRoutingHints
   expiresAt: number
 }
+type CachedAoUnavailable = {
+  error: string
+  status: number
+  expiresAt: number
+}
+type ResolverCircuitState = {
+  failures: number
+  windowStartMs: number
+  openUntilMs: number
+}
 
 export type HostSiteResolution =
   | { ok: true; siteId?: string; runtimeHints?: RuntimeRoutingHints }
@@ -24,7 +34,17 @@ export type HostSiteResolution =
 
 const SITE_RESOLVE_TIMEOUT_DEFAULT_MS = 3_000
 const SITE_RESOLVE_CACHE_TTL_DEFAULT_MS = 30_000
+const SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_DEFAULT_MS = 5_000
+const SITE_RESOLVE_BREAKER_THRESHOLD_DEFAULT = 3
+const SITE_RESOLVE_BREAKER_WINDOW_DEFAULT_MS = 20_000
+const SITE_RESOLVE_BREAKER_OPEN_DEFAULT_MS = 15_000
 const aoResolutionCache = new Map<string, CachedAoResolution>()
+const aoUnavailableCache = new Map<string, CachedAoUnavailable>()
+const resolverCircuit: ResolverCircuitState = {
+  failures: 0,
+  windowStartMs: 0,
+  openUntilMs: 0,
+}
 const RUNTIME_POINTER_FIELDS = [
   'processId',
   'siteProcessId',
@@ -119,6 +139,28 @@ function readResolverTimeoutMs(): number {
 
 function readResolverCacheTtlMs(): number {
   return readPositiveIntEnv('GATEWAY_SITE_RESOLVE_CACHE_TTL_MS', SITE_RESOLVE_CACHE_TTL_DEFAULT_MS)
+}
+
+function readResolverUnavailableCacheTtlMs(): number {
+  return readPositiveIntEnv(
+    'GATEWAY_SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_MS',
+    SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_DEFAULT_MS,
+  )
+}
+
+function readResolverBreakerThreshold(): number {
+  return readPositiveIntEnv('GATEWAY_SITE_RESOLVE_BREAKER_THRESHOLD', SITE_RESOLVE_BREAKER_THRESHOLD_DEFAULT)
+}
+
+function readResolverBreakerWindowMs(): number {
+  return readPositiveIntEnv(
+    'GATEWAY_SITE_RESOLVE_BREAKER_WINDOW_MS',
+    SITE_RESOLVE_BREAKER_WINDOW_DEFAULT_MS,
+  )
+}
+
+function readResolverBreakerOpenMs(): number {
+  return readPositiveIntEnv('GATEWAY_SITE_RESOLVE_BREAKER_OPEN_MS', SITE_RESOLVE_BREAKER_OPEN_DEFAULT_MS)
 }
 
 function allowFallback(): boolean {
@@ -224,6 +266,16 @@ function cachedAoLookup(host: string): CachedAoResolution | null {
   return cached
 }
 
+function cachedAoUnavailable(host: string): CachedAoUnavailable | null {
+  const cached = aoUnavailableCache.get(host)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    aoUnavailableCache.delete(host)
+    return null
+  }
+  return cached
+}
+
 function storeAoLookup(host: string, siteId: string | undefined, runtimeHints?: RuntimeRoutingHints) {
   const ttlMs = readResolverCacheTtlMs()
   aoResolutionCache.set(host, {
@@ -231,9 +283,55 @@ function storeAoLookup(host: string, siteId: string | undefined, runtimeHints?: 
     runtimeHints,
     expiresAt: Date.now() + ttlMs,
   })
+  aoUnavailableCache.delete(host)
+}
+
+function storeAoUnavailable(host: string, error: string, status: number) {
+  const ttlMs = readResolverUnavailableCacheTtlMs()
+  aoUnavailableCache.set(host, {
+    error,
+    status,
+    expiresAt: Date.now() + ttlMs,
+  })
+}
+
+function resolverCircuitOpen(now = Date.now()): boolean {
+  return resolverCircuit.openUntilMs > now
+}
+
+function noteResolverSuccess(now = Date.now()) {
+  resolverCircuit.failures = 0
+  resolverCircuit.windowStartMs = now
+  resolverCircuit.openUntilMs = 0
+}
+
+function noteResolverFailure(now = Date.now()) {
+  const windowMs = readResolverBreakerWindowMs()
+  if (resolverCircuit.windowStartMs <= 0 || now - resolverCircuit.windowStartMs > windowMs) {
+    resolverCircuit.windowStartMs = now
+    resolverCircuit.failures = 0
+  }
+  resolverCircuit.failures += 1
+  if (resolverCircuit.failures >= readResolverBreakerThreshold()) {
+    resolverCircuit.openUntilMs = now + readResolverBreakerOpenMs()
+  }
 }
 
 async function lookupSiteIdViaAo(host: string): Promise<AoLookupResult> {
+  const now = Date.now()
+  if (resolverCircuitOpen(now)) {
+    return { kind: 'unavailable', error: 'site_resolver_circuit_open', status: 503 }
+  }
+
+  const unavailableCached = cachedAoUnavailable(host)
+  if (unavailableCached) {
+    return {
+      kind: 'unavailable',
+      error: unavailableCached.error,
+      status: unavailableCached.status,
+    }
+  }
+
   const cached = cachedAoLookup(host)
   if (cached !== null) {
     if (cached.siteId) {
@@ -273,10 +371,13 @@ async function lookupSiteIdViaAo(host: string): Promise<AoLookupResult> {
 
     if (response.status === 404) {
       storeAoLookup(host, undefined)
+      noteResolverSuccess()
       return { kind: 'not_found' }
     }
 
     if (!response.ok) {
+      noteResolverFailure()
+      storeAoUnavailable(host, 'site_resolver_unavailable', 503)
       return { kind: 'unavailable', error: 'site_resolver_unavailable', status: 503 }
     }
 
@@ -284,10 +385,12 @@ async function lookupSiteIdViaAo(host: string): Promise<AoLookupResult> {
     const parsed = parseResolverBody(body)
     if (!parsed.siteId) {
       storeAoLookup(host, undefined)
+      noteResolverSuccess()
       return { kind: 'not_found' }
     }
 
     storeAoLookup(host, parsed.siteId, parsed.runtimeHints)
+    noteResolverSuccess()
     return {
       kind: 'resolved',
       siteId: parsed.siteId,
@@ -295,8 +398,12 @@ async function lookupSiteIdViaAo(host: string): Promise<AoLookupResult> {
     }
   } catch {
     if (timedOut) {
+      noteResolverFailure()
+      storeAoUnavailable(host, 'site_resolver_timeout', 504)
       return { kind: 'unavailable', error: 'site_resolver_timeout', status: 504 }
     }
+    noteResolverFailure()
+    storeAoUnavailable(host, 'site_resolver_unavailable', 503)
     return { kind: 'unavailable', error: 'site_resolver_unavailable', status: 503 }
   } finally {
     clearTimeout(timer)
@@ -398,4 +505,8 @@ export async function resolveTemplateSiteIdFromHost(hostRaw: string, productionL
 
 export function resetTemplateSiteResolverCacheForTests() {
   aoResolutionCache.clear()
+  aoUnavailableCache.clear()
+  resolverCircuit.failures = 0
+  resolverCircuit.windowStartMs = 0
+  resolverCircuit.openUntilMs = 0
 }

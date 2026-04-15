@@ -61,6 +61,7 @@
 - Node-only VPS installer path: `ops/install/README.md` (bootstrap + hardening + systemd + cloudflared wiring).
 - live handoff folder: `ops/live-vps/` (VPS + cloudflared rollout and production-like validation tooling).
 - Production gaplist tracker for 1.4.0: `ops/decommission/PRODUCTION_READY_GAPLIST_1.4.0.md`.
+- P1 runbook debt tracker (cross-repo): `ops/decommission/P1_RUNBOOK_DEBT_BACKLOG.md`.
 - Evidence bundle scripts: `npm run ops:export-integrity-evidence` and `npm run ops:validate-integrity-attestation` produce and verify the compare/attestation evidence set used for go/no-go checks.
 - Bundle indexing/exchange pack: `npm run ops:index-evidence-bundles` and `npm run ops:build-attestation-exchange-pack` for portable review artifacts.
 - Schema validation: keep attestation payloads aligned with `ops/schemas/integrity-attestation.schema.json` before archiving the bundle.

@@ -5,6 +5,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 ## Tracker
 
 - Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
+- P1 operator/runbook debt is tracked explicitly in `ops/decommission/P1_RUNBOOK_DEBT_BACKLOG.md` (P1-01..P1-06).
 
 - Gateway-side implementation is complete for the current migration slice; the remaining blockers are AO-side registry/authority lifecycle work plus the final decommission evidence, and those AO blockers remain open.
 - Machine-validated release evidence is now available from `build-release-evidence-pack`, `validate-ao-dependency-gate`, `build-release-signoff-checklist`, and the consistency drift report/summary artifacts produced by `build-drift-alert-summary`.

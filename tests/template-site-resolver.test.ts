@@ -22,6 +22,10 @@ describe('template host resolver', () => {
     delete process.env.GATEWAY_SITE_RESOLVE_AO_URL
     delete process.env.GATEWAY_SITE_RESOLVE_TIMEOUT_MS
     delete process.env.GATEWAY_SITE_RESOLVE_CACHE_TTL_MS
+    delete process.env.GATEWAY_SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_MS
+    delete process.env.GATEWAY_SITE_RESOLVE_BREAKER_THRESHOLD
+    delete process.env.GATEWAY_SITE_RESOLVE_BREAKER_WINDOW_MS
+    delete process.env.GATEWAY_SITE_RESOLVE_BREAKER_OPEN_MS
     delete process.env.GATEWAY_SITE_RESOLVE_ALLOW_BODY_FALLBACK
     delete process.env.GATEWAY_PRODUCTION_LIKE
     delete process.env.AO_PUBLIC_API_URL
@@ -362,5 +366,92 @@ describe('template host resolver', () => {
     const [, templateInit] = fetchSpy.mock.calls[1] as [string, RequestInit]
     const templateBody = JSON.parse(String(templateInit.body || '{}'))
     expect(templateBody.siteId).toBe('site-body')
+  })
+
+  it('caches resolver unavailable responses briefly to avoid retry storms', async () => {
+    process.env.GATEWAY_SITE_RESOLVE_MODE = 'ao'
+    process.env.GATEWAY_SITE_RESOLVE_AO_URL = 'https://resolver.example'
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.NODE_ENV = 'production'
+    process.env.GATEWAY_PRODUCTION_LIKE = '1'
+    process.env.GATEWAY_SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_MS = '10000'
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('/api/public/site-by-host')) {
+        return new Response(JSON.stringify({ error: 'down' }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('unexpected', { status: 404 })
+    })
+
+    const res1 = await handleRequest(
+      buildTemplateCallRequest('cache-unavail.example', {
+        action: 'public.resolve-route',
+        payload: { path: '/' },
+      }),
+    )
+    const res2 = await handleRequest(
+      buildTemplateCallRequest('cache-unavail.example', {
+        action: 'public.resolve-route',
+        payload: { path: '/' },
+      }),
+    )
+
+    expect(res1.status).toBe(503)
+    await expect(res1.json()).resolves.toMatchObject({ error: 'site_resolver_unavailable' })
+    expect(res2.status).toBe(503)
+    await expect(res2.json()).resolves.toMatchObject({ error: 'site_resolver_unavailable' })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens resolver circuit breaker after repeated AO failures', async () => {
+    process.env.GATEWAY_SITE_RESOLVE_MODE = 'ao'
+    process.env.GATEWAY_SITE_RESOLVE_AO_URL = 'https://resolver.example'
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.NODE_ENV = 'production'
+    process.env.GATEWAY_PRODUCTION_LIKE = '1'
+    process.env.GATEWAY_SITE_RESOLVE_BREAKER_THRESHOLD = '2'
+    process.env.GATEWAY_SITE_RESOLVE_BREAKER_WINDOW_MS = '60000'
+    process.env.GATEWAY_SITE_RESOLVE_BREAKER_OPEN_MS = '60000'
+    process.env.GATEWAY_SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_MS = '1'
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('/api/public/site-by-host')) {
+        return new Response(JSON.stringify({ error: 'down' }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('unexpected', { status: 404 })
+    })
+
+    const res1 = await handleRequest(
+      buildTemplateCallRequest('breaker-1.example', {
+        action: 'public.resolve-route',
+        payload: { path: '/' },
+      }),
+    )
+    const res2 = await handleRequest(
+      buildTemplateCallRequest('breaker-2.example', {
+        action: 'public.resolve-route',
+        payload: { path: '/' },
+      }),
+    )
+    const res3 = await handleRequest(
+      buildTemplateCallRequest('breaker-3.example', {
+        action: 'public.resolve-route',
+        payload: { path: '/' },
+      }),
+    )
+
+    expect(res1.status).toBe(503)
+    expect(res2.status).toBe(503)
+    expect(res3.status).toBe(503)
+    await expect(res3.json()).resolves.toMatchObject({ error: 'site_resolver_circuit_open' })
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 })
