@@ -180,6 +180,7 @@ jobs:
       GATEWAY_TEMPLATE_WORKER_TOKEN_MAP: ${{ vars.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP || secrets.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP || '' }}
       GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP: ${{ vars.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || secrets.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || '' }}
       GATEWAY_TEMPLATE_VARIANT_MAP: ${{ vars.GATEWAY_TEMPLATE_VARIANT_MAP || secrets.GATEWAY_TEMPLATE_VARIANT_MAP || '' }}
+      GATEWAY_REQUIRED_SITES: ${{ vars.GATEWAY_REQUIRED_SITES || secrets.GATEWAY_REQUIRED_SITES || '' }}
       GATEWAY_FORGET_FORWARD_URL: ${{ vars.GATEWAY_FORGET_FORWARD_URL || secrets.GATEWAY_FORGET_FORWARD_URL || '' }}
       GATEWAY_FORGET_FORWARD_TOKEN: ${{ vars.GATEWAY_FORGET_FORWARD_TOKEN || secrets.GATEWAY_FORGET_FORWARD_TOKEN || '' }}
       GATEWAY_FORGET_FORWARD_TIMEOUT_MS: ${{ vars.GATEWAY_FORGET_FORWARD_TIMEOUT_MS || secrets.GATEWAY_FORGET_FORWARD_TIMEOUT_MS || '' }}
@@ -203,24 +204,35 @@ jobs:
           set -euo pipefail
           url_map_count="$(node -e "const raw = process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP || ''; try { const parsed = raw ? JSON.parse(raw) : null; const count = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed).length : 0; process.stdout.write(String(count)); } catch (_) { process.stdout.write('0'); }")"
           if [ "${url_map_count}" -gt 0 ]; then
-            npm run ops:check-template-worker-map-coherence -- --json --strict --require-token-map --require-signature-map
+            if [ -z "${GATEWAY_REQUIRED_SITES:-}" ]; then
+              echo "GATEWAY_REQUIRED_SITES is required when template worker maps are configured" >&2
+              exit 1
+            fi
+            npm run ops:check-template-worker-map-coherence -- --json --strict --require-token-map --require-signature-map --require-sites "${GATEWAY_REQUIRED_SITES}"
           else
             npm run ops:check-template-worker-map-coherence -- --json
           fi
       - name: Check template signature-ref map
-        run: npm run ops:check-template-signature-ref-map -- --strict --json
+        run: |
+          set -euo pipefail
+          if [ -n "${GATEWAY_REQUIRED_SITES:-}" ]; then
+            npm run ops:check-template-signature-ref-map -- --strict --json --require-sites "${GATEWAY_REQUIRED_SITES}"
+          else
+            npm run ops:check-template-signature-ref-map -- --strict --json
+          fi
       - name: Check template bridge contract compatibility
         run: npm run ops:check-template-bridge-contract -- --strict --json
       - name: Validate template variant map config (strict)
         run: |
           set -euo pipefail
+          required_sites="${GATEWAY_REQUIRED_SITES:-site-alpha,site-beta}"
           if [ -z "${GATEWAY_TEMPLATE_VARIANT_MAP:-}" ]; then
             export GATEWAY_TEMPLATE_VARIANT_MAP="$(cat config/template-variant-map.example.json)"
             echo "GATEWAY_TEMPLATE_VARIANT_MAP source: config/template-variant-map.example.json (CI fallback)"
-            node scripts/validate-template-variant-map-config.js --strict --require-sites site-alpha,site-beta --allow-placeholders
+            node scripts/validate-template-variant-map-config.js --strict --require-sites "${required_sites}" --allow-placeholders
           else
             echo "GATEWAY_TEMPLATE_VARIANT_MAP source: vars/secrets"
-            node scripts/validate-template-variant-map-config.js --strict --require-sites site-alpha,site-beta
+            node scripts/validate-template-variant-map-config.js --strict --require-sites "${required_sites}"
           fi
       - name: Check forget-forward config
         run: npm run ops:check-forget-forward-config -- --json
