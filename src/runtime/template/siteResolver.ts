@@ -35,11 +35,13 @@ export type HostSiteResolution =
 const SITE_RESOLVE_TIMEOUT_DEFAULT_MS = 3_000
 const SITE_RESOLVE_CACHE_TTL_DEFAULT_MS = 30_000
 const SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_DEFAULT_MS = 5_000
+const SITE_RESOLVE_GLOBAL_UNAVAILABLE_CACHE_TTL_DEFAULT_MS = 0
 const SITE_RESOLVE_BREAKER_THRESHOLD_DEFAULT = 3
 const SITE_RESOLVE_BREAKER_WINDOW_DEFAULT_MS = 20_000
 const SITE_RESOLVE_BREAKER_OPEN_DEFAULT_MS = 15_000
 const aoResolutionCache = new Map<string, CachedAoResolution>()
 const aoUnavailableCache = new Map<string, CachedAoUnavailable>()
+let globalAoUnavailableCache: CachedAoUnavailable | null = null
 const resolverCircuit: ResolverCircuitState = {
   failures: 0,
   windowStartMs: 0,
@@ -145,6 +147,13 @@ function readResolverUnavailableCacheTtlMs(): number {
   return readPositiveIntEnv(
     'GATEWAY_SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_MS',
     SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_DEFAULT_MS,
+  )
+}
+
+function readResolverGlobalUnavailableCacheTtlMs(): number {
+  return readPositiveIntEnv(
+    'GATEWAY_SITE_RESOLVE_GLOBAL_UNAVAILABLE_CACHE_TTL_MS',
+    SITE_RESOLVE_GLOBAL_UNAVAILABLE_CACHE_TTL_DEFAULT_MS,
   )
 }
 
@@ -276,6 +285,20 @@ function cachedAoUnavailable(host: string): CachedAoUnavailable | null {
   return cached
 }
 
+function cachedGlobalAoUnavailable(): CachedAoUnavailable | null {
+  const cached = globalAoUnavailableCache
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    globalAoUnavailableCache = null
+    return null
+  }
+  return cached
+}
+
+function clearGlobalAoUnavailable() {
+  globalAoUnavailableCache = null
+}
+
 function storeAoLookup(host: string, siteId: string | undefined, runtimeHints?: RuntimeRoutingHints) {
   const ttlMs = readResolverCacheTtlMs()
   aoResolutionCache.set(host, {
@@ -284,6 +307,7 @@ function storeAoLookup(host: string, siteId: string | undefined, runtimeHints?: 
     expiresAt: Date.now() + ttlMs,
   })
   aoUnavailableCache.delete(host)
+  clearGlobalAoUnavailable()
 }
 
 function storeAoUnavailable(host: string, error: string, status: number) {
@@ -293,6 +317,14 @@ function storeAoUnavailable(host: string, error: string, status: number) {
     status,
     expiresAt: Date.now() + ttlMs,
   })
+  const globalTtlMs = readResolverGlobalUnavailableCacheTtlMs()
+  if (globalTtlMs > 0) {
+    globalAoUnavailableCache = {
+      error,
+      status,
+      expiresAt: Date.now() + globalTtlMs,
+    }
+  }
 }
 
 function resolverCircuitOpen(now = Date.now()): boolean {
@@ -321,6 +353,15 @@ async function lookupSiteIdViaAo(host: string): Promise<AoLookupResult> {
   const now = Date.now()
   if (resolverCircuitOpen(now)) {
     return { kind: 'unavailable', error: 'site_resolver_circuit_open', status: 503 }
+  }
+
+  const globalUnavailableCached = cachedGlobalAoUnavailable()
+  if (globalUnavailableCached) {
+    return {
+      kind: 'unavailable',
+      error: globalUnavailableCached.error,
+      status: globalUnavailableCached.status,
+    }
   }
 
   const unavailableCached = cachedAoUnavailable(host)
@@ -506,6 +547,7 @@ export async function resolveTemplateSiteIdFromHost(hostRaw: string, productionL
 export function resetTemplateSiteResolverCacheForTests() {
   aoResolutionCache.clear()
   aoUnavailableCache.clear()
+  globalAoUnavailableCache = null
   resolverCircuit.failures = 0
   resolverCircuit.windowStartMs = 0
   resolverCircuit.openUntilMs = 0

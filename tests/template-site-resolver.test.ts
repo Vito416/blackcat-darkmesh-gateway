@@ -23,6 +23,7 @@ describe('template host resolver', () => {
     delete process.env.GATEWAY_SITE_RESOLVE_TIMEOUT_MS
     delete process.env.GATEWAY_SITE_RESOLVE_CACHE_TTL_MS
     delete process.env.GATEWAY_SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_MS
+    delete process.env.GATEWAY_SITE_RESOLVE_GLOBAL_UNAVAILABLE_CACHE_TTL_MS
     delete process.env.GATEWAY_SITE_RESOLVE_BREAKER_THRESHOLD
     delete process.env.GATEWAY_SITE_RESOLVE_BREAKER_WINDOW_MS
     delete process.env.GATEWAY_SITE_RESOLVE_BREAKER_OPEN_MS
@@ -395,6 +396,46 @@ describe('template host resolver', () => {
     )
     const res2 = await handleRequest(
       buildTemplateCallRequest('cache-unavail.example', {
+        action: 'public.resolve-route',
+        payload: { path: '/' },
+      }),
+    )
+
+    expect(res1.status).toBe(503)
+    await expect(res1.json()).resolves.toMatchObject({ error: 'site_resolver_unavailable' })
+    expect(res2.status).toBe(503)
+    await expect(res2.json()).resolves.toMatchObject({ error: 'site_resolver_unavailable' })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses global unavailable cache across hosts when enabled', async () => {
+    process.env.GATEWAY_SITE_RESOLVE_MODE = 'ao'
+    process.env.GATEWAY_SITE_RESOLVE_AO_URL = 'https://resolver.example'
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.NODE_ENV = 'production'
+    process.env.GATEWAY_PRODUCTION_LIKE = '1'
+    process.env.GATEWAY_SITE_RESOLVE_UNAVAILABLE_CACHE_TTL_MS = '1'
+    process.env.GATEWAY_SITE_RESOLVE_GLOBAL_UNAVAILABLE_CACHE_TTL_MS = '10000'
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('/api/public/site-by-host')) {
+        return new Response(JSON.stringify({ error: 'down' }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('unexpected', { status: 404 })
+    })
+
+    const res1 = await handleRequest(
+      buildTemplateCallRequest('cache-global-a.example', {
+        action: 'public.resolve-route',
+        payload: { path: '/' },
+      }),
+    )
+    const res2 = await handleRequest(
+      buildTemplateCallRequest('cache-global-b.example', {
         action: 'public.resolve-route',
         payload: { path: '/' },
       }),
