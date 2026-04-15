@@ -13,6 +13,7 @@ function usage(exitCode = 0) {
       '  --url <URL>        Gateway base URL; repeat at least twice',
       '  --out-dir <PATH>   Base directory for the timestamped evidence bundle',
       '  --token <VALUE>    Optional auth token; repeat once per URL or once for all URLs',
+      '  --allow-anon       Allow anonymous /integrity/state requests when no token is configured',
       '  --hmac-env <NAME>  Optional env var name containing an HMAC key for attestation',
       '  --help             Show this help',
       '',
@@ -46,11 +47,16 @@ function parseArgs(argv) {
     tokens: [],
     outDir: '',
     hmacEnv: '',
+    allowAnon: false,
   }
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') usage(0)
+    if (arg === '--allow-anon') {
+      args.allowAnon = true
+      continue
+    }
 
     const next = argv[i + 1]
     const readValue = () => {

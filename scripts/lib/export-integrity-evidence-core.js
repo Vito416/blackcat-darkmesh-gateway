@@ -24,11 +24,15 @@ function createBundleDir(outDir, { now = () => new Date(), pid = process.pid, ra
 }
 
 function resolveTokenMode(args, urls, envToken = '') {
-  const tokens = resolveTokensForUrls(urls, args.tokens, envToken)
+  const allowAnonymous = args?.allowAnon === true
+  const tokens = resolveTokensForUrls(urls, args.tokens, envToken, { allowAnonymous })
 
   let tokenMode = 'env:GATEWAY_INTEGRITY_STATE_TOKEN'
   if (args.tokens.length === 1) tokenMode = 'explicit:shared'
   if (args.tokens.length === urls.length) tokenMode = 'explicit:per-url'
+  if (allowAnonymous && args.tokens.length === 0 && !(typeof envToken === 'string' && envToken.trim())) {
+    tokenMode = 'anonymous'
+  }
 
   return { tokens, tokenMode, envToken }
 }
@@ -145,20 +149,26 @@ function buildManifest({
   }
 }
 
-function buildCompareArgs(urls, tokens) {
+function buildCompareArgs(urls, tokens, allowAnon = false) {
   const compareArgs = ['--url', urls[0]]
   for (let i = 1; i < urls.length; i += 1) compareArgs.push('--url', urls[i])
-  if (tokens.length > 0) {
-    for (const token of tokens) compareArgs.push('--token', token)
+  const nonEmptyTokens = tokens.filter((token) => typeof token === 'string' && token.trim().length > 0)
+  if (nonEmptyTokens.length > 0) {
+    for (const token of nonEmptyTokens) compareArgs.push('--token', token)
+  } else if (allowAnon) {
+    compareArgs.push('--allow-anon')
   }
   return compareArgs
 }
 
-function buildAttestationArgs(urls, tokens, attestationPath, hmacEnv) {
+function buildAttestationArgs(urls, tokens, attestationPath, hmacEnv, allowAnon = false) {
   const attestationArgs = ['--url', urls[0]]
   for (let i = 1; i < urls.length; i += 1) attestationArgs.push('--url', urls[i])
-  if (tokens.length > 0) {
-    for (const token of tokens) attestationArgs.push('--token', token)
+  const nonEmptyTokens = tokens.filter((token) => typeof token === 'string' && token.trim().length > 0)
+  if (nonEmptyTokens.length > 0) {
+    for (const token of nonEmptyTokens) attestationArgs.push('--token', token)
+  } else if (allowAnon) {
+    attestationArgs.push('--allow-anon')
   }
   attestationArgs.push('--out', attestationPath)
   if (hmacEnv) attestationArgs.push('--hmac-env', hmacEnv)
@@ -186,11 +196,17 @@ async function exportIntegrityEvidence({
   await mkdirFn(bundleDir, { recursive: true })
 
   const startedAt = now().toISOString()
-  const compareArgs = buildCompareArgs(urls, tokens)
+  const compareArgs = buildCompareArgs(urls, tokens, args.allowAnon === true)
   const compareResult = runNodeScript(compareScript, compareArgs, {}, redactTokenArgs(compareArgs))
 
   const attestationPath = join(bundleDir, 'attestation.json')
-  const attestationArgs = buildAttestationArgs(urls, tokens, attestationPath, args.hmacEnv)
+  const attestationArgs = buildAttestationArgs(
+    urls,
+    tokens,
+    attestationPath,
+    args.hmacEnv,
+    args.allowAnon === true,
+  )
   const attestationResult = runNodeScript(
     attestationScript,
     attestationArgs,

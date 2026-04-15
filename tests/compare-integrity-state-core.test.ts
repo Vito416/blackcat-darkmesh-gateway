@@ -28,6 +28,7 @@ describe('compare-integrity-state core', () => {
     expect(resolveTokensForUrls(urls, ['shared-token'], '')).toEqual(['shared-token', 'shared-token'])
     expect(resolveTokensForUrls(urls, ['token-a', 'token-b'], '')).toEqual(['token-a', 'token-b'])
     expect(resolveTokensForUrls(urls, [], ' env-token ')).toEqual([' env-token ', ' env-token '])
+    expect(resolveTokensForUrls(urls, [], '', { allowAnonymous: true })).toEqual(['', ''])
   })
 
   it('rejects blank or mismatched token mapping', () => {
@@ -102,4 +103,3 @@ describe('compare-integrity-state core', () => {
     })
   })
 })
-

@@ -28,9 +28,10 @@ function stateSnapshot(overrides = {}) {
   }
 }
 
-function makeFetch(fixtures) {
-  return vi.fn(async (input) => {
+function makeFetch(fixtures, onRequest?: (url: string, init?: RequestInit) => void) {
+  return vi.fn(async (input, init) => {
     const url = input instanceof URL ? input.toString() : String(input)
+    onRequest?.(url, init)
     const fixture = fixtures[url]
 
     if (fixture instanceof Error) {
@@ -79,6 +80,7 @@ describe('compare-integrity-matrix.js', () => {
       help: false,
       urls: ['https://gw-a.example', 'https://gw-b.example'],
       tokens: ['secret'],
+      allowAnon: false,
       mode: 'all',
       json: true,
     })
@@ -124,6 +126,33 @@ describe('compare-integrity-matrix.js', () => {
     expect(summary.counts).toEqual({ total: 2, pass: 2, mismatch: 0, failure: 0 })
     expect(summary.runs.map((run) => run.status)).toEqual(['PASS', 'PASS'])
     expect(renderHumanSummary(summary)).toContain('Aggregate: 2 pass, 0 mismatch, 0 failure')
+  })
+
+  it('allows anonymous mode without any token source', async () => {
+    const authHeaders: string[] = []
+    const fetchImpl = makeFetch(
+      {
+        'https://gw-a.example/integrity/state': { body: stateSnapshot() },
+        'https://gw-b.example/integrity/state': { body: stateSnapshot() },
+      },
+      (_url, init) => {
+        const headers = new Headers(init?.headers as HeadersInit)
+        authHeaders.push(headers.get('authorization') || '')
+      },
+    )
+
+    const summary = await compareMatrix({
+      urls: ['https://gw-a.example', 'https://gw-b.example'],
+      tokens: [],
+      mode: 'all',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      envToken: '',
+      allowAnon: true,
+    })
+
+    expect(summary.exitCode).toBe(0)
+    expect(summary.tokensMode).toBe('anonymous')
+    expect(authHeaders).toEqual(['', ''])
   })
 
   it('marks adjacent drift as mismatch in pairwise mode', async () => {

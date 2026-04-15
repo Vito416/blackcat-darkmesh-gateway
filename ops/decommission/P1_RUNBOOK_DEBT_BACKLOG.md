@@ -43,6 +43,7 @@ Legend:
 - [ ] Run one coordinated drill covering gateway -> AO public API fallback, write forwarding, and worker signing/notify boundaries under degraded AO conditions.
 - Owner: cross-repo ops.
 - Evidence target: single drill bundle with trace correlation and clear pass/fail matrix.
+- Progress note (2026-04-15): strict drill tooling now supports `--allow-anon` end-to-end (preflight + matrix + evidence export/attestation), but live run still failed with `401` on `/integrity/state` because gateway currently requires a state token. See `ops/decommission/live-probes/2026-04-15/run-live-strict-drill-allowanon-2026-04-15.md`.
 
 ## P1-06 Final operator closeout packaging
 - [ ] Fold P1-01..P1-05 outputs into the decommission/release evidence chain (`release-evidence-pack`, readiness checks, signoff checklist).

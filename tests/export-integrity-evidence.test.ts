@@ -131,6 +131,11 @@ describe('export-integrity-evidence core', () => {
       tokenMode: 'explicit:per-url',
       envToken: '',
     })
+    expect(resolveTokenMode({ tokens: [], allowAnon: true }, urls, '')).toEqual({
+      tokens: ['', ''],
+      tokenMode: 'anonymous',
+      envToken: '',
+    })
   })
 
   it('records compare failures in the manifest and bundle report', async () => {
@@ -270,5 +275,30 @@ describe('export-integrity-evidence core', () => {
         exitCode: 0,
       },
     })
+  })
+
+  it('passes --allow-anon to compare/attestation scripts when token sources are absent', async () => {
+    const outDir = makeTempDir()
+    const { writeText } = makeWriteSpy()
+    const { runNodeScript, calls } = makeRunStub()
+
+    const result = await exportIntegrityEvidence({
+      urls: ['https://gw-a.example/', 'https://gw-b.example/'],
+      args: { outDir, tokens: [], hmacEnv: '', allowAnon: true },
+      envToken: '',
+      now: fixedNow,
+      random: () => 0.2,
+      pid: 2468,
+      runNodeScript,
+      writeText,
+      mkdir: async (path, options) => {
+        mkdirSync(path, options)
+      },
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.tokenMode).toBe('anonymous')
+    expect(calls[0]?.args).toContain('--allow-anon')
+    expect(calls[1]?.args).toContain('--allow-anon')
   })
 })

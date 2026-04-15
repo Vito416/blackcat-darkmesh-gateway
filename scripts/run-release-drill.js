@@ -552,6 +552,9 @@ function buildDrillPlan({
   if (isNonEmptyString(token)) {
     compareArgs.push('--token', token)
     exportEvidenceArgs.push('--token', token)
+  } else if (allowAnon) {
+    compareArgs.push('--allow-anon')
+    exportEvidenceArgs.push('--allow-anon')
   }
 
   const steps = [

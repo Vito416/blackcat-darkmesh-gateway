@@ -34,9 +34,10 @@ function parseGatewayUrls(urls, { minUrls = 2 } = {}) {
   return urls.map((url) => validateGatewayUrl(url))
 }
 
-function resolveTokensForUrls(urls, tokens = [], envToken = '') {
+function resolveTokensForUrls(urls, tokens = [], envToken = '', options = {}) {
   const normalizedTokens = Array.isArray(tokens) ? tokens : []
   const trimmedEnvToken = typeof envToken === 'string' ? envToken.trim() : ''
+  const allowAnonymous = options?.allowAnonymous === true
 
   for (const token of normalizedTokens) {
     if (typeof token !== 'string' || !token.trim()) {
@@ -50,6 +51,7 @@ function resolveTokensForUrls(urls, tokens = [], envToken = '') {
 
   if (normalizedTokens.length === urls.length) return normalizedTokens.slice()
   if (normalizedTokens.length === 1) return urls.map(() => normalizedTokens[0])
+  if (allowAnonymous) return urls.map(() => '')
   if (!trimmedEnvToken) {
     throw new Error('missing token: set GATEWAY_INTEGRITY_STATE_TOKEN or pass --token')
   }
@@ -124,4 +126,3 @@ export {
   formatValue,
   buildComparisonReport,
 }
-

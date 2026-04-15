@@ -247,6 +247,7 @@ Token handling:
 - pass one `--token` to reuse the same state token for every URL
 - pass one `--token` per `--url` to compare gateways with different tokens
 - if no `--token` is given, the helper falls back to `GATEWAY_INTEGRITY_STATE_TOKEN`
+- when `/integrity/state` is intentionally public, pass `--allow-anon` to skip token fallback
 - blank tokens are rejected so auth mistakes fail fast
 
 ## Integrity matrix comparison
@@ -275,6 +276,11 @@ npm run ops:compare-integrity-matrix -- \
   --url https://gateway-a.example.com \
   --url https://gateway-b.example.com \
   --mode all --json
+
+node scripts/compare-integrity-matrix.js \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com \
+  --allow-anon --json
 ```
 
 ## Multi-region drift alert summary
@@ -766,6 +772,12 @@ npm run ops:attest-integrity -- \
   --url https://gateway-a.example.com \
   --url https://gateway-b.example.com \
   --out ./artifacts/integrity-attestation.json
+
+node scripts/generate-integrity-attestation.js \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com \
+  --out ./artifacts/integrity-attestation.json \
+  --allow-anon
 ```
 
 Archive tip:
@@ -808,6 +820,12 @@ npm run ops:export-integrity-evidence -- \
   --url https://gateway-a.example.com \
   --url https://gateway-b.example.com \
   --out-dir ./artifacts/integrity-evidence
+
+node scripts/export-integrity-evidence.js \
+  --url https://gateway-a.example.com \
+  --url https://gateway-b.example.com \
+  --out-dir ./artifacts/integrity-evidence \
+  --allow-anon
 ```
 
 ## Integrity attestation validation

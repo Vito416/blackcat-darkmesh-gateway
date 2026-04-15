@@ -17,6 +17,7 @@ function usage(exitCode = 0) {
       '  --url <URL>         Gateway base URL; repeat at least twice',
       '  --out <PATH>        Output JSON file path (required)',
       '  --token <VALUE>     Optional auth token; repeat once per URL or once for all URLs',
+      '  --allow-anon        Allow anonymous /integrity/state requests when no token is configured',
       '  --hmac-env <NAME>   Optional env var name containing an HMAC key to sign the artifact',
       '  --help              Show this help',
       '',
@@ -66,11 +67,16 @@ function parseArgs(argv) {
     tokens: [],
     out: '',
     hmacEnv: '',
+    allowAnon: false,
   }
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') usage(0)
+    if (arg === '--allow-anon') {
+      args.allowAnon = true
+      continue
+    }
 
     const next = argv[i + 1]
     const readValue = () => {
@@ -122,6 +128,7 @@ function resolveToken(args, index) {
   if (args.tokens.length === args.urls.length) return args.tokens[index]
   if (args.tokens.length === 1) return args.tokens[0]
   const envToken = process.env.GATEWAY_INTEGRITY_STATE_TOKEN || ''
+  if (args.allowAnon) return ''
   if (!envToken.trim()) {
     die('missing token: set GATEWAY_INTEGRITY_STATE_TOKEN or pass --token')
   }
@@ -129,9 +136,9 @@ function resolveToken(args, index) {
 }
 
 async function fetchState(url, token) {
-  const headers = {
-    accept: 'application/json',
-    authorization: `Bearer ${token}`,
+  const headers = { accept: 'application/json' }
+  if (typeof token === 'string' && token.trim()) {
+    headers.authorization = `Bearer ${token}`
   }
   const res = await fetch(new URL('/integrity/state', url), { headers })
   const text = await res.text()

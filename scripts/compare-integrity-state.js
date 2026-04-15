@@ -15,6 +15,7 @@ function usage(exitCode = 0) {
       'Options:',
       '  --url <URL>        Gateway base URL; repeat at least twice',
       '  --token <VALUE>    Optional auth token; repeat once per URL or once for all URLs',
+      '  --allow-anon       Allow anonymous /integrity/state requests when no token is configured',
       '  --help             Show this help',
       '',
       'Auth token fallback:',
@@ -45,11 +46,16 @@ function parseArgs(argv) {
   const args = {
     urls: [],
     tokens: [],
+    allowAnon: false,
   }
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') usage(0)
+    if (arg === '--allow-anon') {
+      args.allowAnon = true
+      continue
+    }
 
     const next = argv[i + 1]
     const readValue = () => {
@@ -75,9 +81,9 @@ function parseArgs(argv) {
 }
 
 async function fetchState(url, token) {
-  const headers = {
-    accept: 'application/json',
-    authorization: `Bearer ${token}`,
+  const headers = { accept: 'application/json' }
+  if (typeof token === 'string' && token.trim()) {
+    headers.authorization = `Bearer ${token}`
   }
   const res = await fetch(new URL('/integrity/state', url), { headers })
   const text = await res.text()
@@ -142,7 +148,9 @@ function pad(value, width) {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   const urls = parseGatewayUrls(args.urls)
-  const tokens = resolveTokensForUrls(urls, args.tokens, process.env.GATEWAY_INTEGRITY_STATE_TOKEN || '')
+  const tokens = resolveTokensForUrls(urls, args.tokens, process.env.GATEWAY_INTEGRITY_STATE_TOKEN || '', {
+    allowAnonymous: args.allowAnon,
+  })
 
   const results = []
   for (let i = 0; i < urls.length; i += 1) {

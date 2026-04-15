@@ -17,6 +17,7 @@ function usage() {
     'Options:',
     '  --url <URL>        Gateway base URL; repeat at least twice',
     '  --token <VALUE>    Optional auth token; repeat once for all URLs or once per URL',
+    '  --allow-anon       Allow anonymous /integrity/state requests when no token is configured',
     '  --mode <MODE>      pairwise (default) or all',
     '  --json             Emit machine-readable JSON output',
     '  --help             Show this help',
@@ -49,6 +50,7 @@ function parseArgs(argv) {
     help: false,
     urls: [],
     tokens: [],
+    allowAnon: false,
     mode: 'pairwise',
     json: false,
   }
@@ -62,6 +64,10 @@ function parseArgs(argv) {
 
     if (arg === '--json') {
       args.json = true
+      continue
+    }
+    if (arg === '--allow-anon') {
+      args.allowAnon = true
       continue
     }
 
@@ -139,9 +145,9 @@ function buildRunPlan(urls, mode = 'pairwise') {
 }
 
 async function fetchState(url, token, fetchImpl = globalThis.fetch) {
-  const headers = {
-    accept: 'application/json',
-    authorization: `Bearer ${token}`,
+  const headers = { accept: 'application/json' }
+  if (typeof token === 'string' && token.trim()) {
+    headers.authorization = `Bearer ${token}`
   }
 
   const res = await fetchImpl(new URL('/integrity/state', url), { headers })
@@ -213,9 +219,18 @@ function summarizeRun(report, errors) {
   }
 }
 
-async function compareMatrix({ urls, tokens = [], mode = 'pairwise', fetchImpl = globalThis.fetch, envToken = '' }) {
+async function compareMatrix({
+  urls,
+  tokens = [],
+  mode = 'pairwise',
+  fetchImpl = globalThis.fetch,
+  envToken = '',
+  allowAnon = false,
+}) {
   const normalizedUrls = parseGatewayUrls(urls)
-  const normalizedTokens = resolveTokensForUrls(normalizedUrls, tokens, envToken)
+  const normalizedTokens = resolveTokensForUrls(normalizedUrls, tokens, envToken, {
+    allowAnonymous: allowAnon,
+  })
   const runPlan = buildRunPlan(normalizedUrls, mode)
 
   const snapshots = await Promise.allSettled(
@@ -314,7 +329,9 @@ async function compareMatrix({ urls, tokens = [], mode = 'pairwise', fetchImpl =
           ? 'per-url'
           : envToken
             ? 'env-shared'
-            : 'none',
+            : allowAnon
+              ? 'anonymous'
+              : 'none',
     comparedFields: COMPARED_FIELDS.map(([field]) => field),
     runPlan: runPlan.map((plan) => ({ type: plan.type, name: plan.name, indices: plan.indices })),
     runs,
@@ -382,6 +399,7 @@ async function runCli(argv, env = process.env, fetchImpl = globalThis.fetch) {
       mode: args.mode,
       fetchImpl,
       envToken: env.GATEWAY_INTEGRITY_STATE_TOKEN || '',
+      allowAnon: args.allowAnon,
     })
 
     return {

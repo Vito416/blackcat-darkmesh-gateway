@@ -27,6 +27,7 @@ This backlog is written to avoid re-discovery work and to make execution straigh
 - Host->site resolution now supports `map|ao|hybrid` mode with AO lookup endpoint `/api/public/site-by-host`, timeout/TTL controls, and production-like fail-closed behavior by default.
 - Baseline HTTP security headers now include HSTS + COOP + CORP, and sensitive control-plane routes (`/integrity/state`, `/integrity/incident`, `/cache/forget`, `/metrics`) now consistently return `cache-control: no-store`.
 - New operator shortcut: `ops:check-production-readiness` emits concise GO/NO-GO with actionable blocker groups (`automation` vs `aoManual`).
+- Consistency tooling now supports true anonymous mode (`--allow-anon`) across matrix compare + attestation evidence export paths; if live gateway still protects `/integrity/state`, strict drills remain blocked until a valid `GATEWAY_INTEGRITY_STATE_TOKEN` is provided.
 - Fresh-machine rollout runbook now exists at `ops/fresh-machine-production-bootstrap-runbook.md` and is linked from `ops/README.md` and `ops/release-drill-runbook.md`.
 - Treat that output as machine-checked evidence only; AO gate closure and manual evidence still need separate drill logs, rollback proof, and human sign-off before decommission.
 - Validator ordering for operator drills is now fixed: build the drill bundle, validate the drill manifest, check drill artifacts, build the evidence ledger/log, then run closeout readiness and AO gate evidence checks before any sign-off is recorded.
