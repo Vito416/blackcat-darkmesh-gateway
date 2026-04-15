@@ -15,6 +15,7 @@ Legend:
 - Latest hardening batch: `ops/decommission/P1_FIX_BATCH_2026-04-15.md` (token-topology fail-closed checks landed).
 - Runbook: `blackcat-darkmesh-ao/worker/ops/runbooks/token-scope-rotation.md`
 - Evidence template: `ops/decommission/P1_WORKER_TOKEN_ROTATION_EVIDENCE_TEMPLATE.md`
+- Latest live probe: `ops/decommission/P1_WORKER_DRILLS_2026-04-15.md` (partial verification only; full rotation still pending).
 
 ## P1-02 Worker replay contention drill
 - [~] Add operator drill for replay guard contention path (claim collision, expected `409 replay`, recovery expectations, metric interpretation).
@@ -24,6 +25,7 @@ Legend:
 - Runbook: `blackcat-darkmesh-ao/worker/ops/runbooks/replay-contention-drill.md`
 - Drill helper: `blackcat-darkmesh-ao/worker/ops/loadtest/replay-contention-drill.mjs`
 - Evidence template: `ops/decommission/P1_WORKER_REPLAY_CONTENTION_EVIDENCE_TEMPLATE.md`
+- Latest live probe: `ops/decommission/P1_WORKER_DRILLS_2026-04-15.md` (`201=3`,`409=1` fail); strong-lock source fix landed, redeploy + re-drill pending.
 
 ## P1-03 Gateway AO outage behavior drill
 - [x] Validate and document AO resolver outage path (negative-cache TTL + circuit-breaker open/close windows).
