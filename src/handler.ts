@@ -68,6 +68,7 @@ const incidentSeverities = new Set<IntegrityIncidentSeverity>(['low', 'medium', 
 const INTEGRITY_CACHE_DEFAULT_TTL_MS = 10_000
 const INTEGRITY_INCIDENT_MAX_BODY_DEFAULT_BYTES = 16_384
 const WEBHOOK_MAX_BODY_DEFAULT_BYTES = 262_144
+const WORKER_NOTIFY_TIMEOUT_DEFAULT_MS = 5_000
 const TEMPLATE_CALL_MAX_BODY_DEFAULT_BYTES = 32_768
 const incidentActionRoles: Record<string, IntegrityRole[]> = {
   report: ['reporter', 'emergency', 'root'],
@@ -472,9 +473,26 @@ async function forwardWorkerNotifyBody(body: string, provider?: string): Promise
     headers['X-Signature'] = sig
   }
 
-  const resp = await fetch(workerNotify.target, { method: 'POST', headers, body })
-  if (resp.ok) return respond('forwarded', { status: 200 })
-  return respond('notify_failed', { status: 502 })
+  const timeoutMs = readPositiveIntEnv('WORKER_NOTIFY_TIMEOUT_MS', WORKER_NOTIFY_TIMEOUT_DEFAULT_MS)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const resp = await fetch(workerNotify.target, { method: 'POST', headers, body, signal: controller.signal })
+    if (resp.ok) return respond('forwarded', { status: 200 })
+    return respond('notify_failed', { status: 502 })
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'name' in error &&
+      (error as { name?: string }).name === 'AbortError'
+    ) {
+      return respond('notify_timeout', { status: 504 })
+    }
+    return respond('notify_failed', { status: 502 })
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function maybeForwardWebhookWrite(provider: WebhookProvider, body: string, productionLikeMode: boolean): Promise<Response | null> {

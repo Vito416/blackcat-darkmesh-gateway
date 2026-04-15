@@ -656,6 +656,8 @@ describe('template api policy gateway', () => {
     process.env.WRITE_API_URL = 'https://write.example'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
     process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
+    process.env.GATEWAY_TEMPLATE_ALLOW_RUNTIME_HINTS = '1'
+    process.env.GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST = 'write.example,worker-runtime.example'
     process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP = JSON.stringify({
       'site-1': 'https://worker-map.example',
     })

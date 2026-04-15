@@ -44,6 +44,8 @@ type SignedWriteEnvelope = {
   requestId: string
   actor: string
   tenant: string
+  role: string
+  siteId: string
   timestamp: number
   nonce: string
   payload: unknown
@@ -428,6 +430,22 @@ function getTemplateTargetAllowlist(): string[] | null {
     .filter((value) => value.length > 0)
 }
 
+function runtimeOverridesEnabled(): boolean {
+  return readStringEnv('GATEWAY_TEMPLATE_ALLOW_RUNTIME_HINTS') === '1'
+}
+
+function runtimeWritePidOverrideEnabled(): boolean {
+  const explicit = readStringEnv('GATEWAY_TEMPLATE_ALLOW_RUNTIME_WRITE_PID_OVERRIDE')
+  if (explicit) return explicit === '1'
+  return runtimeOverridesEnabled()
+}
+
+function runtimeWorkerUrlOverrideEnabled(): boolean {
+  const explicit = readStringEnv('GATEWAY_TEMPLATE_ALLOW_RUNTIME_WORKER_URL_OVERRIDE')
+  if (explicit) return explicit === '1'
+  return runtimeOverridesEnabled()
+}
+
 function jsonError(status: number, error: string, detail?: Record<string, unknown>, traceId?: string): Response {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (traceId) headers['x-trace-id'] = traceId
@@ -471,7 +489,13 @@ function validateAllowlist(baseUrl: string, allowlist: string[] | null, traceId?
   }, traceId)
 }
 
-function buildWriteSignEnvelope(input: TemplateCallInput, siteId: string, requestId: string, payload: unknown): SignedWriteEnvelope {
+function buildWriteSignEnvelope(
+  input: TemplateCallInput,
+  siteId: string,
+  requestId: string,
+  role: string,
+  payload: unknown,
+): SignedWriteEnvelope {
   const action = TEMPLATE_TO_WRITE_ACTION[input.action] || input.action
   const timestamp = Math.floor(Date.now() / 1000)
   const nonce = `gw-${crypto.randomBytes(12).toString('hex')}`
@@ -482,6 +506,8 @@ function buildWriteSignEnvelope(input: TemplateCallInput, siteId: string, reques
     requestId,
     actor,
     tenant,
+    role,
+    siteId,
     timestamp,
     nonce,
     payload,
@@ -634,6 +660,17 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   if (runtimeWorkerUrl && !isValidHttpUrl(runtimeWorkerUrl)) {
     return jsonError(502, 'invalid_runtime_worker_url', { value: runtimeWorkerUrl }, traceId)
   }
+  if (runtimeWritePid && !runtimeWritePidOverrideEnabled()) {
+    return jsonError(403, 'runtime_write_process_id_override_disabled', undefined, traceId)
+  }
+  if (runtimeWorkerUrl && !runtimeWorkerUrlOverrideEnabled()) {
+    return jsonError(403, 'runtime_worker_url_override_disabled', undefined, traceId)
+  }
+  if ((runtimeWritePid || runtimeWorkerUrl) && !allowlist) {
+    return jsonError(503, 'template_target_allowlist_required_for_runtime_overrides', {
+      detail: 'set GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST before enabling runtime overrides',
+    }, traceId)
+  }
 
   if (policy.local.kind === 'write') {
     const explicitSiteId = asNonEmptyString(input.siteId)
@@ -673,7 +710,13 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     }
 
     effectiveRequestId = effectiveRequestId || `req-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
-    const signEnvelope = buildWriteSignEnvelope(input, resolvedSiteId, effectiveRequestId, payloadWithTemplateVariant)
+    const signEnvelope = buildWriteSignEnvelope(
+      input,
+      resolvedSiteId,
+      effectiveRequestId,
+      policy.contract.auth.requiredRole,
+      payloadWithTemplateVariant,
+    )
     const signerBaseUrl = (signerBase as Extract<ResolveResult, { ok: true }>).value
     const signed = await signWriteEnvelope(
       signerBaseUrl,

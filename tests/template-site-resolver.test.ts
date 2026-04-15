@@ -28,6 +28,10 @@ describe('template host resolver', () => {
     delete process.env.WRITE_API_URL
     delete process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS
     delete process.env.GATEWAY_TEMPLATE_TOKEN
+    delete process.env.GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST
+    delete process.env.GATEWAY_TEMPLATE_ALLOW_RUNTIME_HINTS
+    delete process.env.GATEWAY_TEMPLATE_ALLOW_RUNTIME_WORKER_URL_OVERRIDE
+    delete process.env.GATEWAY_TEMPLATE_ALLOW_RUNTIME_WRITE_PID_OVERRIDE
     delete process.env.WORKER_API_URL
     delete process.env.WORKER_AUTH_TOKEN
     delete process.env.NODE_ENV
@@ -142,6 +146,8 @@ describe('template host resolver', () => {
     process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
     process.env.WORKER_API_URL = 'https://worker-fallback.example'
     process.env.WORKER_AUTH_TOKEN = 'worker-token'
+    process.env.GATEWAY_TEMPLATE_ALLOW_RUNTIME_HINTS = '1'
+    process.env.GATEWAY_TEMPLATE_TARGET_HOST_ALLOWLIST = 'write.example,worker-runtime.example'
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input)
@@ -194,6 +200,111 @@ describe('template host resolver', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(3)
     expect(String(fetchSpy.mock.calls[1]?.[0])).toBe('https://worker-runtime.example/sign')
     expect(String(fetchSpy.mock.calls[2]?.[0])).toBe('https://write.example/api/checkout/order')
+  })
+
+  it('rejects runtime write PID overrides unless explicitly enabled', async () => {
+    process.env.GATEWAY_SITE_RESOLVE_MODE = 'ao'
+    process.env.GATEWAY_SITE_RESOLVE_AO_URL = 'https://resolver.example'
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
+    process.env.WORKER_API_URL = 'https://worker-fallback.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('/api/public/site-by-host')) {
+        return new Response(
+          JSON.stringify({
+            status: 'OK',
+            data: {
+              siteId: 'site-ao-runtime',
+              runtime: { writeProcessId: 'B'.repeat(43), workerUrl: 'https://worker-runtime.example' },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
+      }
+      return new Response('unexpected', { status: 404 })
+    })
+
+    const res = await handleRequest(
+      new Request('https://runtime-write.example/template/call', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-template-token': 'tmpl-secret',
+        },
+        body: JSON.stringify({
+          action: 'checkout.create-order',
+          requestId: 'req-runtime-site-2',
+          role: 'shop_admin',
+          payload: { items: [{ sku: 'sku-1', qty: 1 }] },
+        }),
+      }),
+    )
+
+    expect(res.status).toBe(403)
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'runtime_write_process_id_override_disabled',
+    })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('requires allowlist when runtime overrides are enabled', async () => {
+    process.env.GATEWAY_SITE_RESOLVE_MODE = 'ao'
+    process.env.GATEWAY_SITE_RESOLVE_AO_URL = 'https://resolver.example'
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'tmpl-secret'
+    process.env.WORKER_API_URL = 'https://worker-fallback.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
+    process.env.GATEWAY_TEMPLATE_ALLOW_RUNTIME_HINTS = '1'
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('/api/public/site-by-host')) {
+        return new Response(
+          JSON.stringify({
+            status: 'OK',
+            data: {
+              siteId: 'site-ao-runtime',
+              runtime: { writeProcessId: 'B'.repeat(43), workerUrl: 'https://worker-runtime.example' },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
+      }
+      return new Response('unexpected', { status: 404 })
+    })
+
+    const res = await handleRequest(
+      new Request('https://runtime-write.example/template/call', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-template-token': 'tmpl-secret',
+        },
+        body: JSON.stringify({
+          action: 'checkout.create-order',
+          requestId: 'req-runtime-site-3',
+          role: 'shop_admin',
+          payload: { items: [{ sku: 'sku-1', qty: 1 }] },
+        }),
+      }),
+    )
+
+    expect(res.status).toBe(503)
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'template_target_allowlist_required_for_runtime_overrides',
+    })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 
   it('fails closed in production-like mode when no resolver source is configured', async () => {
