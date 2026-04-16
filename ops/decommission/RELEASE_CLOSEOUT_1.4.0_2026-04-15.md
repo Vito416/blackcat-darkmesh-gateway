@@ -113,3 +113,24 @@ Observed live behavior after update:
 Operational status:
 - write flow is production-like healthy.
 - read flow is acceptable with retry/circuit policy; keep ongoing watch in runbook until warmup `504` rate is reduced further.
+
+---
+
+## Addendum — 2026-04-17 (strict drill rerun, manual proofs closed)
+
+Drill execution:
+- directory: `tmp/release-drills/live-1.4.0-token-20260416T222254Z`
+- command: `bash scripts/run-live-strict-drill.sh --skip-forget-forward` (token mode, pairwise)
+
+Outcome:
+- automation pack: `ready`
+- decommission readiness: `ready`
+- initial production summary blocker was only missing manual proof log (`decommission-evidence-log.json`)
+- after generating log + links:
+  - `check-decommission-manual-proofs --strict`: `complete`
+  - `check-production-readiness-summary`: **GO / ready**
+
+Authoritative decision for this rerun:
+- `decision: GO`
+- `status: ready`
+- `blockerCount: 0`
