@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from '../src/integrity/checkpoint.js'
 import type { IntegritySnapshot } from '../src/integrity/types.js'
+import { canonicalizeJson } from '../src/runtime/core/canonicalJson.js'
 
 function sampleSnapshot(): IntegritySnapshot {
   return {
@@ -41,7 +42,6 @@ function sampleSnapshot(): IntegritySnapshot {
     },
   }
 }
-
 const checkpointEnvKeys = [
   'GATEWAY_INTEGRITY_CHECKPOINT_PATH',
   'GATEWAY_INTEGRITY_CHECKPOINT_SECRET',
@@ -52,27 +52,8 @@ const checkpointEnvKeys = [
 
 let checkpointEnvSnapshot: Record<(typeof checkpointEnvKeys)[number], string | undefined>
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
-
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map((entry) => sortValue(entry))
-  if (!isObject(value)) return value
-
-  const sorted: Record<string, unknown> = {}
-  for (const key of Object.keys(value).sort()) {
-    sorted[key] = sortValue(value[key])
-  }
-  return sorted
-}
-
-function canonicalize(value: unknown): string {
-  return JSON.stringify(sortValue(value))
-}
-
 function signCheckpointBody(body: unknown, secret: string): string {
-  return createHmac('sha256', secret).update(canonicalize(body)).digest('hex')
+  return createHmac('sha256', secret).update(canonicalizeJson(body)).digest('hex')
 }
 
 beforeEach(() => {
@@ -118,6 +99,41 @@ describe('integrity checkpoint', () => {
     expect(parsed.metadata.expiresAt).toBeGreaterThan(parsed.metadata.writtenAt)
   })
 
+  it('keeps checkpoint signatures deterministic across key order changes', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'gateway-checkpoint-'))
+    const fileA = join(dir, 'checkpoint-a.json')
+    const fileB = join(dir, 'checkpoint-b.json')
+    const secret = 'secret-123'
+    const now = Date.parse('2026-04-11T00:00:00Z')
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    const snapshotA = sampleSnapshot()
+    const snapshotB: IntegritySnapshot = {
+      audit: { ...snapshotA.audit },
+      authority: { ...snapshotA.authority },
+      policy: { ...snapshotA.policy },
+      release: { ...snapshotA.release },
+    }
+
+    await writeIntegrityCheckpoint(snapshotA, fileA, secret)
+    await writeIntegrityCheckpoint(snapshotB, fileB, secret)
+
+    const parsedA = JSON.parse(await readFile(fileA, 'utf8'))
+    const parsedB = JSON.parse(await readFile(fileB, 'utf8'))
+
+    expect(parsedA.signature).toBe(parsedB.signature)
+    expect(parsedA.signature).toBe(
+      signCheckpointBody(
+        {
+          algorithm: 'hmac-sha256',
+          payload: snapshotA,
+          metadata: { writtenAt: now },
+        },
+        secret,
+      ),
+    )
+  })
+
   it('returns null when the checkpoint is tampered with', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'gateway-checkpoint-'))
     const file = join(dir, 'checkpoint.json')
@@ -157,6 +173,32 @@ describe('integrity checkpoint', () => {
     await expect(readIntegrityCheckpoint(file, secret)).resolves.toBeNull()
   })
 
+  it('returns null when the max-age config is invalid', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'gateway-checkpoint-'))
+    const file = join(dir, 'checkpoint.json')
+    const snapshot = sampleSnapshot()
+    const secret = 'secret-123'
+    const metadata = { writtenAt: Date.parse('2024-01-01T00:00:00Z') }
+    const envelope = {
+      algorithm: 'hmac-sha256',
+      payload: snapshot,
+      metadata,
+      signature: signCheckpointBody(
+        {
+          algorithm: 'hmac-sha256',
+          payload: snapshot,
+          metadata,
+        },
+        secret,
+      ),
+    }
+
+    process.env.GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS = 'not-a-number'
+    await writeFile(file, `${JSON.stringify(envelope)}\n`, 'utf8')
+
+    await expect(readIntegrityCheckpoint(file, secret)).resolves.toBeNull()
+  })
+
   it('returns null when checkpoint metadata is malformed', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'gateway-checkpoint-'))
     const file = join(dir, 'checkpoint.json')
@@ -178,6 +220,40 @@ describe('integrity checkpoint', () => {
     }
 
     await writeFile(file, `${JSON.stringify(envelope)}\n`, 'utf8')
+
+    await expect(readIntegrityCheckpoint(file, secret)).resolves.toBeNull()
+  })
+
+  it('reads legacy checkpoints without metadata when max-age is not configured', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'gateway-checkpoint-'))
+    const file = join(dir, 'checkpoint.json')
+    const snapshot = sampleSnapshot()
+    const secret = 'secret-123'
+    delete process.env.GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS
+    const legacyEnvelope = {
+      signature: signCheckpointBody(snapshot, secret),
+      payload: snapshot,
+      algorithm: 'hmac-sha256',
+    }
+
+    await writeFile(file, `${JSON.stringify(legacyEnvelope)}\n`, 'utf8')
+
+    await expect(readIntegrityCheckpoint(file, secret)).resolves.toEqual(snapshot)
+  })
+
+  it('rejects legacy checkpoints without metadata when max-age is configured', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'gateway-checkpoint-'))
+    const file = join(dir, 'checkpoint.json')
+    const snapshot = sampleSnapshot()
+    const secret = 'secret-123'
+    process.env.GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS = '3600'
+    const legacyEnvelope = {
+      signature: signCheckpointBody(snapshot, secret),
+      payload: snapshot,
+      algorithm: 'hmac-sha256',
+    }
+
+    await writeFile(file, `${JSON.stringify(legacyEnvelope)}\n`, 'utf8')
 
     await expect(readIntegrityCheckpoint(file, secret)).resolves.toBeNull()
   })

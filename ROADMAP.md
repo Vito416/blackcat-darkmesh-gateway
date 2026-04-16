@@ -1,5 +1,14 @@
 # Gateway Roadmap (draft)
 
+## Done recently
+- Added cache admission hardening and LRU fallback behavior for constrained hosts.
+- Tightened template proxy limits with body-size, timeout, and host allowlist guardrails.
+- Added replay pruning, webhook/body size caps, and clearer integrity metrics.
+- Split CI into build/tests and the dedicated integrity gate for faster diagnosis.
+- Tuned integrity fetch cadence and alert profiles for shared-VPS hosting limits.
+- Documented the template secret-smuggling guard, the optional forget-forward relay semantics, the gateway-owned core hash primitive evidence, and the TS `NodeNext` migration so operator docs match the current runtime shape.
+- Added runtime `signatureRef` pinning for mapped template workers, the routing-map coherence validator, the forget-forward config validator, and the expanded release-drill evidence metadata so release checks stay machine-auditable.
+
 ## Phase 1 – MVP (parity with current AO/Write/Worker)
 - Serve Arweave template (hash-verified) + cache with TTL.
 - Proxy core API: cart/checkout/session → Write AO; public read → AO.
@@ -14,11 +23,25 @@
 - CSP/SRI/COOP headers and asset hash pinning.
 - Replay defense on webhooks; HMAC on browser API (optional).
 
+## Immediate next sprint
+- [ao] Finish registry actions for publish/revoke/query/pause state.
+- [ao] Finalize `root/upgrade/emergency/reporter` authority lifecycle and record one clean rotation drill.
+- [gateway] Wire the AO audit commitment query path so gateway metrics map to immutable AO entries.
+- [gateway] Port the remaining parity scenarios into CI: upgrade activation/cancel, compatibility rollback, revoked root, stale state.
+- [ops] Close the last decommission evidence gaps: recovery drill timestamps, AO outage fallback drill, rollback proof.
+- [gateway/ops] Keep the routing-map coherence validator and forget-forward validator in the release gate so the runtime secret boundaries stay explicit.
+- [gateway/ops] Keep the incident/control-path smoke in the CI gate and update the `1.4.0` migration release notes before retirement.
+- [gateway/ops] Institutionalize the evidence-bundle cadence: compare output, attestation JSON, validation result, and workflow link should ship together for every P3 check.
+
 ## Phase 3 – Multi-tenant & Config
 - Per-merchant config service (template txid, TTLs, PSP creds) with hot-reload.
 - Admission control for envelopes (size/quota).
 - Template manifest allowlist/denylist; unsafe-template warnings.
 - Canary/shadow deploy of new PSP configs.
+- Mirror consistency checks and cross-gateway compare tools for integrity drift detection.
+- Adaptive per-prefix route rate limits for tenant-aware burst control.
+- Consistency smoke `workflow_dispatch` for manual operator spot checks and escalation evidence.
+- Attestation JSON generation for compare runs so drift checks leave a stable artifact trail.
 
 ## Phase 4 – PQC & Future-proofing
 - Hybrid PQC transport/signatures for gateway↔backend links (when libs stable).
@@ -29,10 +52,11 @@
 - Edge render option: inject AO public state into cached template for ultra-low TTFB.
 - Smart prefetch/early refresh for hot assets.
 - Adaptive rate limits per route based on error budgets.
+- Keep the compare-integrity path lightweight so operator checks stay cheap during normal traffic.
 
 ## Next TODO (crypto + worker alignment)
 - Adopt `blackcat-crypto` envelope/HMAC: browser/worker encrypt to admin pubkey; gateway stays secretless.
-- Integrate `security/crypto-manifests` to pin allowed keys/algos; verify manifest hash from Arweave.
+- Integrate `security/crypto-policy` to pin allowed keys/algos; verify manifest hash from Arweave.
 - Wire ForgetSubject hook to Worker (delete-on-download + TTL cache wipe).
 - Align webhook retry/breaker metrics with AO/Write (`write.webhook.*`, `write.psp.*`) and expose via Prom endpoint.
 - Add E2E test harness: fake PSP + worker + write ingest to validate encrypted checkout → AO state.

@@ -4,6 +4,14 @@ import { reset, snapshot } from '../src/metrics.js'
 
 const originalEnv = { ...process.env }
 
+function clearIntegrityAoEnv() {
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('AO_INTEGRITY_')) {
+      delete process.env[key]
+    }
+  }
+}
+
 function makeIncidentRequest(body: Record<string, unknown>, headers: Record<string, string> = {}) {
   return new Request('http://gateway/integrity/incident', {
     method: 'POST',
@@ -12,12 +20,22 @@ function makeIncidentRequest(body: Record<string, unknown>, headers: Record<stri
   })
 }
 
+function makeIncidentRawRequest(body: string, headers: Record<string, string> = {}) {
+  return new Request('http://gateway/integrity/incident', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body,
+  })
+}
+
 function makeTemplateWriteRequest() {
   return new Request('http://gateway/template/call', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-template-token': 'template-secret' },
     body: JSON.stringify({
       action: 'checkout.create-order',
+      requestId: 'req-int-incident-write',
+      role: 'shop_admin',
       payload: { siteId: 'site-1', items: [{ sku: 'sku-1', qty: 1 }] },
     }),
   })
@@ -61,17 +79,30 @@ describe('integrity incident and state endpoints', () => {
   beforeEach(() => {
     vi.resetModules()
     process.env = { ...originalEnv }
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.WORKER_API_URL = 'https://worker.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'template-secret'
+    clearIntegrityAoEnv()
     reset()
   })
 
   afterEach(() => {
     process.env = { ...originalEnv }
+    clearIntegrityAoEnv()
     vi.restoreAllMocks()
     reset()
   })
 
   async function loadHandler() {
     return import('../src/handler.js')
+  }
+
+  async function readPaused(handleRequest: (req: Request) => Promise<Response>): Promise<boolean> {
+    const res = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    return Boolean(body.policy?.paused)
   }
 
   it('guards /integrity/state with optional token auth and returns policy payload', async () => {
@@ -207,11 +238,163 @@ describe('integrity incident and state endpoints', () => {
     expect(metrics.counters.gateway_integrity_incident_auth_blocked).toBe(1)
   })
 
+  it('rejects oversized incident bodies before auth and validation', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_MAX_BODY_BYTES = '64'
+
+    const { handleRequest } = await loadHandler()
+    const oversized = makeIncidentRawRequest(
+      JSON.stringify({
+        event: 'manual-freeze',
+        action: 'pause',
+        details: 'x'.repeat(256),
+      }),
+    )
+
+    const res = await handleRequest(oversized)
+    expect(res.status).toBe(413)
+    await expect(res.json()).resolves.toEqual({
+      error: 'payload_too_large',
+      retryable: false,
+    })
+
+    const metrics = snapshot()
+    expect(metrics.counters.gateway_integrity_incident_reject_size).toBe(1)
+  })
+
+  it('keeps runtime paused state unchanged when incident auth or role checks fail', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF = '1'
+    process.env.GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS = 'sig-emergency'
+    process.env.GATEWAY_INTEGRITY_ROLE_REPORTER_REFS = 'sig-reporter'
+
+    const { handleRequest } = await loadHandler()
+
+    const initialState = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(initialState.status).toBe(200)
+    await expect(initialState.json()).resolves.toMatchObject({ policy: { paused: false } })
+
+    const unauthorizedPause = await handleRequest(
+      makeIncidentRequest({ event: 'manual-freeze', action: 'pause', severity: 'critical' }),
+    )
+    expect(unauthorizedPause.status).toBe(401)
+    await expect(unauthorizedPause.json()).resolves.toEqual({ error: 'unauthorized' })
+
+    const stateAfterUnauthorized = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(stateAfterUnauthorized.status).toBe(200)
+    await expect(stateAfterUnauthorized.json()).resolves.toMatchObject({ policy: { paused: false } })
+
+    const forbiddenResume = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-unfreeze', action: 'resume', severity: 'high' },
+        { 'x-incident-token': 'incident-secret', 'x-signature-ref': 'sig-not-allowed' },
+      ),
+    )
+    expect(forbiddenResume.status).toBe(403)
+    await expect(forbiddenResume.json()).resolves.toEqual({ error: 'forbidden_signature_ref' })
+
+    const stateAfterForbidden = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(stateAfterForbidden.status).toBe(200)
+    await expect(stateAfterForbidden.json()).resolves.toMatchObject({ policy: { paused: false } })
+  })
+
+  it.each([
+    {
+      name: 'invalid json body',
+      request: (token: string) =>
+        makeIncidentRawRequest('{not-json', {
+          'x-incident-token': token,
+          'x-signature-ref': 'sig-emergency',
+        }),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_json' },
+    },
+    {
+      name: 'missing event field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          { action: 'pause', severity: 'critical' },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'event_required' },
+    },
+    {
+      name: 'invalid action field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          { event: 'manual-freeze', action: 'flip', severity: 'critical' },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_action' },
+    },
+    {
+      name: 'invalid severity field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          { event: 'manual-freeze', action: 'pause', severity: 'urgent' },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_severity' },
+    },
+    {
+      name: 'invalid source field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          { event: 'manual-freeze', action: 'pause', source: 'x'.repeat(129), severity: 'critical' },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_source' },
+    },
+    {
+      name: 'invalid incident id field',
+      request: (token: string) =>
+        makeIncidentRequest(
+          {
+            event: 'manual-freeze',
+            action: 'pause',
+            incidentId: 'x'.repeat(129),
+            severity: 'critical',
+          },
+          { 'x-incident-token': token, 'x-signature-ref': 'sig-emergency' },
+        ),
+      expectedStatus: 400,
+      expectedBody: { error: 'invalid_incident_id' },
+    },
+  ])(
+    'keeps paused state unchanged for $name',
+    async ({ request, expectedStatus, expectedBody }) => {
+      process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+      process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF = '1'
+      process.env.GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS = 'sig-emergency'
+      process.env.GATEWAY_INTEGRITY_ROLE_REPORTER_REFS = 'sig-reporter'
+
+      const { handleRequest } = await loadHandler()
+      expect(await readPaused(handleRequest)).toBe(false)
+
+      const res = await handleRequest(request('incident-secret'))
+      expect(res.status).toBe(expectedStatus)
+      await expect(res.json()).resolves.toEqual(expectedBody)
+      expect(await readPaused(handleRequest)).toBe(false)
+    },
+  )
+
   it('applies pause/resume actions to runtime integrity policy', async () => {
     process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url === 'https://worker.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('ok', { status: 200 })
+    })
 
     const { handleRequest } = await loadHandler()
 
@@ -226,7 +409,12 @@ describe('integrity incident and state endpoints', () => {
 
     const blockedWrite = await handleRequest(makeTemplateWriteRequest())
     expect(blockedWrite.status).toBe(503)
-    await expect(blockedWrite.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expect(blockedWrite.json()).resolves.toEqual({
+      error: 'policy_paused',
+      reason: 'integrity_policy_paused',
+      paused: true,
+      retryable: false,
+    })
 
     const resume = await handleRequest(
       makeIncidentRequest(
@@ -239,8 +427,170 @@ describe('integrity incident and state endpoints', () => {
 
     const allowedWrite = await handleRequest(makeTemplateWriteRequest())
     expect(allowedWrite.status).toBe(200)
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+
+    const state = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(state.status).toBe(200)
+    await expect(state.json()).resolves.toMatchObject({ policy: { paused: false } })
     expect(snapshot().gauges.gateway_integrity_policy_paused).toBe(0)
+  })
+
+  it('deduplicates replayed incident ids and preserves the first applied side effect', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+
+    const { handleRequest } = await loadHandler()
+    const incidentId = 'incident-replay-001'
+
+    const first = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-freeze',
+          action: 'pause',
+          incidentId,
+          source: 'ops',
+          severity: 'critical',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+
+    expect(first.status).toBe(200)
+    await expect(first.json()).resolves.toMatchObject({
+      ok: true,
+      incidentId,
+      action: 'pause',
+      paused: true,
+    })
+
+    const duplicate = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-unfreeze',
+          action: 'resume',
+          incidentId,
+          source: 'ops',
+          severity: 'critical',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+
+    expect(duplicate.status).toBe(200)
+    await expect(duplicate.json()).resolves.toMatchObject({
+      ok: true,
+      duplicate: true,
+      idempotent: true,
+      incidentId,
+      action: 'pause',
+      paused: true,
+      status: 'duplicate',
+    })
+
+    const metrics = snapshot()
+    expect(metrics.counters.gateway_integrity_incident).toBe(1)
+    expect(metrics.counters.gateway_integrity_incident_duplicate).toBe(1)
+
+    const state = await handleRequest(new Request('http://gateway/integrity/state'))
+    expect(state.status).toBe(200)
+    await expect(state.json()).resolves.toMatchObject({ policy: { paused: true } })
+  })
+
+  it('expires replay ids after the configured ttl and stops deduping stale incidents', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS = '1'
+    const nowSpy = vi.spyOn(Date, 'now')
+    nowSpy.mockReturnValue(1000)
+
+    const { handleRequest } = await loadHandler()
+    const incidentId = 'ttl-expire-001'
+
+    const first = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-freeze', action: 'pause', incidentId, source: 'ops', severity: 'critical' },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+    expect(first.status).toBe(200)
+
+    nowSpy.mockReturnValue(1005)
+    const second = await handleRequest(
+      makeIncidentRequest(
+        { event: 'manual-unfreeze', action: 'resume', incidentId, source: 'ops', severity: 'critical' },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+
+    expect(second.status).toBe(200)
+    await expect(second.json()).resolves.toMatchObject({
+      ok: true,
+      incidentId,
+      action: 'resume',
+      paused: false,
+    })
+
+    expect(snapshot().counters.gateway_integrity_incident_duplicate).toBeUndefined()
+  })
+
+  it('evicts the oldest replay ids when the cache cap is exceeded', async () => {
+    process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN = 'incident-secret'
+    process.env.GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP = '1'
+    const nowSpy = vi.spyOn(Date, 'now')
+    nowSpy.mockReturnValue(2000)
+
+    const { handleRequest } = await loadHandler()
+
+    const first = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-freeze',
+          action: 'pause',
+          incidentId: 'cap-evict-001',
+          source: 'ops',
+          severity: 'critical',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+    expect(first.status).toBe(200)
+
+    nowSpy.mockReturnValue(2001)
+    const second = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'routine-report',
+          action: 'report',
+          incidentId: 'cap-evict-002',
+          source: 'ops',
+          severity: 'medium',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+    expect(second.status).toBe(200)
+
+    nowSpy.mockReturnValue(2002)
+    const third = await handleRequest(
+      makeIncidentRequest(
+        {
+          event: 'manual-thaw',
+          action: 'resume',
+          incidentId: 'cap-evict-001',
+          source: 'ops',
+          severity: 'critical',
+        },
+        { 'x-incident-token': 'incident-secret' },
+      ),
+    )
+
+    expect(third.status).toBe(200)
+    await expect(third.json()).resolves.toMatchObject({
+      ok: true,
+      incidentId: 'cap-evict-001',
+      action: 'resume',
+      paused: false,
+    })
+
+    expect(snapshot().counters.gateway_integrity_incident_duplicate).toBeUndefined()
   })
 
   it('forwards incident notifications and records notify metrics', async () => {

@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-04-15T16:25:11Z",
+  "baseUrl": "https://blackcat-inbox-production.vitek-pasek.workers.dev",
+  "checks": {
+    "read": {
+      "tokenStatus": 404,
+      "badTokenStatus": 401,
+      "pass": true
+    },
+    "forget": {
+      "tokenStatus": 200,
+      "badTokenStatus": 401,
+      "pass": true
+    },
+    "notify": {
+      "tokenStatus": 200,
+      "badTokenStatus": 401,
+      "pass": true
+    },
+    "sign": {
+      "tokenStatus": 200,
+      "badTokenStatus": 401,
+      "pass": true
+    }
+  }
+}

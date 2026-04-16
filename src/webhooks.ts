@@ -1,87 +1,254 @@
 import { inc, gauge } from './metrics.js'
 import crypto from 'crypto'
+import { safeCompareHexOrAscii } from './runtime/crypto/safeCompare.js'
+import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
+
+const DEFAULT_CERT_TTL_MS = 6 * 60 * 60 * 1000
+const MIN_CERT_TTL_MS = 60 * 1000
+const MAX_CERT_TTL_MS = 24 * 60 * 60 * 1000
+const DEFAULT_CERT_CACHE_MAX = 256
+const MIN_CERT_CACHE_MAX = 1
+const MAX_CERT_CACHE_MAX = 4096
+const MAX_CERT_URL_BYTES = 2048
+const DEFAULT_STRIPE_SIGNATURE_HEADER_BYTES = 4096
+const MIN_STRIPE_SIGNATURE_HEADER_BYTES = 256
+const MAX_STRIPE_SIGNATURE_HEADER_BYTES = 16384
+const MAX_STRIPE_SIGNATURE_PARTS = 32
+const DEFAULT_PAYPAL_HTTP_TIMEOUT_MS = 7000
+const MIN_PAYPAL_HTTP_TIMEOUT_MS = 1000
+const MAX_PAYPAL_HTTP_TIMEOUT_MS = 60000
+const SAFE_TRACE_ID_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/
+
+function readStringEnv(name: string): string | undefined {
+  const loaded = loadStringConfig(name)
+  if (!loaded.ok) return undefined
+  const value = typeof loaded.value === 'string' ? loaded.value.trim() : ''
+  return value.length > 0 ? value : undefined
+}
+
+function readBoundedIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const loaded = loadIntegerConfig(name, { fallbackValue: fallback })
+  if (!loaded.ok) return fallback
+  if (!Number.isFinite(loaded.value)) return fallback
+  return Math.min(Math.max(Math.floor(loaded.value), min), max)
+}
+
+function isAbortError(error: unknown): boolean {
+  return !!error && typeof error === 'object' && 'name' in error && (error as { name?: string }).name === 'AbortError'
+}
+
+function isValidCertUrl(rawUrl?: string): rawUrl is string {
+  if (!rawUrl) return false
+  const url = rawUrl.trim()
+  if (!url || url.length > MAX_CERT_URL_BYTES) return false
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:') return false
+    if (parsed.username || parsed.password) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
+function parsePaypalApiAllowHosts(raw: string | undefined): string[] {
+  return (raw || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0)
+}
+
+function resolvePaypalApiBase(): URL | null {
+  const rawBase = readStringEnv('PAYPAL_API_BASE') || 'https://api-m.sandbox.paypal.com'
+  try {
+    const base = new URL(rawBase)
+    if (base.protocol !== 'https:') return null
+    if (base.username || base.password) return null
+    const allowHosts = parsePaypalApiAllowHosts(readStringEnv('PAYPAL_API_ALLOW_HOSTS'))
+    if (allowHosts.length > 0 && !allowHosts.includes(base.hostname.toLowerCase())) return null
+    return base
+  } catch {
+    return null
+  }
+}
+
+function getPaypalHttpTimeoutMs(): number {
+  return readBoundedIntEnv(
+    'PAYPAL_HTTP_TIMEOUT_MS',
+    DEFAULT_PAYPAL_HTTP_TIMEOUT_MS,
+    MIN_PAYPAL_HTTP_TIMEOUT_MS,
+    MAX_PAYPAL_HTTP_TIMEOUT_MS,
+  )
+}
+
+function parseStripeSignatureHeader(sigHeader: string): { timestamp: string | null; signatures: string[] } | null {
+  const header = sigHeader.trim()
+  if (!header || header.length > STRIPE_SIGNATURE_HEADER_MAX_BYTES) return null
+  const buckets: Record<string, string[]> = {}
+  let seenParts = 0
+  for (const rawPart of header.split(',')) {
+    seenParts = seenParts + 1
+    if (seenParts > MAX_STRIPE_SIGNATURE_PARTS) return null
+    const part = rawPart.trim()
+    if (!part) continue
+    const eq = part.indexOf('=')
+    if (eq <= 0) continue
+    const key = part.slice(0, eq).trim()
+    const value = part.slice(eq + 1).trim()
+    if (!key || !value) continue
+    if (!buckets[key]) buckets[key] = []
+    buckets[key].push(value)
+  }
+  const ts = buckets.t && buckets.t.length > 0 ? buckets.t[buckets.t.length - 1] : null
+  return { timestamp: ts, signatures: buckets.v1 || [] }
+}
+
+function readRequiredHeaderValue(headers: Headers, name: string): string | null {
+  const raw = headers.get(name)
+  if (!raw) return null
+  const value = raw.trim()
+  return value.length > 0 ? value : null
+}
+
+function resolveTraceId(rawTraceId: string | undefined): string | undefined {
+  const traceId = typeof rawTraceId === 'string' ? rawTraceId.trim() : ''
+  return SAFE_TRACE_ID_RE.test(traceId) ? traceId : undefined
+}
+
+function buildPayPalHmacPayload(transmissionId: string, transmissionTime: string, body: string): string {
+  return `${transmissionId}.${transmissionTime}.${body}`
+}
 
 // Stripe webhook verification (t=timestamp,v1=signature)
 export function verifyStripe(body: string, sigHeader: string | null, secret: string, toleranceMs: number): boolean {
   if (!body || !sigHeader || !secret) return false
-  const parts: Record<string, string> = {}
-  sigHeader.split(',').forEach((p) => {
-    const [k, v] = p.split('='); if (k && v) parts[k.trim()] = v.trim()
-  })
-  if (!parts.t || !parts.v1) return false
-  const signedPayload = `${parts.t}.${body}`
+  const parsed = parseStripeSignatureHeader(sigHeader)
+  if (!parsed) return false
+  if (!parsed.timestamp || parsed.signatures.length === 0) return false
+  const ts = Number.parseInt(parsed.timestamp, 10)
+  if (!Number.isFinite(ts)) return false
+  const tol = Number.isFinite(toleranceMs) ? toleranceMs : 300000
+  if (Math.abs(Date.now() - (ts * 1000)) > tol) return false
+  const signedPayload = `${parsed.timestamp}.${body}`
   const expected = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex')
-  if (expected !== parts.v1) return false
-  const tol = isNaN(toleranceMs) ? 300000 : toleranceMs
-  const ts = parseInt(parts.t, 10) * 1000
-  if (isFinite(ts) && Math.abs(Date.now() - ts) > tol) return false
-  return true
+  return parsed.signatures.some((candidate) => safeCompareHexOrAscii(expected, candidate))
 }
 
 // PayPal webhook verification (HMAC fallback + RSA remote)
-export async function verifyPayPal(body: string, headers: Headers, secret?: string): Promise<boolean> {
+export async function verifyPayPal(body: string, headers: Headers, secret?: string, traceId?: string): Promise<boolean> {
   if (!body) return false
-  // HMAC short-path if secret provided
+  const parsedBody = parsePayPalBody(body)
+  if (!parsedBody) return false
+  const resolvedTraceId = resolveTraceId(traceId) || crypto.randomUUID()
+  // HMAC mode: require transmission metadata and bind it to the signature input.
   if (secret) {
-    const sig = headers.get('PayPal-Transmission-Sig') || headers.get('PP-Signature')
-    if (!sig) return false
-    const expected = crypto.createHmac('sha256', secret).update(body).digest('hex')
-    if (expected === sig) return true
+    const sig = readRequiredHeaderValue(headers, 'PayPal-Transmission-Sig') || readRequiredHeaderValue(headers, 'PP-Signature')
+    const transmissionId = readRequiredHeaderValue(headers, 'PayPal-Transmission-Id')
+    const transmissionTime = readRequiredHeaderValue(headers, 'PayPal-Transmission-Time')
+    if (!sig || !transmissionId || !transmissionTime) return false
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(buildPayPalHmacPayload(transmissionId, transmissionTime, body))
+      .digest('hex')
+    return safeCompareHexOrAscii(expected, sig)
   }
+  const certUrl = headers.get('PayPal-Cert-Url')
+  if (!isValidCertUrl(certUrl || undefined)) return false
   // Remote verify (requires PAYPAL_WEBHOOK_ID and client creds via env)
-  const webhookId = process.env.PAYPAL_WEBHOOK_ID
+  const webhookId = readStringEnv('PAYPAL_WEBHOOK_ID')
   if (!webhookId) return false
-  const token = await paypalToken()
+  const base = resolvePaypalApiBase()
+  if (!base) return false
+  const timeoutMs = getPaypalHttpTimeoutMs()
+  const token = await paypalToken(base, timeoutMs, resolvedTraceId)
   if (!token) return false
-  const payload = {
-    auth_algo: headers.get('PayPal-Auth-Algo'),
-    cert_url: headers.get('PayPal-Cert-Url'),
-    transmission_id: headers.get('PayPal-Transmission-Id'),
-    transmission_sig: headers.get('PayPal-Transmission-Sig') || headers.get('PayPal-Transmission-Signature'),
-    transmission_time: headers.get('PayPal-Transmission-Time'),
-    webhook_id: webhookId,
-    webhook_event: JSON.parse(body),
+  try {
+    const payload = {
+      auth_algo: headers.get('PayPal-Auth-Algo'),
+      cert_url: certUrl,
+      transmission_id: headers.get('PayPal-Transmission-Id'),
+      transmission_sig: headers.get('PayPal-Transmission-Sig') || headers.get('PayPal-Transmission-Signature'),
+      transmission_time: headers.get('PayPal-Transmission-Time'),
+      webhook_id: webhookId,
+      webhook_event: parsedBody,
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let resp: Response
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      }
+      if (resolvedTraceId) headers['x-trace-id'] = resolvedTraceId
+      resp = await fetch(`${base.toString()}/v1/notifications/verify-webhook-signature`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timer)
+    }
+    if (!resp.ok) return false
+    const data = await resp.json()
+    return Boolean(data && data.verification_status === 'SUCCESS')
+  } catch {
+    return false
   }
-  const resp = await fetch(`${paypalBase()}/v1/notifications/verify-webhook-signature`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  })
-  if (!resp.ok) return false
-  const data = await resp.json()
-  return data && data.verification_status === 'SUCCESS'
 }
 
-async function paypalToken(): Promise<string | null> {
-  const cid = process.env.PAYPAL_CLIENT_ID
-  const sec = process.env.PAYPAL_CLIENT_SECRET
+async function paypalToken(base: URL, timeoutMs: number, traceId?: string): Promise<string | null> {
+  const cid = readStringEnv('PAYPAL_CLIENT_ID')
+  const sec = readStringEnv('PAYPAL_CLIENT_SECRET')
   if (!cid || !sec) return null
-  const base = paypalBase()
-  const resp = await fetch(`${base}/v1/oauth2/token`, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${Buffer.from(`${cid}:${sec}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials',
-  })
-  if (!resp.ok) return null
-  const data = await resp.json()
-  return data.access_token || null
-}
-
-function paypalBase() {
-  return process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com'
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+  try {
+    const headers: Record<string, string> = {
+      Authorization: `Basic ${Buffer.from(`${cid}:${sec}`).toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    }
+    const resolvedTraceId = resolveTraceId(traceId)
+    if (resolvedTraceId) headers['x-trace-id'] = resolvedTraceId
+    const resp = await fetch(`${base.toString()}/v1/oauth2/token`, {
+      method: 'POST',
+      headers,
+      body: 'grant_type=client_credentials',
+      signal: controller.signal,
+    })
+    if (!resp.ok) return null
+    const data = await resp.json()
+    return data.access_token || null
+  } catch (error) {
+    if (timedOut || isAbortError(error)) return null
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 // Simple cert cache placeholder (for future pinning)
 const certCache = new Map<string, number>()
-const CERT_TTL = parseInt(process.env.GW_CERT_CACHE_TTL_MS || '21600000', 10) // 6h
-const CERT_ALLOW_PREFIXES = (process.env.PAYPAL_CERT_ALLOW_PREFIXES || '')
+const CERT_TTL = readBoundedIntEnv('GW_CERT_CACHE_TTL_MS', DEFAULT_CERT_TTL_MS, MIN_CERT_TTL_MS, MAX_CERT_TTL_MS)
+const CERT_CACHE_MAX = readBoundedIntEnv('GW_CERT_CACHE_MAX_SIZE', DEFAULT_CERT_CACHE_MAX, MIN_CERT_CACHE_MAX, MAX_CERT_CACHE_MAX)
+const STRIPE_SIGNATURE_HEADER_MAX_BYTES = readBoundedIntEnv(
+  'GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES',
+  DEFAULT_STRIPE_SIGNATURE_HEADER_BYTES,
+  MIN_STRIPE_SIGNATURE_HEADER_BYTES,
+  MAX_STRIPE_SIGNATURE_HEADER_BYTES,
+)
+const CERT_ALLOW_PREFIXES = (readStringEnv('PAYPAL_CERT_ALLOW_PREFIXES') || '')
   .split(',')
   .map((s) => s.trim())
   .filter((s) => s.length > 0)
-const CERT_PIN_SHA256 = (process.env.GW_CERT_PIN_SHA256 || '')
+const CERT_PIN_SHA256 = (readStringEnv('GW_CERT_PIN_SHA256') || '')
   .split(',')
   .map((s) => s.trim())
   .filter((s) => s.length > 0)
@@ -92,6 +259,14 @@ function sweepCerts(now: number) {
     if (exp <= now) { certCache.delete(u); removed = removed + 1 }
   }
   if (removed > 0) gauge('gateway_webhook_cert_cache_size', certCache.size)
+}
+
+function trimCertCache() {
+  while (certCache.size >= CERT_CACHE_MAX) {
+    const oldest = certCache.keys().next()
+    if (oldest.done) break
+    certCache.delete(oldest.value)
+  }
 }
 
 function certAllowed(url: string): boolean {
@@ -107,7 +282,12 @@ function certPinnedOk(fingerprint?: string): boolean {
 
 export function noteCert(url?: string, fingerprint?: string): boolean {
   if (!url) return true
-  sweepCerts(Date.now())
+  if (!isValidCertUrl(url)) {
+    inc('gateway_webhook_cert_allow_fail')
+    return false
+  }
+  const now = Date.now()
+  sweepCerts(now)
   if (!certAllowed(url)) {
     inc('gateway_webhook_cert_allow_fail')
     return false
@@ -116,8 +296,20 @@ export function noteCert(url?: string, fingerprint?: string): boolean {
     inc('gateway_webhook_cert_pin_fail')
     return false
   }
-  certCache.set(url, Date.now() + CERT_TTL)
+  if (certCache.has(url)) certCache.delete(url)
+  trimCertCache()
+  certCache.set(url, now + CERT_TTL)
   inc('gateway_webhook_cert_seen')
   gauge('gateway_webhook_cert_cache_size', certCache.size)
   return true
+}
+
+function parsePayPalBody(body: string): object | null {
+  try {
+    const parsed = JSON.parse(body)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return parsed
+  } catch {
+    return null
+  }
 }

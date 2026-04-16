@@ -19,3 +19,36 @@ pnpm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# IDE / local deploy connector secrets
+**/.vscode/sftp.json
+**/.vscode/ftp-sync.json
+ops/live-vps/*.local.*
+ops/live-vps/**/*.local.*
+ops/install/*.local.*
+ops/install/**/*.local.*
+
+# Local operator artifacts / drill outputs
+tmp/
+ops/decommission/consistency-matrix.json
+ops/decommission/consistency-drift-report.md
+ops/decommission/consistency-drift-summary.json
+ops/decommission/latest-evidence-bundle.json
+ops/decommission/forget-forward-config.json
+ops/decommission/template-worker-map-coherence.json
+ops/decommission/template-signature-ref-map.json
+ops/decommission/template-variant-map.json
+ops/decommission/release-evidence-pack.md
+ops/decommission/release-evidence-pack.json
+ops/decommission/release-signoff-checklist.md
+ops/decommission/release-readiness.json
+ops/decommission/release-drill-checks.json
+ops/decommission/release-drill-manifest.json
+ops/decommission/release-drill-manifest.validation.txt
+ops/decommission/release-drill-check.json
+ops/decommission/release-evidence-ledger.md
+ops/decommission/release-evidence-ledger.json
+ops/decommission/decommission-evidence-log.md
+ops/decommission/decommission-evidence-log.json
+ops/decommission/decommission-closeout.json
+ops/decommission/evidence/

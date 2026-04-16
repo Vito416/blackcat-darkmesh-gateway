@@ -1,0 +1,87 @@
+{
+  "status": "fail",
+  "strict": false,
+  "checkedAtUtc": "2026-04-15T16:36:52.247Z",
+  "siteId": "site-alpha",
+  "path": "/",
+  "slug": "home",
+  "profiles": {
+    "dryrun": "https://blackcat-inbox-production.vitek-pasek.workers.dev",
+    "scheduler": "https://blackcat-inbox-production.vitek-pasek.workers.dev"
+  },
+  "counts": {
+    "probeCount": 4,
+    "issueCount": 3,
+    "warningCount": 2
+  },
+  "issues": [
+    "[dryrun/ResolveRoute] request failed: This operation was aborted",
+    "[dryrun/GetPage] request failed: This operation was aborted",
+    "[scheduler/GetPage] request failed: This operation was aborted"
+  ],
+  "warnings": [
+    "dryrun profile did not expose transport.mode=dryrun (run AO adapter with debug transport visibility)",
+    "scheduler profile did not expose transport.mode=scheduler/scheduler-direct (run AO adapter with fallback enabled + debug transport visibility)"
+  ],
+  "probes": [
+    {
+      "profile": "dryrun",
+      "action": "ResolveRoute",
+      "endpoint": "/api/public/resolve-route",
+      "url": "https://blackcat-inbox-production.vitek-pasek.workers.dev/api/public/resolve-route",
+      "status": 0,
+      "ok": false,
+      "startedAt": "2026-04-15T16:36:05.331Z",
+      "finishedAt": "2026-04-15T16:36:17.400Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "error": "This operation was aborted"
+    },
+    {
+      "profile": "dryrun",
+      "action": "GetPage",
+      "endpoint": "/api/public/page",
+      "url": "https://blackcat-inbox-production.vitek-pasek.workers.dev/api/public/page",
+      "status": 0,
+      "ok": false,
+      "startedAt": "2026-04-15T16:36:17.400Z",
+      "finishedAt": "2026-04-15T16:36:29.403Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "error": "This operation was aborted"
+    },
+    {
+      "profile": "scheduler",
+      "action": "ResolveRoute",
+      "endpoint": "/api/public/resolve-route",
+      "url": "https://blackcat-inbox-production.vitek-pasek.workers.dev/api/public/resolve-route",
+      "status": 404,
+      "ok": false,
+      "startedAt": "2026-04-15T16:36:29.403Z",
+      "finishedAt": "2026-04-15T16:36:40.189Z",
+      "transportMode": "",
+      "parseOk": true,
+      "body": {
+        "status": "ERROR",
+        "code": "NOT_FOUND",
+        "message": "not_found_or_empty_result"
+      }
+    },
+    {
+      "profile": "scheduler",
+      "action": "GetPage",
+      "endpoint": "/api/public/page",
+      "url": "https://blackcat-inbox-production.vitek-pasek.workers.dev/api/public/page",
+      "status": 0,
+      "ok": false,
+      "startedAt": "2026-04-15T16:36:40.189Z",
+      "finishedAt": "2026-04-15T16:36:52.246Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "error": "This operation was aborted"
+    }
+  ]
+}

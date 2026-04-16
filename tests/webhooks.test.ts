@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { verifyStripe, verifyPayPal, noteCert } from '../src/webhooks.js'
 
 const stripeSecret = 'whsec_test'
@@ -9,14 +9,77 @@ function stripeSig(body: string, ts: number, secret: string) {
   return `t=${ts},v1=${hmac}`
 }
 
+function paypalSig(body: string, transmissionId: string, transmissionTime: string, secret: string) {
+  const payload = `${transmissionId}.${transmissionTime}.${body}`
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex')
+}
+
 import crypto from 'crypto'
 import { markAndCheck } from '../src/replay.js'
+
+async function metricValue(name: string) {
+  const { toProm } = await import('../src/metrics.js')
+  const prom = toProm()
+  const line = prom.split('\n').find((l) => l.startsWith(name + ' '))
+  if (!line) return 0
+  return parseFloat(line.split(' ')[1]) || 0
+}
+
+async function loadHandler() {
+  vi.resetModules()
+  return import('../src/handler.js')
+}
+
+beforeEach(async () => {
+  const { reset } = await import('../src/metrics.js')
+  reset()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  delete process.env.GATEWAY_WEBHOOK_MAX_BODY_BYTES
+  delete process.env.STRIPE_WEBHOOK_SECRET
+  delete process.env.PAYPAL_WEBHOOK_SECRET
+  delete process.env.GW_CERT_PIN_SHA256
+  delete process.env.GW_CERT_CACHE_MAX_SIZE
+  delete process.env.GW_CERT_CACHE_TTL_MS
+  delete process.env.PAYPAL_CERT_ALLOW_PREFIXES
+  delete process.env.GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES
+  delete process.env.PAYPAL_WEBHOOK_ID
+  delete process.env.PAYPAL_API_BASE
+  delete process.env.PAYPAL_API_ALLOW_HOSTS
+  delete process.env.PAYPAL_HTTP_TIMEOUT_MS
+  delete process.env.PAYPAL_CLIENT_ID
+  delete process.env.PAYPAL_CLIENT_SECRET
+  delete process.env.GATEWAY_RL_MAX
+  delete process.env.GATEWAY_PRODUCTION_LIKE
+  delete process.env.GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED
+  delete process.env.WORKER_NOTIFY_URL
+  delete process.env.WORKER_AUTH_TOKEN
+  delete process.env.WORKER_NOTIFY_TOKEN
+  delete process.env.WORKER_NOTIFY_HMAC
+  delete process.env.WORKER_NOTIFY_BREAKER_KEY
+  delete process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE
+  delete process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL
+  delete process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY
+  vi.resetModules()
+})
 
 describe('webhook verification', () => {
   it('verifies stripe signature', () => {
     const body = JSON.stringify({ id: 'evt_1', object: 'event' })
     const ts = Math.floor(Date.now() / 1000)
     const sig = stripeSig(body, ts, stripeSecret)
+    const ok = verifyStripe(body, sig, stripeSecret, 300000)
+    expect(ok).toBe(true)
+  })
+
+  it('verifies stripe signature with robust header parsing', () => {
+    const body = JSON.stringify({ id: 'evt_robust', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const hmac = crypto.createHmac('sha256', stripeSecret).update(`${ts}.${body}`).digest('hex')
+    const sig = `v0=legacy, t = ${ts} , v1 = bad , v1 = ${hmac} , extra = field`
     const ok = verifyStripe(body, sig, stripeSecret, 300000)
     expect(ok).toBe(true)
   })
@@ -28,13 +91,223 @@ describe('webhook verification', () => {
     expect(ok).toBe(false)
   })
 
+  it('rejects oversized stripe signature headers', async () => {
+    process.env.GW_STRIPE_SIGNATURE_HEADER_MAX_BYTES = '256'
+    vi.resetModules()
+    const { verifyStripe: vs } = await import('../src/webhooks.js')
+    const body = JSON.stringify({ id: 'evt_big', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const hmac = crypto.createHmac('sha256', stripeSecret).update(`${ts}.${body}`).digest('hex')
+    const sig = `t=${ts},v1=${hmac},v1=${'a'.repeat(300)}`
+    expect(sig.length).toBeGreaterThan(256)
+    const ok = vs(body, sig, stripeSecret, 300000)
+    expect(ok).toBe(false)
+  })
+
   it('verifies paypal HMAC path when secret provided', async () => {
     const body = JSON.stringify({ id: 'WH-1', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
     const secret = 'ppsecret'
-    const sig = crypto.createHmac('sha256', secret).update(body).digest('hex')
-    const headers = new Headers({ 'PayPal-Transmission-Sig': sig })
+    const transmissionId = 'tx-1'
+    const transmissionTime = '2026-04-09T00:00:00Z'
+    const sig = paypalSig(body, transmissionId, transmissionTime, secret)
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': sig,
+      'PayPal-Transmission-Id': transmissionId,
+      'PayPal-Transmission-Time': transmissionTime,
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+    })
     const ok = await verifyPayPal(body, headers, secret)
     expect(ok).toBe(true)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects paypal HMAC mode requests missing transmission metadata', async () => {
+    const body = JSON.stringify({ id: 'WH-hmac', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const secret = 'ppsecret'
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': 'deadbeef',
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+    })
+    await expect(verifyPayPal(body, headers, secret)).resolves.toBe(false)
+  })
+
+  it('rejects non-https paypal api bases without calling fetch', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_API_BASE = 'http://api.sandbox.paypal.com'
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const body = JSON.stringify({ id: 'WH-http', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'deadbeef',
+      'PayPal-Transmission-Id': 'tx-http',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('respects paypal api host allowlists and accepts configured hosts', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_CLIENT_ID = 'client'
+    process.env.PAYPAL_CLIENT_SECRET = 'secret'
+    process.env.PAYPAL_API_BASE = 'https://api.sandbox.paypal.com'
+    process.env.PAYPAL_API_ALLOW_HOSTS = 'api.sandbox.paypal.com'
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: 'token-123' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ verification_status: 'SUCCESS' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const body = JSON.stringify({ id: 'WH-remote', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'sig',
+      'PayPal-Transmission-Id': 'tx-remote',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('propagates trace ids through paypal remote verification and response headers', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_CLIENT_ID = 'client'
+    process.env.PAYPAL_CLIENT_SECRET = 'secret'
+    process.env.PAYPAL_API_BASE = 'https://api.sandbox.paypal.com'
+    process.env.PAYPAL_API_ALLOW_HOSTS = 'api.sandbox.paypal.com'
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: 'token-123' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ verification_status: 'SUCCESS' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const body = JSON.stringify({ id: 'WH-trace', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'content-type': 'application/json',
+      'x-trace-id': 'trace-paypal-1',
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'sig',
+      'PayPal-Transmission-Id': 'tx-trace',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+
+    const { handleRequest } = await loadHandler()
+    const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-trace-id')).toBe('trace-paypal-1')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    const tokenInit = fetchMock.mock.calls[0][1] as RequestInit
+    const verifyInit = fetchMock.mock.calls[1][1] as RequestInit
+    expect(new Headers(tokenInit.headers).get('x-trace-id')).toBe('trace-paypal-1')
+    expect(new Headers(verifyInit.headers).get('x-trace-id')).toBe('trace-paypal-1')
+  })
+
+  it('blocks paypal api hosts not on the allowlist', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_API_BASE = 'https://evil.example'
+    process.env.PAYPAL_API_ALLOW_HOSTS = 'api.sandbox.paypal.com'
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const body = JSON.stringify({ id: 'WH-host', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'sig',
+      'PayPal-Transmission-Id': 'tx-host',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('times out paypal remote verification without throwing', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    process.env.PAYPAL_CLIENT_ID = 'client'
+    process.env.PAYPAL_CLIENT_SECRET = 'secret'
+    process.env.PAYPAL_API_BASE = 'https://api.sandbox.paypal.com'
+    process.env.PAYPAL_API_ALLOW_HOSTS = 'api.sandbox.paypal.com'
+    process.env.PAYPAL_HTTP_TIMEOUT_MS = '5'
+    const fetchMock = vi.fn((_, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal as AbortSignal | undefined
+        const timer = setTimeout(() => {
+          _resolve(
+            new Response(JSON.stringify({ access_token: 'late-token' }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }),
+          )
+        }, 1000)
+        const onAbort = () => {
+          clearTimeout(timer)
+          const error = new Error('aborted')
+          error.name = 'AbortError'
+          reject(error)
+        }
+        if (signal) {
+          if (signal.aborted) {
+            onAbort()
+            return
+          }
+          signal.addEventListener('abort', onAbort, { once: true })
+        }
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const body = JSON.stringify({ id: 'WH-timeout', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+      'PayPal-Transmission-Sig': 'sig',
+      'PayPal-Transmission-Id': 'tx-timeout',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(false)
+  })
+
+  it('rejects malformed paypal body without throwing', async () => {
+    const headers = new Headers({ 'PayPal-Transmission-Sig': 'deadbeef' })
+    await expect(verifyPayPal('{"id":', headers, 'ppsecret')).resolves.toBe(false)
+  })
+
+  it('rejects malformed paypal cert urls before remote verification', async () => {
+    process.env.PAYPAL_WEBHOOK_ID = 'wh_123'
+    const body = JSON.stringify({ id: 'WH-2', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const headers = new Headers({
+      'PayPal-Cert-Url': 'not-a-url',
+      'PayPal-Transmission-Sig': 'deadbeef',
+      'PayPal-Transmission-Id': 'tx-1',
+      'PayPal-Transmission-Time': '2026-04-09T00:00:00Z',
+      'PayPal-Auth-Algo': 'SHA256withRSA',
+    })
+    await expect(verifyPayPal(body, headers)).resolves.toBe(false)
   })
 
   it('rejects paypal when signature missing', async () => {
@@ -58,5 +331,259 @@ describe('webhook verification', () => {
     const { noteCert: nc } = await import('../src/webhooks.js')
     const ok = nc('https://cert.example.com', 'badpin')
     expect(ok).toBe(false)
+  })
+
+  it('caps cert cache size under churn', async () => {
+    process.env.GW_CERT_CACHE_MAX_SIZE = '2'
+    process.env.GW_CERT_CACHE_TTL_MS = '600000'
+    process.env.GW_CERT_PIN_SHA256 = ''
+    process.env.PAYPAL_CERT_ALLOW_PREFIXES = ''
+    vi.resetModules()
+    const { reset } = await import('../src/metrics.js')
+    reset()
+    const { noteCert: nc } = await import('../src/webhooks.js')
+    expect(nc('https://cert-1.example.com/a.pem', 'pin1')).toBe(true)
+    expect(nc('https://cert-2.example.com/b.pem', 'pin2')).toBe(true)
+    expect(nc('https://cert-3.example.com/c.pem', 'pin3')).toBe(true)
+    expect(await metricValue('gateway_webhook_cert_cache_size')).toBe(2)
+  })
+
+  it('clamps cert cache ttl to a sane minimum', async () => {
+    process.env.GW_CERT_CACHE_TTL_MS = '1'
+    process.env.GW_CERT_CACHE_MAX_SIZE = '8'
+    process.env.GW_CERT_PIN_SHA256 = ''
+    process.env.PAYPAL_CERT_ALLOW_PREFIXES = ''
+    vi.resetModules()
+    const { reset } = await import('../src/metrics.js')
+    reset()
+    const { noteCert: nc } = await import('../src/webhooks.js')
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    expect(nc('https://cert-1.example.com/a.pem', 'pin1')).toBe(true)
+    expect(await metricValue('gateway_webhook_cert_cache_size')).toBe(1)
+    vi.setSystemTime(10)
+    expect(nc('https://cert-2.example.com/b.pem', 'pin2')).toBe(true)
+    expect(await metricValue('gateway_webhook_cert_cache_size')).toBe(2)
+  })
+
+  it('rejects oversized stripe webhook bodies before verification', async () => {
+    process.env.GATEWAY_WEBHOOK_MAX_BODY_BYTES = '64'
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    vi.resetModules()
+    const { handleRequest } = await loadHandler()
+
+    const body = JSON.stringify({
+      id: 'evt_big',
+      object: 'event',
+      details: 'x'.repeat(256),
+    })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({
+      'Stripe-Signature': stripeSig(body, ts, stripeSecret),
+    })
+    const res = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(413)
+    await expect(res.text()).resolves.toBe('payload too large')
+    expect(await metricValue('gateway_webhook_reject_size_total')).toBe(1)
+  })
+
+  it('rejects oversized paypal webhook bodies before verification', async () => {
+    process.env.GATEWAY_WEBHOOK_MAX_BODY_BYTES = '64'
+    process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
+    vi.resetModules()
+    const { handleRequest } = await loadHandler()
+
+    const body = JSON.stringify({
+      id: 'WH-big',
+      event_type: 'PAYMENT.CAPTURE.COMPLETED',
+      details: 'x'.repeat(256),
+    })
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': crypto.createHmac('sha256', 'ppsecret').update(body).digest('hex'),
+    })
+    const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(413)
+    await expect(res.text()).resolves.toBe('payload too large')
+    expect(await metricValue('gateway_webhook_reject_size_total')).toBe(1)
+  })
+
+  it('still accepts valid stripe webhook bodies under the size limit', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'evt_ok', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({ 'Stripe-Signature': stripeSig(body, ts, stripeSecret) })
+    const res = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('ok')
+  })
+
+  it('forwards verified stripe webhooks into worker/write notify path when enabled', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    process.env.GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED = '1'
+    process.env.WORKER_NOTIFY_URL = 'http://worker:8787/notify'
+    process.env.WORKER_NOTIFY_TOKEN = 'notify-secret'
+    process.env.WORKER_NOTIFY_HMAC = 'notify-hmac'
+    process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE = 'stripe-breaker'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'evt_forward_1', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({ 'Stripe-Signature': stripeSig(body, ts, stripeSecret) })
+    const res = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('forwarded')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://worker:8787/notify',
+      expect.objectContaining({
+        method: 'POST',
+        body,
+      }),
+    )
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    const forwardedHeaders = new Headers(init.headers)
+    expect(forwardedHeaders.get('authorization')).toBe('Bearer notify-secret')
+    expect(forwardedHeaders.get('x-breaker-key')).toBe('stripe-breaker')
+    expect(forwardedHeaders.get('x-provider')).toBe('stripe')
+    expect(forwardedHeaders.get('x-signature')).toBe(
+      crypto.createHmac('sha256', 'notify-hmac').update(body).digest('hex'),
+    )
+  })
+
+  it('enables webhook forwarding by default in production-like mode', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    process.env.GATEWAY_PRODUCTION_LIKE = '1'
+    process.env.WORKER_NOTIFY_URL = 'http://worker:8787/notify'
+    process.env.WORKER_NOTIFY_TOKEN = 'notify-secret'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'evt_forward_prod_default', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({ 'Stripe-Signature': stripeSig(body, ts, stripeSecret) })
+    const res = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('forwarded')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps replay protection when stripe webhook forwarding is enabled', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    process.env.GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED = '1'
+    process.env.WORKER_NOTIFY_URL = 'http://worker:8787/notify'
+    process.env.WORKER_NOTIFY_TOKEN = 'notify-secret'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'evt_forward_replay', object: 'event' })
+    const ts = Math.floor(Date.now() / 1000)
+    const headers = new Headers({ 'Stripe-Signature': stripeSig(body, ts, stripeSecret) })
+
+    const first = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+    expect(first.status).toBe(200)
+    await expect(first.text()).resolves.toBe('forwarded')
+
+    const second = await handleRequest(new Request('http://gateway/webhook/stripe', { method: 'POST', body, headers }))
+    expect(second.status).toBe(200)
+    await expect(second.text()).resolves.toBe('replay')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('still accepts valid paypal webhook bodies under the size limit', async () => {
+    process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'WH-ok', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const transmissionId = 'tx-ok'
+    const transmissionTime = '2026-04-09T00:00:00Z'
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': paypalSig(body, transmissionId, transmissionTime, 'ppsecret'),
+      'PayPal-Transmission-Id': transmissionId,
+      'PayPal-Transmission-Time': transmissionTime,
+    })
+    const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('ok')
+  })
+
+  it('forwards verified paypal webhooks into worker/write notify path when enabled', async () => {
+    process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
+    process.env.GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED = '1'
+    process.env.WORKER_NOTIFY_URL = 'http://worker:8787/notify'
+    process.env.WORKER_NOTIFY_TOKEN = 'notify-secret'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { handleRequest } = await loadHandler()
+    const body = JSON.stringify({ id: 'WH-forward', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const transmissionId = 'tx-forward'
+    const transmissionTime = '2026-04-09T00:00:00Z'
+    const headers = new Headers({
+      'PayPal-Transmission-Sig': paypalSig(body, transmissionId, transmissionTime, 'ppsecret'),
+      'PayPal-Transmission-Id': transmissionId,
+      'PayPal-Transmission-Time': transmissionTime,
+      'PayPal-Cert-Url': 'https://api.paypal.com/certs/wh.pem',
+    })
+    const res = await handleRequest(new Request('http://gateway/webhook/paypal', { method: 'POST', body, headers }))
+    expect(res.status).toBe(200)
+    await expect(res.text()).resolves.toBe('forwarded')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    const forwardedHeaders = new Headers(init.headers)
+    expect(forwardedHeaders.get('x-provider')).toBe('paypal')
+    expect(forwardedHeaders.get('x-breaker-key')).toBe('paypal')
+  })
+
+  it('rate limits stripe and paypal webhooks per IP before verification', async () => {
+    process.env.GATEWAY_RL_MAX = '1'
+    process.env.STRIPE_WEBHOOK_SECRET = stripeSecret
+    process.env.PAYPAL_WEBHOOK_SECRET = 'ppsecret'
+    const { handleRequest } = await loadHandler()
+    const ipHeaders = { 'CF-Connecting-IP': '198.51.100.22' }
+
+    const stripeBody = JSON.stringify({ id: 'evt_rl', object: 'event' })
+    const stripeTs = Math.floor(Date.now() / 1000)
+    const stripeHeaders = new Headers({
+      ...ipHeaders,
+      'Stripe-Signature': stripeSig(stripeBody, stripeTs, stripeSecret),
+    })
+    const firstStripe = await handleRequest(
+      new Request('http://gateway/webhook/stripe', { method: 'POST', body: stripeBody, headers: stripeHeaders }),
+    )
+    expect(firstStripe.status).toBe(200)
+
+    const secondStripe = await handleRequest(
+      new Request('http://gateway/webhook/stripe', { method: 'POST', body: stripeBody, headers: stripeHeaders }),
+    )
+    expect(secondStripe.status).toBe(429)
+    await expect(secondStripe.text()).resolves.toBe('Too Many Requests')
+
+    const paypalBody = JSON.stringify({ id: 'WH-rl', event_type: 'PAYMENT.CAPTURE.COMPLETED' })
+    const transmissionId = 'tx-rl'
+    const transmissionTime = '2026-04-09T00:00:00Z'
+    const paypalHeaders = new Headers({
+      ...ipHeaders,
+      'PayPal-Transmission-Sig': paypalSig(paypalBody, transmissionId, transmissionTime, 'ppsecret'),
+      'PayPal-Transmission-Id': transmissionId,
+      'PayPal-Transmission-Time': transmissionTime,
+    })
+    const firstPaypal = await handleRequest(
+      new Request('http://gateway/webhook/paypal', { method: 'POST', body: paypalBody, headers: paypalHeaders }),
+    )
+    expect(firstPaypal.status).toBe(200)
+
+    const secondPaypal = await handleRequest(
+      new Request('http://gateway/webhook/paypal', { method: 'POST', body: paypalBody, headers: paypalHeaders }),
+    )
+    expect(secondPaypal.status).toBe(429)
+    await expect(secondPaypal.text()).resolves.toBe('Too Many Requests')
   })
 })

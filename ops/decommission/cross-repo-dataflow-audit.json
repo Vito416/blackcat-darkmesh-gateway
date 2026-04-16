@@ -1,0 +1,88 @@
+{
+  "checkedAtUtc": "2026-04-14T08:22:17.492Z",
+  "workspaceRoot": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS",
+  "gatewayRoot": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway",
+  "status": "ready_with_warnings",
+  "blockerCount": 0,
+  "warningCount": 0,
+  "blockers": [],
+  "warnings": [],
+  "files": {
+    "contract": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/config/template-backend-contract.json",
+    "gatewayTemplateApi": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/src/templateApi.ts",
+    "gatewayHandler": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/src/handler.ts",
+    "aoPublicApi": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-ao/scripts/http/public_api_server.mjs",
+    "writeCheckoutApi": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/scripts/http/checkout_api_server.mjs",
+    "workerIndex": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-ao/worker/src/index.ts",
+    "writeAuth": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/ao/shared/auth.lua",
+    "writeSignScript": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/scripts/sign-write.js",
+    "gatewayE2ESmoke": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/scripts/e2e-template-dataflow-smoke.js"
+  },
+  "diagnostics": {
+    "workerAllowedKeys": [
+      "action",
+      "Action",
+      "tenant",
+      "Tenant",
+      "actor",
+      "Actor",
+      "timestamp",
+      "ts",
+      "nonce",
+      "Nonce",
+      "role",
+      "Role",
+      "Actor-Role",
+      "siteId",
+      "SiteId",
+      "Site-Id",
+      "signatureRef",
+      "SignatureRef",
+      "Signature-Ref",
+      "payload",
+      "Payload",
+      "requestId",
+      "Request-Id"
+    ],
+    "workerCanonicalFields": [
+      "action",
+      "tenant",
+      "actor",
+      "timestamp",
+      "nonce",
+      "payload",
+      "requestId",
+      "role"
+    ],
+    "writeAuthCanonicalFields": [
+      "action",
+      "tenant",
+      "actor",
+      "timestamp",
+      "nonce",
+      "payload",
+      "requestId",
+      "role"
+    ],
+    "writeSignScriptFields": [
+      "action",
+      "tenant",
+      "actor",
+      "timestamp",
+      "nonce",
+      "payload",
+      "requestId",
+      "role"
+    ],
+    "roleSigned": true
+  },
+  "niceToHave": [
+    "Add an end-to-end smoke that verifies site->variant->templateTxId flow through /template/config and /template/call.",
+    "Add synthetic chaos probes for read fallback behavior (AO dryrun vs scheduler fallback) with evidence export."
+  ],
+  "futureProof": [
+    "Publish template bundles as signed release manifests and gate startup on verified variant-map signatures.",
+    "Bind signer identity to authorization intent (signatureRef -> allowed actions/roles map) and enforce in write runtime.",
+    "Introduce versioned bridge contracts for gateway<->worker and gateway<->AO adapters with compatibility checks in CI."
+  ]
+}

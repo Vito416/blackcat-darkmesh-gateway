@@ -1,0 +1,85 @@
+{
+  "status": "fail",
+  "strict": false,
+  "checkedAtUtc": "2026-04-15T16:35:02.472Z",
+  "siteId": "site-alpha",
+  "path": "/",
+  "slug": "home",
+  "profiles": {
+    "dryrun": "https://gateway.blgateway.fun",
+    "scheduler": "https://gateway.blgateway.fun"
+  },
+  "counts": {
+    "probeCount": 4,
+    "issueCount": 4,
+    "warningCount": 2
+  },
+  "issues": [
+    "[dryrun/ResolveRoute] response is not valid JSON",
+    "[dryrun/GetPage] response is not valid JSON",
+    "[scheduler/ResolveRoute] response is not valid JSON",
+    "[scheduler/GetPage] response is not valid JSON"
+  ],
+  "warnings": [
+    "dryrun profile did not expose transport.mode=dryrun (run AO adapter with debug transport visibility)",
+    "scheduler profile did not expose transport.mode=scheduler/scheduler-direct (run AO adapter with fallback enabled + debug transport visibility)"
+  ],
+  "probes": [
+    {
+      "profile": "dryrun",
+      "action": "ResolveRoute",
+      "endpoint": "/api/public/resolve-route",
+      "url": "https://gateway.blgateway.fun/api/public/resolve-route",
+      "status": 404,
+      "ok": false,
+      "startedAt": "2026-04-15T16:35:02.005Z",
+      "finishedAt": "2026-04-15T16:35:02.293Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "bodyPreview": "not found"
+    },
+    {
+      "profile": "dryrun",
+      "action": "GetPage",
+      "endpoint": "/api/public/page",
+      "url": "https://gateway.blgateway.fun/api/public/page",
+      "status": 404,
+      "ok": false,
+      "startedAt": "2026-04-15T16:35:02.293Z",
+      "finishedAt": "2026-04-15T16:35:02.347Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "bodyPreview": "not found"
+    },
+    {
+      "profile": "scheduler",
+      "action": "ResolveRoute",
+      "endpoint": "/api/public/resolve-route",
+      "url": "https://gateway.blgateway.fun/api/public/resolve-route",
+      "status": 404,
+      "ok": false,
+      "startedAt": "2026-04-15T16:35:02.347Z",
+      "finishedAt": "2026-04-15T16:35:02.404Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "bodyPreview": "not found"
+    },
+    {
+      "profile": "scheduler",
+      "action": "GetPage",
+      "endpoint": "/api/public/page",
+      "url": "https://gateway.blgateway.fun/api/public/page",
+      "status": 404,
+      "ok": false,
+      "startedAt": "2026-04-15T16:35:02.404Z",
+      "finishedAt": "2026-04-15T16:35:02.471Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "bodyPreview": "not found"
+    }
+  ]
+}

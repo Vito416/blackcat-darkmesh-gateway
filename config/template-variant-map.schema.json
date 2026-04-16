@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "./config/template-variant-map.schema.json",
+  "title": "Gateway template variant map",
+  "description": "Maps site keys to template variant + Arweave transaction references.",
+  "type": "object",
+  "propertyNames": {
+    "type": "string",
+    "minLength": 1,
+    "description": "Site key used by routing/config maps."
+  },
+  "additionalProperties": {
+    "$ref": "#/$defs/variantMapEntry"
+  },
+  "$defs": {
+    "variantMapEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant",
+        "templateTxId",
+        "manifestTxId"
+      ],
+      "properties": {
+        "variant": {
+          "type": "string",
+          "enum": [
+            "signal",
+            "bastion",
+            "horizon"
+          ],
+          "description": "Default allowed variant set for gateway template routing."
+        },
+        "templateTxId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/arweaveTxId"
+            },
+            {
+              "$ref": "#/$defs/txIdPlaceholder"
+            }
+          ],
+          "description": "Template bundle transaction id."
+        },
+        "manifestTxId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/arweaveTxId"
+            },
+            {
+              "$ref": "#/$defs/txIdPlaceholder"
+            }
+          ],
+          "description": "Template manifest transaction id."
+        }
+      }
+    },
+    "arweaveTxId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$",
+      "description": "Arweave id-like string (43 base64url characters)."
+    },
+    "txIdPlaceholder": {
+      "type": "string",
+      "pattern": "^REPLACE_WITH_[A-Z0-9_]+$",
+      "description": "Bootstrap placeholder value accepted only when validators allow placeholders."
+    }
+  }
+}

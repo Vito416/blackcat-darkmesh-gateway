@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blackcat-darkmesh-gateway.local/schemas/integrity-attestation.schema.json",
+  "title": "Gateway Integrity Attestation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactType",
+    "scriptVersionTag",
+    "generatedAt",
+    "gateways",
+    "comparedFields",
+    "summary",
+    "digest"
+  ],
+  "properties": {
+    "artifactType": {
+      "const": "gateway-integrity-attestation"
+    },
+    "scriptVersionTag": {
+      "const": "integrity-attestation-v1"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "gateways": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "$ref": "#/$defs/gatewayEntry"
+      }
+    },
+    "comparedFields": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/comparedFieldEntry"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/summaryEntry"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hmacEnv": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hmacSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["hmacSha256"]
+      },
+      "then": {
+        "required": ["hmacEnv"]
+      }
+    },
+    {
+      "if": {
+        "required": ["hmacEnv"]
+      },
+      "then": {
+        "required": ["hmacSha256"]
+      }
+    }
+  ],
+  "$defs": {
+    "gatewayEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "url", "snapshot"],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "snapshot": {
+          "type": "object"
+        }
+      }
+    },
+    "comparedFieldEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "status", "values"],
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["consensus", "mismatch", "invalid"]
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/comparedFieldValueEntry"
+          }
+        }
+      }
+    },
+    "comparedFieldValueEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gateway", "url", "found", "value"],
+      "properties": {
+        "gateway": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "found": {
+          "type": "boolean"
+        }
+      }
+    },
+    "summaryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mismatchCount", "invalidFieldCount", "gatewayCount"],
+      "properties": {
+        "mismatchCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalidFieldCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gatewayCount": {
+          "type": "integer",
+          "minimum": 2
+        }
+      }
+    }
+  }
+}

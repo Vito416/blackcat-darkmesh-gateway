@@ -23,22 +23,49 @@ function normalizeBuffer(input: string | Uint8Array): Uint8Array {
   return typeof input === 'string' ? new TextEncoder().encode(input) : input
 }
 
+function normalizeIntegrityToken(input: string | null | undefined): string | null {
+  if (typeof input !== 'string') return null
+
+  let value = input.trim()
+  if (!value) return null
+
+  const commonPrefixes = [/^sha256[:=\-]/i, /^0x/i]
+  let normalized = true
+  while (normalized) {
+    normalized = false
+    for (const prefix of commonPrefixes) {
+      const stripped = value.replace(prefix, '')
+      if (stripped !== value) {
+        value = stripped.trim()
+        normalized = true
+      }
+    }
+  }
+
+  value = value.toLowerCase()
+  if (!value || /\s/.test(value)) return null
+  return value
+}
+
 export function sha256Hex(input: string | Uint8Array): string {
   return createHash('sha256').update(normalizeBuffer(input)).digest('hex')
 }
 
 export function isTrustedRoot(root: string | null | undefined, trustedRoots: readonly string[] | null | undefined): boolean {
-  if (!root || !trustedRoots || trustedRoots.length === 0) return false
-  return trustedRoots.includes(root)
+  const normalizedRoot = normalizeIntegrityToken(root)
+  if (!normalizedRoot || !trustedRoots || trustedRoots.length === 0) return false
+  return trustedRoots.some((trustedRoot) => normalizeIntegrityToken(trustedRoot) === normalizedRoot)
 }
 
 function collectTrustedRoots(policy: IntegrityTrustedRoot): string[] {
   const roots = new Set<string>()
-  if (typeof policy.activeRoot === 'string' && policy.activeRoot.trim()) {
-    roots.add(policy.activeRoot.trim())
+  const activeRoot = normalizeIntegrityToken(policy.activeRoot)
+  if (activeRoot) {
+    roots.add(activeRoot)
   }
   for (const root of policy.trustedRoots ?? []) {
-    if (typeof root === 'string' && root.trim()) roots.add(root.trim())
+    const normalizedRoot = normalizeIntegrityToken(root)
+    if (normalizedRoot) roots.add(normalizedRoot)
   }
   return [...roots]
 }
@@ -46,7 +73,8 @@ function collectTrustedRoots(policy: IntegrityTrustedRoot): string[] {
 function resolveEntryHash(entry: IntegrityManifestEntry): string | null {
   const candidates = [entry.hash, entry.uriHash, entry.metaHash]
   for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+    const normalizedCandidate = normalizeIntegrityToken(candidate)
+    if (normalizedCandidate) return normalizedCandidate
   }
   return null
 }
@@ -60,7 +88,7 @@ export function verifyManifestEntry(
   }
 
   const trustedRoots = collectTrustedRoots(trustedRoot)
-  const entryRoot = typeof manifestEntry.root === 'string' ? manifestEntry.root.trim() : ''
+  const entryRoot = normalizeIntegrityToken(manifestEntry.root)
   if (!entryRoot || trustedRoots.length === 0) {
     return { ok: false, code: 'missing_trusted_root' }
   }
@@ -68,7 +96,7 @@ export function verifyManifestEntry(
     return { ok: false, code: 'integrity_mismatch' }
   }
 
-  const expectedHash = typeof trustedRoot.expectedHash === 'string' ? trustedRoot.expectedHash.trim() : ''
+  const expectedHash = normalizeIntegrityToken(trustedRoot.expectedHash)
   if (!expectedHash) {
     return { ok: true }
   }

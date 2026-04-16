@@ -11,9 +11,40 @@ Purpose
 
 Consolidation status
 - Gateway is the active integration target for legacy backend modules.
-- Imported migration snapshots live in `libs/legacy/` (see `libs/legacy/README.md` and `libs/legacy/MANIFEST.md`).
-- Crypto manifest policy snapshot lives in `security/crypto-manifests/` (see `security/crypto-manifests/SNAPSHOT.md`).
-- Template code remains intentionally separate in `blackcat-templates`; gateway enforces controlled backend access for deployed templates.
+- Legacy library snapshots were fully retired from this repo; request-path runtime now uses gateway-owned modules only under `src/runtime/**` and `src/clients/**`.
+- Crypto policy bundle is maintained in `security/crypto-policy/` (gateway-owned, not a vendored snapshot).
+- Template code remains intentionally separate in `blackcat-darkmesh-templates`; gateway enforces controlled backend access for deployed templates.
+
+Migration status
+- Active backlog and blocker split: `ops/decommission/BACKLOG.md`
+- Decommission evidence checklist: `ops/decommission/DECOMMISSION_CHECKLIST.md`
+- Integrity gate command: `npm run test:integrity-gate`
+- Current migration goal: keep the gateway slice evidence-complete while AO-side dependencies finish and the final decommission gate is cleared.
+
+## Quick operator loop
+```bash
+curl -fsS "${GATEWAY_BASE_URL:-http://localhost:8787}/integrity/state" -H "Authorization: Bearer ${GATEWAY_INTEGRITY_STATE_TOKEN}"
+npm run test:integrity-gate
+GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://localhost:8787}" GATEWAY_INTEGRITY_INCIDENT_TOKEN="${GATEWAY_INTEGRITY_INCIDENT_TOKEN}" GATEWAY_TEMPLATE_TOKEN="${GATEWAY_TEMPLATE_TOKEN}" node scripts/e2e-integrity-incident-smoke.js
+```
+
+## Node runtime entrypoint (VPS mode)
+```bash
+npm run build
+HOST=127.0.0.1 PORT=8080 npm start
+```
+
+- `/health` and `/healthz` are lightweight liveness endpoints (no AO dependency lookup).
+- Keep the process private (`127.0.0.1`), then publish through Cloudflare Tunnel.
+- Domain lock (recommended): `GATEWAY_ALLOWED_HOSTS=gateway.example.com,store.example.com`
+- Trusted-proxy mode (secure default): `GATEWAY_TRUST_PROXY_MODE=off`
+  - Set `forwarded` only when all traffic comes from your trusted reverse proxy and host allowlisting is enabled.
+- Node adapter body cap (default `262144`): `GATEWAY_NODE_MAX_BODY_BYTES=262144` (enforced before handler routing).
+
+## P3 operator tools
+```bash
+npm run ops:compare-integrity -- --url ... --url ...
+```
 
 Key responsibilities
 - Fetch + cache site front-end from Arweave (verified via manifest of trusted templates).
@@ -53,6 +84,18 @@ Configuration (per site)
     - `GATEWAY_RL_WINDOW_MS`, `GATEWAY_RL_MAX`, `GATEWAY_RL_MAX_BUCKETS`
     - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_REPLAY_MAX_KEYS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
     - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
+    - `GATEWAY_PRODUCTION_LIKE` (recommended `1` on staging/production; or auto-derived from `GATEWAY_MODE` / `APP_ENV` / `NODE_ENV` values `production|prod|staging|stage|preprod|pre-production`)
+    - Internal plane toggles (apply only in production-like mode; secure default is fail-closed):
+      - `GATEWAY_INTERNAL_PLANE_ALLOW_MUTATIONS=1` (opens `/cache/*`, `/cache/forget`, `/inbox` together)
+      - `GATEWAY_INTERNAL_PLANE_ALLOW_CACHE=1`, `GATEWAY_INTERNAL_PLANE_ALLOW_FORGET=1`, `GATEWAY_INTERNAL_PLANE_ALLOW_INBOX=1` (per-route opt-in)
+      - strict flag semantics: only literal `1` enables these toggles
+      - when `/cache/forget` is enabled in production-like mode, `GATEWAY_FORGET_TOKEN` must be configured or requests fail with `500 forget_auth_not_configured`
+    - `GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED` (boolean; default auto: enabled in production-like mode, disabled otherwise)
+      - set to `0` for verify-only staged rollout
+      - when enabled, configure `WORKER_NOTIFY_URL` and `WORKER_AUTH_TOKEN` (or `WORKER_NOTIFY_TOKEN`)
+    - `GATEWAY_ALLOWED_HOSTS` (recommended host allowlist for Node adapter mode)
+    - `GATEWAY_TRUST_PROXY_MODE=off|forwarded` (default `off`; only `forwarded` trusts `x-forwarded-host` / `x-forwarded-proto`)
+    - `GATEWAY_NODE_MAX_BODY_BYTES` (default `262144`; Node-layer payload guardrail before route handlers)
     - `GW_CERT_CACHE_TTL_MS`, `GW_CERT_PIN_SHA256` (comma pins), `PAYPAL_CERT_ALLOW_PREFIXES` (comma prefixes)
 - Integrity policy and snapshot:
     - `AO_INTEGRITY_URL` (AO endpoint for integrity snapshot)
@@ -63,10 +106,14 @@ Configuration (per site)
     - `GATEWAY_INTEGRITY_CHECKPOINT_MAX_AGE_SECONDS` (ignore older checkpoints; stale files are treated as absent)
     - `GATEWAY_INTEGRITY_DISKLESS=1` (force memory-only mode; disable checkpoint file reads/writes)
     - `GATEWAY_INTEGRITY_CHECKPOINT_MODE=diskless|disabled|memory-only` (equivalent explicit checkpoint disable mode)
+    - `GATEWAY_RESOURCE_PROFILE=vps_small|vps_medium|diskless` (profiled defaults for integrity fetch/retry cadence)
     - `AO_INTEGRITY_FETCH_TIMEOUT_MS`, `AO_INTEGRITY_FETCH_RETRY_ATTEMPTS`, `AO_INTEGRITY_FETCH_RETRY_BACKOFF_MS` (AO/integrity fetch timeout + retry budget)
+      - precedence: explicit fetch options > `AO_INTEGRITY_FETCH_*` env vars > `GATEWAY_RESOURCE_PROFILE` defaults
     - `GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE=1` (fail closed unless cache entries are integrity-verified)
     - `GATEWAY_INTEGRITY_STATE_TOKEN` (optional auth token for `GET /integrity/state`; accepts Bearer or `x-integrity-token`)
     - `GATEWAY_INTEGRITY_INCIDENT_TOKEN` (required auth token for `POST /integrity/incident`; accepts Bearer or `x-incident-token`)
+    - `GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS` (incident idempotency replay TTL; default 30m)
+    - `GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP` (max retained incident IDs for replay dedupe; default 256)
     - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_URL` (optional incident forward target)
     - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_TOKEN` (optional Bearer token for incident forwarding)
     - `GATEWAY_INTEGRITY_INCIDENT_NOTIFY_HMAC` (optional HMAC secret; sent as `x-signature`)
@@ -76,9 +123,31 @@ Configuration (per site)
 - Template custom-backend guardrails:
   - `GATEWAY_TEMPLATE_TOKEN` (optional shared token required on `/template/call`)
   - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1` (default is read-only; write actions blocked unless enabled)
-  - `AO_PUBLIC_API_URL` / `AO_READ_URL` and `WRITE_API_URL` (upstream targets)
+  - `GATEWAY_TEMPLATE_CONTRACT_FILE` (optional path, default `config/template-backend-contract.json`; template actions must exist in this contract and match route+method)
+  - `AO_PUBLIC_API_URL` / `AO_READ_URL` (public read upstream target)
+  - `WRITE_API_URL` (write upstream target for checkout/write actions)
+  - `WORKER_API_URL` / `WORKER_SIGN_URL` (worker signer endpoint base for single-tenant/simple deployments; gateway calls `/sign`)
+  - `WORKER_AUTH_TOKEN` / `WORKER_SIGN_TOKEN` (worker signer auth token)
+  - `GATEWAY_TEMPLATE_WORKER_URL_MAP` (multi-tenant worker signer routing map, JSON: `{ \"site-a\": \"https://worker-a.example/sign\", \"site-b\": \"https://worker-b.example/sign\" }`)
+  - `GATEWAY_TEMPLATE_WORKER_TOKEN_MAP` (optional runtime fallback map, JSON with same keys as the URL map)
+    - when signer map is configured, write actions fail closed for unknown `siteId`
+    - strict production-readiness checks require URL/token map site coverage to stay aligned
+  - `GATEWAY_TEMPLATE_VARIANT_MAP` (optional per-site template variant map, JSON `{ "<site>": { "variant": "signal|bastion|horizon", "templateTxId": "...", "manifestTxId": "..." } }`)
   - `GATEWAY_TEMPLATE_HMAC_SECRET` (optional HMAC signature header for forwarded template calls)
-- Notify → Worker:
+  - `GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS` (global fallback timeout)
+  - `GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS_READ` / `GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS_WRITE` (per-route-kind timeout overrides)
+  - `GATEWAY_TEMPLATE_UPSTREAM_AUTH_MODE` (`none`|`bearer`|`x-template-token`, default `none`)
+  - `GATEWAY_TEMPLATE_UPSTREAM_TOKEN` (shared upstream auth token used when auth mode is enabled)
+  - `GATEWAY_TEMPLATE_UPSTREAM_TOKEN_MAP` (optional per-site upstream auth token map, JSON)
+  - `GATEWAY_SITE_ID_BY_HOST_MAP` (runtime-optional JSON host->site binding map; still used as highest-priority allowlist source)
+  - `GATEWAY_SITE_RESOLVE_MODE` (`map`|`ao`|`hybrid`, default `hybrid`; resolver order is map first, then AO)
+  - `GATEWAY_SITE_RESOLVE_AO_URL` (optional resolver base URL; gateway calls `${base}/api/public/site-by-host` with `{ "host": "<request-host>" }`)
+  - `GATEWAY_SITE_RESOLVE_TIMEOUT_MS` (AO resolver timeout, default `3000`)
+  - `GATEWAY_SITE_RESOLVE_CACHE_TTL_MS` (AO resolver cache TTL, default `30000`)
+  - `GATEWAY_SITE_RESOLVE_ALLOW_BODY_FALLBACK=1` (optional override; permits body-provided `siteId` fallback when resolvers fail/miss)
+    - production-like mode (`NODE_ENV=production` or `GATEWAY_PRODUCTION_LIKE=1`) fails closed when no resolver source is available unless this fallback override is set
+    - strict production-readiness checks can still require a non-empty host map for deterministic allowlisting
+  - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
   - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.
 - Metrics scrape example (Prometheus):
@@ -136,6 +205,7 @@ Open items to design/implement
 - `/api/public/*` → served from AO read state (cached).
 - `/webhook/:psp` → PSP bridge ingress.
 - `/template/call` → constrained template backend API (allowlisted actions only, schema-validated, optional token + HMAC).
+- `/template/config` → machine-readable template backend/runtime contract snapshot for operators and template loaders.
 - `/integrity/state` → read current runtime integrity state + latest AO/checkpoint snapshot details (optional token).
 - `/integrity/incident` → authenticated incident intake (`report|ack|pause|resume`) with optional forwarding hook.
 - `/metrics` → Prom/OpenMetrics (protected, text format; set `GATEWAY_REQUIRE_METRICS_AUTH=1` + bearer/basic creds).
@@ -203,6 +273,16 @@ When cache admission limits are exceeded, cache PUT returns:
 - Webhook pen-tests: `npm test -- --run tests/webhook-pentest.test.ts`
 - Bez lokálního Node: `docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm test -- --run tests/webhook-pentest.test.ts"`
 
+### Production-like controls: concise verification
+```bash
+npm test -- --run tests/handler.test.ts tests/webhooks.test.ts tests/server-node-adapter.test.ts tests/template-host-site-binding.test.ts
+npm run ops:validate-hosting-readiness -- --profile vps_medium --env-file config/example.env --strict --json
+GATEWAY_TEMPLATE_WORKER_URL_MAP="$(cat config/template-worker-routing.example.json)" \
+GATEWAY_TEMPLATE_WORKER_TOKEN_MAP="$(cat config/template-worker-token-map.example.json)" \
+GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP="$(cat config/template-worker-signature-ref-map.example.json)" \
+npm run ops:check-template-worker-map-coherence -- --require-sites site-alpha,site-beta --require-token-map --strict --json
+```
+
 ### Next execution order (P0 rollout)
 1. `npm test`
 2. `npm run build`
@@ -214,23 +294,22 @@ When cache admission limits are exceeded, cache PUT returns:
 8. Re-run the full suite before any kernel-retirement decision.
 
 ## Kernel integrity migration
-- Detailed migration package from `blackcat-kernel-contracts` is tracked in `kernel-migration/`.
-- Start with `kernel-migration/README.md`, then follow:
+- Migration and decommission evidence from `blackcat-kernel-contracts` is tracked in `ops/decommission/`.
+- Start with `ops/decommission/README.md`, then follow:
   - `KERNEL_PORT_SCOPE.md`
   - `AO_GATEWAY_DESIGN.md`
   - `BACKLOG.md`
   - `DECOMMISSION_CHECKLIST.md`
-- Temporary upstream references are stored in `kernel-migration/upstream/` to avoid losing design/security context during the port.
 
 ## Template security model
-- Guardrails for the custom backend model are documented in `libs/legacy/TEMPLATE_BACKEND_GUARDRAILS.md`.
+- Guardrails for the custom backend model are documented in `ops/decommission/TEMPLATE_BACKEND_GUARDRAILS.md`.
 - High-level rule: templates can call only declared gateway APIs; they do not get direct data-store or secret access.
 
 ## Releases
 - Release drafts are created from main; see the latest draft and published tags in [Releases](https://github.com/Vito416/blackcat-darkmesh-gateway/releases).
 Open items to design/implement
 - Exact endpoint contract with browser (cart/checkout/session).
-- Metrics/alerts defaults (thresholds).
+- Dashboard layout and escalation policy across environments.
 - Deployment topology (per-merchant vs multi-tenant isolation).
 
 

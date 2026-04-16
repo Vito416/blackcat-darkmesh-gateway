@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blackcat.darkmesh/schemas/template/checkout.create-payment-intent.request.json",
+  "title": "checkout.create-payment-intent request",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["orderId"],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "enum": ["stripe", "paypal", "gopay"]
+    },
+    "siteId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "number",
+      "minimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "minLength": 3
+    },
+    "returnUrl": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

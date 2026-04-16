@@ -127,6 +127,36 @@ describe('integrity cache enforcement', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('accepts verified cache PUT with prefixed, case-variant root headers', async () => {
+    process.env.GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE = '1'
+    process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
+    const body = 'template-v1'
+    const hash = sha256Hex(body)
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(makeIntegritySnapshot(false)), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const { handleRequest } = await loadHandler()
+    const res = await handleRequest(
+      new Request('http://gateway/cache/template-index', {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/octet-stream',
+          'x-integrity-root': '  SHA256:0xROOT-ABC  ',
+          'x-integrity-hash': hash,
+        },
+        body,
+      }),
+    )
+
+    expect(res.status).toBe(201)
+    expect(snapshot().counters.gateway_integrity_verify_ok).toBeGreaterThanOrEqual(1)
+  })
+
   it('blocks cache PUT on hash mismatch', async () => {
     process.env.GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE = '1'
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'

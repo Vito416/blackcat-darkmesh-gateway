@@ -1,0 +1,68 @@
+{
+  "ok": true,
+  "status": "pass",
+  "root": ".",
+  "resolvedRoot": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway",
+  "strict": true,
+  "requiredRuntimeFileCount": 5,
+  "requiredTestCount": 5,
+  "runtimeFileCount": 5,
+  "testCount": 5,
+  "importFindingCount": 0,
+  "forbiddenSigningFindingCount": 0,
+  "runtimeMissing": [],
+  "testMissing": [],
+  "importScan": {
+    "sourceRoot": "src",
+    "scanned": true,
+    "findingCount": 0,
+    "findings": [],
+    "issue": ""
+  },
+  "importFindings": [],
+  "forbiddenSigningFindings": [],
+  "runtimeFiles": [
+    {
+      "path": "src/runtime/crypto/boundary.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/crypto/hmac.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/crypto/safeCompare.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/crypto/signatureRefs.ts",
+      "exists": true
+    },
+    {
+      "path": "src/webhooks.ts",
+      "exists": true
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/runtime-crypto-safeCompare.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-crypto-hmac.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-crypto-signatureRefs.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-crypto-boundary.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/webhooks.test.ts",
+      "exists": true
+    }
+  ]
+}

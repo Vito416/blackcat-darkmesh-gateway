@@ -1,0 +1,10 @@
+prod-like site-variant smoke
+BASE_URL=https://gateway.blgateway.fun
+SITE_ID=site-alpha
+SITE_PATH=/
+
+PASS - variant map entry for site-alpha -> variant signal, templateTxId Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, manifestTxId Bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+FAIL - GET /template/config returned 200 but missing read-ready variant map fields; body=Gateway skeleton
+PASS - POST /template/call -> 404 (expected 200/202/404)
+
+Summary: PASS=2 WARN=0 FAIL=1

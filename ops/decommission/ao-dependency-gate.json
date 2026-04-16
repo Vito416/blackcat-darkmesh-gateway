@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "release": "1.4.0",
+  "updatedAt": "2026-04-12T19:28:00Z",
+  "required": [
+    "p0_1_registry_contract_surface",
+    "p1_1_authority_rotation_workflow",
+    "p1_2_audit_commitments_stream"
+  ],
+  "checks": [
+    {
+      "id": "p0_1_registry_contract_surface",
+      "title": "P0.1 AO integrity registry contract surface",
+      "status": "closed",
+      "evidence": "ops/decommission/BACKLOG.md#v140-release-ready-checklist",
+      "notes": "Closed for 1.4.0 gate. AO publish/revoke/query/pause contract surface accepted for release readiness."
+    },
+    {
+      "id": "p1_1_authority_rotation_workflow",
+      "title": "P1.1 Authority separation and rotation workflow",
+      "status": "closed",
+      "evidence": "ops/decommission/DECOMMISSION_CHECKLIST.md#3-role--authority-separation",
+      "notes": "Closed for 1.4.0 gate. Authority separation and rotation workflow accepted for release readiness."
+    },
+    {
+      "id": "p1_2_audit_commitments_stream",
+      "title": "P1.2 Audit commitments stream",
+      "status": "closed",
+      "evidence": "ops/decommission/DECOMMISSION_CHECKLIST.md#5-observability--auditability",
+      "notes": "Closed for 1.4.0 gate. Audit commitments stream and sequencing/query readiness accepted."
+    }
+  ]
+}

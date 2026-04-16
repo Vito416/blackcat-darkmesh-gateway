@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vito416/blackcat-darkmesh-gateway/security/contracts/integrity-snapshot-v1.schema.json",
+  "title": "BlackCat Darkmesh Gateway AO Integrity Snapshot v1",
+  "description": "Versioned contract for the AO integrity snapshot consumed by the gateway. The gateway accepts the raw snapshot object as the canonical shape and also unwraps AO codec envelopes with status=OK.",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/rawSnapshot"
+    },
+    {
+      "$ref": "#/$defs/aoCodecOkEnvelope"
+    }
+  ],
+  "$defs": {
+    "rawSnapshot": {
+      "type": "object",
+      "required": ["release", "policy", "authority", "audit"],
+      "properties": {
+        "release": {
+          "$ref": "#/$defs/releaseRecord"
+        },
+        "policy": {
+          "$ref": "#/$defs/policyRecord"
+        },
+        "authority": {
+          "$ref": "#/$defs/authorityRecord"
+        },
+        "audit": {
+          "$ref": "#/$defs/auditRecord"
+        }
+      },
+      "description": "Canonical AO integrity snapshot payload after any transport envelope has been removed.",
+      "examples": [
+        {
+          "release": {
+            "componentId": "gateway",
+            "version": "1.2.0",
+            "root": "root-abc",
+            "uriHash": "uri-123",
+            "metaHash": "meta-456",
+            "publishedAt": "2026-04-09T12:00:00Z"
+          },
+          "policy": {
+            "activeRoot": "root-abc",
+            "activePolicyHash": "policy-789",
+            "paused": false,
+            "maxCheckInAgeSec": 86400
+          },
+          "authority": {
+            "root": "sig-root",
+            "upgrade": "sig-upgrade",
+            "emergency": "sig-emergency",
+            "reporter": "sig-reporter",
+            "signatureRefs": ["sig-root", "sig-upgrade"]
+          },
+          "audit": {
+            "seqFrom": 1,
+            "seqTo": 3,
+            "merkleRoot": "audit-root",
+            "metaHash": "audit-meta",
+            "reporterRef": "sig-reporter",
+            "acceptedAt": "2026-04-09T12:00:00Z"
+          }
+        }
+      ]
+    },
+    "releaseRecord": {
+      "type": "object",
+      "required": ["componentId", "version", "root", "uriHash", "metaHash", "publishedAt"],
+      "properties": {
+        "componentId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Logical component identifier for the active AO release, such as gateway."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable release version string."
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Trusted release root. The gateway expects this to match policy.activeRoot."
+        },
+        "uriHash": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hash of the release URI or location record."
+        },
+        "metaHash": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hash of the release metadata record."
+        },
+        "publishedAt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ISO-8601 timestamp for when the release became active."
+        },
+        "revokedAt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional ISO-8601 revocation timestamp. Active snapshots must omit this field."
+        }
+      },
+      "description": "Release metadata for the active AO integrity root. The gateway currently rejects active snapshots when revokedAt is present.",
+      "examples": [
+        {
+          "componentId": "gateway",
+          "version": "1.2.0",
+          "root": "root-abc",
+          "uriHash": "uri-123",
+          "metaHash": "meta-456",
+          "publishedAt": "2026-04-09T12:00:00Z"
+        }
+      ]
+    },
+    "policyRecord": {
+      "type": "object",
+      "required": ["activeRoot", "activePolicyHash", "paused", "maxCheckInAgeSec"],
+      "properties": {
+        "activeRoot": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Currently trusted root for the active policy snapshot."
+        },
+        "activePolicyHash": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hash of the active policy state."
+        },
+        "paused": {
+          "type": "boolean",
+          "description": "Boolean pause flag. The parser rejects any non-boolean representation."
+        },
+        "maxCheckInAgeSec": {
+          "type": "number",
+          "description": "Finite age budget in seconds. Production snapshots should use a non-negative integer."
+        },
+        "pendingUpgrade": {
+          "$ref": "#/$defs/pendingUpgradeRecord"
+        },
+        "compatibilityState": {
+          "$ref": "#/$defs/compatibilityStateRecord"
+        }
+      },
+      "description": "Operational policy state. activeRoot must match release.root in the current gateway parser.",
+      "examples": [
+        {
+          "activeRoot": "root-abc",
+          "activePolicyHash": "policy-789",
+          "paused": false,
+          "maxCheckInAgeSec": 86400
+        }
+      ]
+    },
+    "pendingUpgradeRecord": {
+      "type": "object",
+      "required": ["root", "hash", "expiry", "proposedAt"],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Root proposed for the next release window."
+        },
+        "hash": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hash of the proposed upgrade payload."
+        },
+        "expiry": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ISO-8601 expiry timestamp for the upgrade proposal."
+        },
+        "proposedAt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ISO-8601 timestamp for when the proposal was created."
+        }
+      },
+      "description": "Optional upgrade proposal metadata kept by AO for operational visibility."
+    },
+    "compatibilityStateRecord": {
+      "type": "object",
+      "required": ["root", "hash", "until"],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Temporary compatibility root. The parser only accepts this when it matches release.root or policy.activeRoot."
+        },
+        "hash": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hash for the compatibility overlap state."
+        },
+        "until": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ISO-8601 end timestamp for the compatibility overlap."
+        }
+      },
+      "description": "Optional compatibility overlap metadata. The gateway currently accepts compatibilityState.root only when it matches release.root or policy.activeRoot.",
+      "examples": [
+        {
+          "root": "root-abc",
+          "hash": "compat-123",
+          "until": "2026-04-09T13:00:00Z"
+        }
+      ]
+    },
+    "authorityRecord": {
+      "type": "object",
+      "required": ["root", "upgrade", "emergency", "reporter", "signatureRefs"],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Root signer reference for the active authority set."
+        },
+        "upgrade": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Signer reference for upgrade operations."
+        },
+        "emergency": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Signer reference for emergency override operations."
+        },
+        "reporter": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Signer reference for audit reporting."
+        },
+        "signatureRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "description": "Authority routing metadata used by gateway/operator workflows.",
+      "examples": [
+        {
+          "root": "sig-root",
+          "upgrade": "sig-upgrade",
+          "emergency": "sig-emergency",
+          "reporter": "sig-reporter",
+          "signatureRefs": ["sig-root", "sig-upgrade"]
+        }
+      ]
+    },
+    "auditRecord": {
+      "type": "object",
+      "required": ["seqFrom", "seqTo", "merkleRoot", "metaHash", "reporterRef", "acceptedAt"],
+      "properties": {
+        "seqFrom": {
+          "type": "number",
+          "description": "Lower bound of the audit sequence window. The parser accepts only finite numbers."
+        },
+        "seqTo": {
+          "type": "number",
+          "description": "Upper bound of the audit sequence window. The parser accepts only finite numbers."
+        },
+        "merkleRoot": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Merkle root covering the audit sequence span."
+        },
+        "metaHash": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hash of the audit metadata bundle."
+        },
+        "reporterRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reporter signer reference used to attest the audit."
+        },
+        "acceptedAt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ISO-8601 timestamp for when the audit snapshot was accepted."
+        }
+      },
+      "description": "Audit commitment summary paired with the snapshot.",
+      "examples": [
+        {
+          "seqFrom": 1,
+          "seqTo": 3,
+          "merkleRoot": "audit-root",
+          "metaHash": "audit-meta",
+          "reporterRef": "sig-reporter",
+          "acceptedAt": "2026-04-09T12:00:00Z"
+        }
+      ]
+    },
+    "aoCodecOkEnvelope": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "const": "OK"
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["payload"],
+          "properties": {
+            "payload": {
+              "$ref": "#/$defs/rawSnapshot"
+            }
+          }
+        },
+        {
+          "required": ["body"],
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/rawSnapshot"
+            }
+          }
+        },
+        {
+          "required": ["result"],
+          "properties": {
+            "result": {
+              "$ref": "#/$defs/rawSnapshot"
+            }
+          }
+        },
+        {
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/rawSnapshot"
+            }
+          }
+        }
+      ],
+      "description": "AO codec envelope variant accepted by the current gateway parser. The snapshot must be nested under payload, body, result, or data.",
+      "examples": [
+        {
+          "status": "OK",
+          "payload": {
+            "release": {
+              "componentId": "gateway",
+              "version": "1.2.0",
+              "root": "root-abc",
+              "uriHash": "uri-123",
+              "metaHash": "meta-456",
+              "publishedAt": "2026-04-09T12:00:00Z"
+            },
+            "policy": {
+              "activeRoot": "root-abc",
+              "activePolicyHash": "policy-789",
+              "paused": false,
+              "maxCheckInAgeSec": 86400
+            },
+            "authority": {
+              "root": "sig-root",
+              "upgrade": "sig-upgrade",
+              "emergency": "sig-emergency",
+              "reporter": "sig-reporter",
+              "signatureRefs": ["sig-root", "sig-upgrade"]
+            },
+            "audit": {
+              "seqFrom": 1,
+              "seqTo": 3,
+              "merkleRoot": "audit-root",
+              "metaHash": "audit-meta",
+              "reporterRef": "sig-reporter",
+              "acceptedAt": "2026-04-09T12:00:00Z"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer'
 import crypto from 'crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { fetchEntry, put, sweep, forgetSubject, dropKey } from './cache.js'
 import { inc, gauge, toProm } from './metrics.js'
 import { check as rateCheck } from './ratelimit.js'
@@ -9,6 +10,38 @@ import { proxyTemplateCall } from './templateApi.js'
 import { fetchIntegritySnapshot } from './integrity/client.js'
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
 import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
+import { applySecurityHeaders } from './securityHeaders.js'
+import { forwardForgetEvent, readForgetForwardConfig } from './runtime/sessions/forgetForward.js'
+import {
+  classifyGoPayWebhookIdempotency,
+  getGoPayWebhookIdempotencyPolicy,
+  verifyGoPayWebhook,
+} from './runtime/payments/gopayWebhook.js'
+import { parseJsonObject } from './runtime/core/index.js'
+import {
+  basicCredentialsMatch,
+  checkToken,
+  readBearerToken,
+  readHeaderToken,
+  tokenEquals,
+} from './runtime/auth/httpAuth.js'
+import { requireAuthorizedSignatureRef } from './runtime/auth/policy.js'
+import {
+  readForgetToken,
+  readHandlerEnvString,
+  readHandlerStrictEnabledFlag,
+  readIntegrityIncidentAuthConfig,
+  readIntegrityStateToken,
+  readMetricsAuthConfig,
+  readPositiveIntEnv,
+  readTemplateToken,
+  readWebhookConfig,
+  readWorkerNotifyConfig,
+  resolveWorkerNotifyBreakerKey,
+} from './runtime/config/handlerConfig.js'
+import { resolveTemplateSiteIdFromHost } from './runtime/template/siteResolver.js'
+import { templateActionPolicies } from './runtime/template/actions.js'
+import { getTemplateContractAction } from './templateContract.js'
 import type { IntegritySnapshot } from './integrity/types.js'
 
 type WebhookProvider = 'stripe' | 'paypal' | 'gopay'
@@ -16,17 +49,39 @@ type IntegrityPolicyState = { paused: boolean; source: 'env' | 'ao' | 'checkpoin
 type IntegrityContext = { state: IntegrityPolicyState; snapshot: IntegritySnapshot | null }
 type IntegrityIncidentSeverity = 'low' | 'medium' | 'high' | 'critical'
 type IntegrityRole = 'root' | 'upgrade' | 'emergency' | 'reporter'
+type IntegrityIncidentRecord = {
+  incidentId: string
+  action: string
+  event: string
+  source: string
+  severity: IntegrityIncidentSeverity
+  paused: boolean
+  recordedAt: string
+}
+type IntegrityIncidentReplayRecord = IntegrityIncidentRecord & {
+  seenAt: number
+}
 
-const templateReadActions = new Set(['public.resolve-route', 'public.get-page'])
+const templateReadActions = new Set(['public.resolve-route', 'public.site-by-host', 'public.get-page'])
 const templateWriteActions = new Set(['checkout.create-order', 'checkout.create-payment-intent'])
 const incidentSeverities = new Set<IntegrityIncidentSeverity>(['low', 'medium', 'high', 'critical'])
 const INTEGRITY_CACHE_DEFAULT_TTL_MS = 10_000
+const INTEGRITY_INCIDENT_MAX_BODY_DEFAULT_BYTES = 16_384
+const WEBHOOK_MAX_BODY_DEFAULT_BYTES = 262_144
+const WORKER_NOTIFY_TIMEOUT_DEFAULT_MS = 5_000
+const TEMPLATE_CALL_MAX_BODY_DEFAULT_BYTES = 32_768
 const incidentActionRoles: Record<string, IntegrityRole[]> = {
   report: ['reporter', 'emergency', 'root'],
   ack: ['reporter', 'emergency', 'root'],
   pause: ['emergency', 'root'],
   resume: ['emergency', 'root'],
 }
+const integrityIncidentReplay = new Map<string, IntegrityIncidentReplayRecord>()
+const INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS = 30 * 60 * 1000
+const INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP = 256
+const traceContext = new AsyncLocalStorage<string>()
+const SAFE_TRACE_ID_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/
+const PRODUCTION_LIKE_MODES = new Set(['production', 'prod', 'staging', 'stage', 'preprod', 'pre-production'])
 
 type IntegrityRuntimeCache = {
   expiresAt: number
@@ -38,6 +93,90 @@ const integrityRuntime: IntegrityRuntimeCache = {
   expiresAt: 0,
   state: { paused: false, source: 'env' },
   snapshot: null,
+}
+
+function parseLooseBoolean(raw: string | undefined): boolean | undefined {
+  if (!raw) return undefined
+  const normalized = raw.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  return undefined
+}
+
+function isProductionLikeMode(): boolean {
+  const explicit = parseLooseBoolean(readHandlerEnvString('GATEWAY_PRODUCTION_LIKE'))
+  if (typeof explicit === 'boolean') return explicit
+  const mode =
+    readHandlerEnvString('GATEWAY_MODE') ||
+    readHandlerEnvString('APP_ENV') ||
+    readHandlerEnvString('NODE_ENV') ||
+    ''
+  return PRODUCTION_LIKE_MODES.has(mode.trim().toLowerCase())
+}
+
+function isInternalPlaneRouteEnabled(route: 'cache' | 'forget' | 'inbox', productionLikeMode: boolean): boolean {
+  if (!productionLikeMode) return true
+  if (readHandlerStrictEnabledFlag('GATEWAY_INTERNAL_PLANE_ALLOW_MUTATIONS')) return true
+  if (route === 'cache') return readHandlerStrictEnabledFlag('GATEWAY_INTERNAL_PLANE_ALLOW_CACHE')
+  if (route === 'forget') return readHandlerStrictEnabledFlag('GATEWAY_INTERNAL_PLANE_ALLOW_FORGET')
+  return readHandlerStrictEnabledFlag('GATEWAY_INTERNAL_PLANE_ALLOW_INBOX')
+}
+
+function internalPlaneBlockedResponse(route: 'cache' | 'forget' | 'inbox'): Response {
+  inc('gateway_internal_plane_blocked')
+  inc(`gateway_internal_plane_blocked_${route}`)
+  return plainErrorResponse(404, 'not found')
+}
+
+function isWebhookWriteForwardEnabled(productionLikeMode: boolean): boolean {
+  const explicit = parseLooseBoolean(readHandlerEnvString('GATEWAY_WEBHOOK_WRITE_FORWARD_ENABLED'))
+  if (typeof explicit === 'boolean') return explicit
+  return productionLikeMode
+}
+
+function respond(body?: BodyInit | null, init?: ResponseInit): Response {
+  const headers = new Headers(init?.headers)
+  const traceId = traceContext.getStore()
+  if (traceId) headers.set('x-trace-id', traceId)
+  return applySecurityHeaders(new Response(body, { ...init, headers }))
+}
+
+function secureResponse(response: Response): Response {
+  const headers = new Headers(response.headers)
+  const traceId = traceContext.getStore()
+  if (traceId) headers.set('x-trace-id', traceId)
+  return applySecurityHeaders(
+    new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    }),
+  )
+}
+
+function applyNoStoreCacheControl(response: Response): Response {
+  const headers = new Headers(response.headers)
+  const traceId = traceContext.getStore()
+  if (traceId) headers.set('x-trace-id', traceId)
+  if (headers.has('cache-control')) {
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  }
+  headers.set('cache-control', 'no-store')
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
+function resolveTraceId(rawTraceId: string | null): string {
+  const traceId = typeof rawTraceId === 'string' ? rawTraceId.trim() : ''
+  if (SAFE_TRACE_ID_RE.test(traceId)) return traceId
+  return crypto.randomUUID()
 }
 
 function updateIntegrityAuditGauges(snapshot: IntegritySnapshot | null) {
@@ -63,27 +202,49 @@ function updateIntegrityAuditGauges(snapshot: IntegritySnapshot | null) {
 }
 
 function readEnvIntegrityPolicyState(): IntegrityPolicyState {
-  const fallbackPaused = process.env.GATEWAY_INTEGRITY_POLICY_PAUSED === '1'
-  const raw = process.env.GATEWAY_INTEGRITY_POLICY_JSON?.trim()
+  const fallbackPaused = readHandlerStrictEnabledFlag('GATEWAY_INTEGRITY_POLICY_PAUSED')
+  const raw = readHandlerEnvString('GATEWAY_INTEGRITY_POLICY_JSON')
   if (!raw) return { paused: fallbackPaused, source: 'env' }
 
-  try {
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object' && typeof parsed.paused === 'boolean') {
-      return { paused: parsed.paused, source: 'env' }
-    }
-  } catch (_) {
-    // Ignore malformed policy JSON and fall back to the env flag.
+  const parsed = parseJsonObject(raw)
+  if (parsed.ok && typeof parsed.value.paused === 'boolean') {
+    return { paused: parsed.value.paused, source: 'env' }
   }
 
+  // Ignore malformed policy JSON and fall back to the env flag.
   return { paused: fallbackPaused, source: 'env' }
 }
 
 function readIntegrityCacheTtlMs(): number {
-  const raw = process.env.GATEWAY_INTEGRITY_CACHE_TTL_MS
-  const parsed = raw ? Number.parseInt(raw, 10) : INTEGRITY_CACHE_DEFAULT_TTL_MS
-  if (!Number.isFinite(parsed) || parsed <= 0) return INTEGRITY_CACHE_DEFAULT_TTL_MS
-  return parsed
+  return readPositiveIntEnv('GATEWAY_INTEGRITY_CACHE_TTL_MS', INTEGRITY_CACHE_DEFAULT_TTL_MS)
+}
+
+function readIntegrityIncidentReplayTtlMs(): number {
+  return readPositiveIntEnv('GATEWAY_INTEGRITY_INCIDENT_REPLAY_TTL_MS', INTEGRITY_INCIDENT_REPLAY_DEFAULT_TTL_MS)
+}
+
+function readIntegrityIncidentReplayCap(): number {
+  return readPositiveIntEnv('GATEWAY_INTEGRITY_INCIDENT_REPLAY_CAP', INTEGRITY_INCIDENT_REPLAY_DEFAULT_CAP)
+}
+
+function readIntegrityIncidentMaxBodyBytes(): number {
+  return readPositiveIntEnv('GATEWAY_INTEGRITY_INCIDENT_MAX_BODY_BYTES', INTEGRITY_INCIDENT_MAX_BODY_DEFAULT_BYTES)
+}
+
+function pruneIntegrityIncidentReplay(now = Date.now()) {
+  const ttlMs = readIntegrityIncidentReplayTtlMs()
+  for (const [incidentId, record] of integrityIncidentReplay.entries()) {
+    if (now - record.seenAt > ttlMs) {
+      integrityIncidentReplay.delete(incidentId)
+    }
+  }
+
+  const cap = readIntegrityIncidentReplayCap()
+  while (integrityIncidentReplay.size > cap) {
+    const oldestKey = integrityIncidentReplay.keys().next().value
+    if (!oldestKey) break
+    integrityIncidentReplay.delete(oldestKey)
+  }
 }
 
 async function resolveIntegrityPolicyState(): Promise<IntegrityPolicyState> {
@@ -124,7 +285,7 @@ async function resolveIntegrityContext(): Promise<IntegrityContext> {
 }
 
 function requireVerifiedCache(): boolean {
-  return process.env.GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE === '1'
+  return readHandlerStrictEnabledFlag('GATEWAY_INTEGRITY_REQUIRE_VERIFIED_CACHE')
 }
 
 function collectTrustedRoots(snapshot: IntegritySnapshot): string[] {
@@ -144,49 +305,98 @@ function integrityErrorStatus(code: string): number {
 
 function policyPausedResponse(): Response {
   inc('gateway_integrity_unverified_block')
-  return new Response(JSON.stringify({ error: 'policy_paused' }), {
+  const payload = {
+    error: 'policy_paused',
+    reason: 'integrity_policy_paused',
+    paused: true,
+    retryable: false,
+  }
+  return respond(JSON.stringify(payload), {
     status: 503,
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    },
   })
+}
+
+function incidentDuplicateResponse(record: IntegrityIncidentRecord): Response {
+  inc('gateway_integrity_incident_duplicate')
+  return respond(
+    JSON.stringify({
+      ok: true,
+      duplicate: true,
+      idempotent: true,
+      incidentId: record.incidentId,
+      action: record.action,
+      paused: record.paused,
+      status: 'duplicate',
+      recordedAt: record.recordedAt,
+    }),
+    {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      },
+    },
+  )
 }
 
 function markReadonlyFallback(paused: boolean) {
   if (paused) inc('gateway_integrity_fallback_readonly')
 }
 
-function readBearerToken(request: Request): string {
-  const auth = request.headers.get('authorization') || ''
-  if (/^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, '').trim()
-  return ''
+function requestIp(req: Request): string {
+  return req.headers.get('CF-Connecting-IP') || 'unknown'
 }
 
-function readHeaderToken(request: Request, headerName: string): string {
-  return (request.headers.get(headerName) || '').trim()
+function rateLimitResponse(key: string): Response | null {
+  if (rateCheck(key)) return null
+  return respond('Too Many Requests', { status: 429 })
 }
 
-function tokenEquals(expected: string, presented: string): boolean {
-  if (!expected || !presented) return false
-  const a = Buffer.from(expected)
-  const b = Buffer.from(presented)
-  if (a.length !== b.length) return false
-  return crypto.timingSafeEqual(a, b)
+function jsonErrorResponse(status: number, error: string, extra: Record<string, unknown> = {}): Response {
+  return respond(JSON.stringify({ error, ...extra }), {
+    status,
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    },
+  })
 }
 
-function checkToken(request: Request, expectedToken: string, headerName: string): boolean {
-  const bearer = readBearerToken(request)
-  const header = readHeaderToken(request, headerName)
-  return tokenEquals(expectedToken, bearer) || tokenEquals(expectedToken, header)
+function plainErrorResponse(status: number, message: string): Response {
+  return respond(message, {
+    status,
+    headers: {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+    },
+  })
 }
 
-function splitRefsCsv(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
+function bodyExceedsLimit(body: string, limitBytes: number): boolean {
+  return Buffer.byteLength(body, 'utf8') > limitBytes
+}
+
+function incidentBodyTooLargeResponse(): Response {
+  inc('gateway_integrity_incident_reject_size')
+  return jsonErrorResponse(413, 'payload_too_large', { retryable: false })
+}
+
+function webhookBodyTooLargeResponse(): Response {
+  inc('gateway_webhook_reject_size')
+  return plainErrorResponse(413, 'payload too large')
+}
+
+function templateBodyTooLargeResponse(): Response {
+  inc('gateway_template_reject_size')
+  return jsonErrorResponse(413, 'payload_too_large', { retryable: false })
 }
 
 function readIncidentSignatureRef(req: Request, body: unknown): string {
-  const customHeaderName = (process.env.GATEWAY_INTEGRITY_INCIDENT_REF_HEADER || 'x-signature-ref').trim()
+  const customHeaderName = readIntegrityIncidentAuthConfig().refHeaderName
   const headerRef = customHeaderName ? readHeaderToken(req, customHeaderName) : ''
   if (headerRef) return headerRef
   if (body && typeof body === 'object' && typeof (body as any).signatureRef === 'string') {
@@ -196,35 +406,36 @@ function readIncidentSignatureRef(req: Request, body: unknown): string {
 }
 
 function readRoleRefsFromEnv(role: IntegrityRole): string[] {
-  const envByRole: Record<IntegrityRole, string> = {
-    root: process.env.GATEWAY_INTEGRITY_ROLE_ROOT_REFS || '',
-    upgrade: process.env.GATEWAY_INTEGRITY_ROLE_UPGRADE_REFS || '',
-    emergency: process.env.GATEWAY_INTEGRITY_ROLE_EMERGENCY_REFS || '',
-    reporter: process.env.GATEWAY_INTEGRITY_ROLE_REPORTER_REFS || '',
-  }
-  return splitRefsCsv(envByRole[role])
+  return readIntegrityIncidentAuthConfig().roleRefs[role]
 }
 
-function collectRoleRefs(role: IntegrityRole, integrity: IntegrityContext): string[] {
-  const refs = new Set<string>()
+function collectRoleRefs(role: IntegrityRole, integrity: IntegrityContext): { activeRefs: string[]; overlapRefs: string[] } {
+  const activeRefs = new Set<string>()
+  const overlapRefs = new Set<string>()
   const authority = integrity.snapshot?.authority
   const roleRef = authority?.[role]
   if (typeof roleRef === 'string' && roleRef.trim()) {
-    refs.add(roleRef.trim())
+    activeRefs.add(roleRef.trim())
   }
   for (const ref of readRoleRefsFromEnv(role)) {
-    refs.add(ref)
+    overlapRefs.add(ref)
   }
-  return [...refs]
+  return { activeRefs: [...activeRefs], overlapRefs: [...overlapRefs] }
 }
 
-function collectAllowedIncidentRefs(action: string, integrity: IntegrityContext): { roles: IntegrityRole[]; refs: string[] } {
+function collectAllowedIncidentRefs(
+  action: string,
+  integrity: IntegrityContext,
+): { roles: IntegrityRole[]; activeRefs: string[]; overlapRefs: string[] } {
   const roles = incidentActionRoles[action] || []
-  const refs = new Set<string>()
+  const activeRefs = new Set<string>()
+  const overlapRefs = new Set<string>()
   for (const role of roles) {
-    for (const ref of collectRoleRefs(role, integrity)) refs.add(ref)
+    const refs = collectRoleRefs(role, integrity)
+    for (const ref of refs.activeRefs) activeRefs.add(ref)
+    for (const ref of refs.overlapRefs) overlapRefs.add(ref)
   }
-  return { roles, refs: [...refs] }
+  return { roles, activeRefs: [...activeRefs], overlapRefs: [...overlapRefs] }
 }
 
 function recordWebhook5xx(provider: WebhookProvider) {
@@ -235,22 +446,74 @@ async function wrapWebhook(provider: WebhookProvider, fn: () => Promise<Response
   try {
     const res = await fn()
     if (res.status >= 500) recordWebhook5xx(provider)
-    return res
+    return secureResponse(res)
   } catch (_) {
     recordWebhook5xx(provider)
-    return new Response('error', { status: 500 })
+    return respond('error', { status: 500 })
   }
 }
 
+async function forwardWorkerNotifyBody(body: string, provider?: string): Promise<Response> {
+  const workerNotify = readWorkerNotifyConfig()
+  if (!workerNotify.token) {
+    return respond('worker_notify_auth_not_configured', { status: 500 })
+  }
+
+  const breakerKey = resolveWorkerNotifyBreakerKey(workerNotify, provider)
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${workerNotify.token}`,
+    'content-type': 'application/json',
+    'x-breaker-key': breakerKey,
+  }
+  const currentTraceId = traceContext.getStore()
+  if (currentTraceId) headers['x-trace-id'] = currentTraceId
+  if (provider) headers['x-provider'] = provider
+  if (workerNotify.hmacSecret) {
+    const sig = crypto.createHmac('sha256', workerNotify.hmacSecret).update(body).digest('hex')
+    headers['X-Signature'] = sig
+  }
+
+  const timeoutMs = readPositiveIntEnv('WORKER_NOTIFY_TIMEOUT_MS', WORKER_NOTIFY_TIMEOUT_DEFAULT_MS)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const resp = await fetch(workerNotify.target, { method: 'POST', headers, body, signal: controller.signal })
+    if (resp.ok) return respond('forwarded', { status: 200 })
+    return respond('notify_failed', { status: 502 })
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'name' in error &&
+      (error as { name?: string }).name === 'AbortError'
+    ) {
+      return respond('notify_timeout', { status: 504 })
+    }
+    return respond('notify_failed', { status: 502 })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function maybeForwardWebhookWrite(provider: WebhookProvider, body: string, productionLikeMode: boolean): Promise<Response | null> {
+  if (!isWebhookWriteForwardEnabled(productionLikeMode)) return null
+  const res = await forwardWorkerNotifyBody(body, provider)
+  if (res.status >= 200 && res.status < 300) {
+    inc('gateway_webhook_write_forward_ok')
+  } else {
+    inc('gateway_webhook_write_forward_fail')
+  }
+  return res
+}
+
 async function handleInbox(req: Request): Promise<Response> {
-  const ip = req.headers.get('CF-Connecting-IP') || 'unknown'
+  const ip = requestIp(req)
   if (!rateCheck(`inbox:${ip}`)) {
-    inc('gateway_ratelimit_blocked')
-    return new Response('Too Many Requests', { status: 429 })
+    return respond('Too Many Requests', { status: 429 })
   }
   inc('gateway_inbox_accept')
   // skeleton: just ack
-  return new Response('ok', { status: 200 })
+  return respond('ok', { status: 200 })
 }
 
 async function handleCache(
@@ -268,7 +531,7 @@ async function handleCache(
     if (verifiedCacheRequired) {
       if (!integritySnapshot?.policy?.activeRoot) {
         inc('gateway_integrity_verify_fail')
-        return new Response(JSON.stringify({ error: 'missing_trusted_root' }), {
+        return respond(JSON.stringify({ error: 'missing_trusted_root' }), {
           status: 503,
           headers: { 'content-type': 'application/json' },
         })
@@ -279,7 +542,7 @@ async function handleCache(
       const actualHash = sha256Hex(new Uint8Array(buf))
       if (declaredHash && declaredHash !== actualHash) {
         inc('gateway_integrity_verify_fail')
-        return new Response(JSON.stringify({ error: 'integrity_mismatch' }), {
+        return respond(JSON.stringify({ error: 'integrity_mismatch' }), {
           status: 422,
           headers: { 'content-type': 'application/json' },
         })
@@ -297,7 +560,7 @@ async function handleCache(
 
       if (!verify.ok) {
         inc('gateway_integrity_verify_fail')
-        return new Response(JSON.stringify({ error: verify.code || 'integrity_mismatch' }), {
+        return respond(JSON.stringify({ error: verify.code || 'integrity_mismatch' }), {
           status: integrityErrorStatus(verify.code || 'integrity_mismatch'),
           headers: { 'content-type': 'application/json' },
         })
@@ -314,7 +577,7 @@ async function handleCache(
         },
       })
       if (!stored) {
-        return new Response(JSON.stringify({ error: 'cache_budget_exceeded' }), {
+        return respond(JSON.stringify({ error: 'cache_budget_exceeded' }), {
           status: 507,
           headers: { 'content-type': 'application/json' },
         })
@@ -322,49 +585,54 @@ async function handleCache(
     } else {
       const stored = put(key, buf, subject)
       if (!stored) {
-        return new Response(JSON.stringify({ error: 'cache_budget_exceeded' }), {
+        return respond(JSON.stringify({ error: 'cache_budget_exceeded' }), {
           status: 507,
           headers: { 'content-type': 'application/json' },
         })
       }
     }
-    return new Response('stored', { status: 201 })
+    return respond('stored', { status: 201 })
   }
   if (req.method === 'GET') {
     markReadonlyFallback(paused)
     const result = fetchEntry(key, { requireVerified: verifiedCacheRequired })
     if (result.status === 'unverified') {
-      return new Response(JSON.stringify({ error: 'integrity_mismatch' }), {
+      return respond(JSON.stringify({ error: 'integrity_mismatch' }), {
         status: 503,
         headers: { 'content-type': 'application/json' },
       })
     }
-    if (result.status !== 'hit') return new Response('miss', { status: 404 })
-    return new Response(result.value, { status: 200 })
+    if (result.status !== 'hit') return respond('miss', { status: 404 })
+    return respond(result.value, { status: 200 })
   }
-  return new Response('method', { status: 405 })
+  return respond('method', { status: 405 })
 }
 
-async function handleTemplateCall(req: Request, paused: boolean): Promise<Response> {
+async function handleTemplateCall(
+  req: Request,
+  paused: boolean,
+  requestHost: string,
+  productionLikeMode: boolean,
+): Promise<Response> {
   inc('gateway_template_call')
-  if (req.method !== 'POST') return new Response('method', { status: 405 })
+  if (req.method !== 'POST') return respond('method', { status: 405 })
 
-  const requiredToken = process.env.GATEWAY_TEMPLATE_TOKEN
-  if (requiredToken) {
-    const presented = (req.headers.get('x-template-token') || '').trim()
-    if (presented !== requiredToken) {
-      inc('gateway_template_call_blocked')
-      return new Response(JSON.stringify({ error: 'unauthorized' }), {
-        status: 401,
-        headers: { 'content-type': 'application/json' },
-      })
-    }
+  const limited = rateLimitResponse(`template:${requestIp(req)}`)
+  if (limited) return limited
+
+  const bodyText = await req.text()
+  if (bodyExceedsLimit(bodyText, readPositiveIntEnv('GATEWAY_TEMPLATE_MAX_BODY_BYTES', TEMPLATE_CALL_MAX_BODY_DEFAULT_BYTES))) {
+    return templateBodyTooLargeResponse()
   }
-
-  const body = await req.json().catch(() => null)
+  let body: unknown = null
+  try {
+    body = bodyText ? JSON.parse(bodyText) : null
+  } catch {
+    body = null
+  }
   if (!body || typeof body !== 'object') {
     inc('gateway_template_call_blocked')
-    return new Response(JSON.stringify({ error: 'invalid_json' }), {
+    return respond(JSON.stringify({ error: 'invalid_json' }), {
       status: 400,
       headers: { 'content-type': 'application/json' },
     })
@@ -372,10 +640,34 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
 
   const action = String((body as any).action || '').trim()
   const payload = (body as any).payload
+  const bodySiteId = typeof (body as any).siteId === 'string' ? (body as any).siteId.trim() : ''
+  const payloadSiteId =
+    payload && typeof payload === 'object' && typeof (payload as any).siteId === 'string'
+      ? (payload as any).siteId.trim()
+      : ''
   if (!action) {
     inc('gateway_template_call_blocked')
-    return new Response(JSON.stringify({ error: 'action_required' }), {
+    return respond(JSON.stringify({ error: 'action_required' }), {
       status: 400,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  const requiredToken = readTemplateToken()
+  const presentedToken = (req.headers.get('x-template-token') || '').trim()
+  const writeAction = templateWriteActions.has(action)
+  const writeMutationsEnabled = readHandlerStrictEnabledFlag('GATEWAY_TEMPLATE_ALLOW_MUTATIONS')
+  if (writeAction && writeMutationsEnabled && !requiredToken) {
+    inc('gateway_template_call_blocked')
+    return respond(JSON.stringify({ error: 'template_auth_not_configured' }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  if ((requiredToken || (writeAction && writeMutationsEnabled)) && !tokenEquals(requiredToken || '', presentedToken)) {
+    inc('gateway_template_call_blocked')
+    return respond(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
       headers: { 'content-type': 'application/json' },
     })
   }
@@ -388,12 +680,51 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
     markReadonlyFallback(true)
   }
 
+  const resolvedHostSite = await resolveTemplateSiteIdFromHost(requestHost, productionLikeMode)
+  if (resolvedHostSite.ok === false) {
+    inc('gateway_template_call_blocked')
+    return jsonErrorResponse(resolvedHostSite.status, resolvedHostSite.error)
+  }
+  const bodyFallbackAllowed =
+    readHandlerStrictEnabledFlag('GATEWAY_SITE_RESOLVE_ALLOW_BODY_FALLBACK') ||
+    (!productionLikeMode && !readHandlerEnvString('GATEWAY_SITE_ID_BY_HOST_MAP'))
+  const mappedSiteId = resolvedHostSite.siteId
+  const fallbackSiteId = bodySiteId || payloadSiteId
+  if (!mappedSiteId && writeAction && !bodyFallbackAllowed) {
+    inc('gateway_template_call_blocked')
+    return jsonErrorResponse(403, 'site_not_bound_for_host')
+  }
+  if (!mappedSiteId && fallbackSiteId && !bodyFallbackAllowed) {
+    inc('gateway_template_call_blocked')
+    return jsonErrorResponse(400, 'site_id_without_host_binding')
+  }
+  if (mappedSiteId) {
+    if (bodySiteId && bodySiteId !== mappedSiteId) {
+      inc('gateway_template_call_blocked')
+      return jsonErrorResponse(400, 'site_id_host_mismatch')
+    }
+    if (payloadSiteId && payloadSiteId !== mappedSiteId) {
+      inc('gateway_template_call_blocked')
+      return jsonErrorResponse(400, 'site_id_host_mismatch')
+    }
+  }
+
+  const effectiveSiteId = mappedSiteId || (bodyFallbackAllowed ? fallbackSiteId : '')
+
+  let effectivePayload = payload
+  if (effectiveSiteId && payload && typeof payload === 'object' && !Array.isArray(payload) && !payloadSiteId) {
+    effectivePayload = { ...(payload as Record<string, unknown>), siteId: effectiveSiteId }
+  }
+
   const res = await proxyTemplateCall({
     action,
-    payload,
+    payload: effectivePayload,
     requestId: typeof (body as any).requestId === 'string' ? (body as any).requestId : undefined,
-    siteId: typeof (body as any).siteId === 'string' ? (body as any).siteId : undefined,
+    siteId: effectiveSiteId || undefined,
+    runtimeHints: resolvedHostSite.runtimeHints,
     actor: typeof (body as any).actor === 'string' ? (body as any).actor : undefined,
+    role: typeof (body as any).role === 'string' ? (body as any).role : undefined,
+    traceId: traceContext.getStore(),
   })
 
   if (res.status >= 200 && res.status < 300) {
@@ -404,16 +735,65 @@ async function handleTemplateCall(req: Request, paused: boolean): Promise<Respon
     inc('gateway_template_call_blocked')
   }
 
-  return res
+  return secureResponse(res)
+}
+
+function buildTemplateConfigPayload(paused: boolean) {
+  const contractActions = templateActionPolicies.map((policy) => {
+    const contract = getTemplateContractAction(policy.action)
+    return {
+      action: policy.action,
+      kind: policy.kind,
+      target: policy.target,
+      method: policy.method,
+      path: policy.path,
+      requiredRole: contract?.auth.requiredRole || null,
+      idempotency: contract?.idempotency.mode || null,
+    }
+  })
+
+  return {
+    ok: true,
+    mode: 'gateway-node',
+    integrityPaused: paused,
+    templateTokenRequired: Boolean(readTemplateToken()),
+    writeMutationsEnabled: readHandlerStrictEnabledFlag('GATEWAY_TEMPLATE_ALLOW_MUTATIONS'),
+    maxTemplateBodyBytes: readPositiveIntEnv('GATEWAY_TEMPLATE_MAX_BODY_BYTES', TEMPLATE_CALL_MAX_BODY_DEFAULT_BYTES),
+    upstream: {
+      readConfigured: Boolean(readHandlerEnvString('AO_PUBLIC_API_URL') || readHandlerEnvString('AO_READ_URL')),
+      writeConfigured: Boolean(readHandlerEnvString('WRITE_API_URL')),
+      signerConfigured: Boolean(readHandlerEnvString('WORKER_API_URL') || readHandlerEnvString('WORKER_SIGN_URL')),
+      signerMapConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_WORKER_URL_MAP')),
+      signerTokenMapConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_WORKER_TOKEN_MAP')),
+      variantMapConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_VARIANT_MAP')),
+      upstreamAuthMode: readHandlerEnvString('GATEWAY_TEMPLATE_UPSTREAM_AUTH_MODE') || 'none',
+      upstreamTokenConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_UPSTREAM_TOKEN')),
+      upstreamTokenMapConfigured: Boolean(readHandlerEnvString('GATEWAY_TEMPLATE_UPSTREAM_TOKEN_MAP')),
+    },
+    contractActions,
+    timestamp: new Date().toISOString(),
+  }
+}
+
+async function handleTemplateConfig(req: Request, paused: boolean): Promise<Response> {
+  if (req.method !== 'GET') return respond('method', { status: 405 })
+  markReadonlyFallback(paused)
+  return respond(JSON.stringify(buildTemplateConfigPayload(paused)), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    },
+  })
 }
 
 async function handleIntegrityState(req: Request, integrity: IntegrityContext): Promise<Response> {
-  if (req.method !== 'GET') return new Response('method', { status: 405 })
+  if (req.method !== 'GET') return respond('method', { status: 405 })
 
-  const token = process.env.GATEWAY_INTEGRITY_STATE_TOKEN || ''
+  const token = readIntegrityStateToken()
   if (token && !checkToken(req, token, 'x-integrity-token')) {
     inc('gateway_integrity_state_auth_blocked')
-    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+    return respond(JSON.stringify({ error: 'unauthorized' }), {
       status: 401,
       headers: { 'content-type': 'application/json' },
     })
@@ -432,33 +812,38 @@ async function handleIntegrityState(req: Request, integrity: IntegrityContext): 
     authority: integrity.snapshot?.authority || null,
     audit: integrity.snapshot?.audit || null,
   }
-  return new Response(JSON.stringify(payload), {
+  return respond(JSON.stringify(payload), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })
 }
 
 async function handleIntegrityIncident(req: Request, integrity: IntegrityContext): Promise<Response> {
-  if (req.method !== 'POST') return new Response('method', { status: 405 })
+  if (req.method !== 'POST') return respond('method', { status: 405 })
 
-  const token = process.env.GATEWAY_INTEGRITY_INCIDENT_TOKEN || ''
+  const bodyText = await req.text()
+  if (bodyExceedsLimit(bodyText, readIntegrityIncidentMaxBodyBytes())) {
+    return incidentBodyTooLargeResponse()
+  }
+
+  const incidentAuth = readIntegrityIncidentAuthConfig()
+  const token = incidentAuth.token
   if (!token) {
-    return new Response('incident_auth_not_configured', { status: 500 })
+    return respond('incident_auth_not_configured', { status: 500 })
   }
   if (!checkToken(req, token, 'x-incident-token')) {
     inc('gateway_integrity_incident_auth_blocked')
-    return new Response(JSON.stringify({ error: 'unauthorized' }), {
-      status: 401,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(401, 'unauthorized')
   }
 
-  const body = await req.json().catch(() => null)
-  if (!body || typeof body !== 'object') {
-    return new Response(JSON.stringify({ error: 'invalid_json' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+  let body: unknown
+  try {
+    body = JSON.parse(bodyText)
+  } catch {
+    return jsonErrorResponse(400, 'invalid_json')
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jsonErrorResponse(400, 'invalid_json')
   }
 
   const event = String((body as any).event || '').trim()
@@ -471,51 +856,39 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
       : null
 
   if (!event || event.length > 128) {
-    return new Response(JSON.stringify({ error: 'event_required' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'event_required')
   }
   if (!source || source.length > 128) {
-    return new Response(JSON.stringify({ error: 'invalid_source' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'invalid_source')
   }
   if (!incidentSeverities.has(severityInput)) {
-    return new Response(JSON.stringify({ error: 'invalid_severity' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'invalid_severity')
   }
   if (!['report', 'ack', 'pause', 'resume'].includes(action)) {
-    return new Response(JSON.stringify({ error: 'invalid_action' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'invalid_action')
   }
-  if (process.env.GATEWAY_INTEGRITY_INCIDENT_REQUIRE_SIGNATURE_REF === '1') {
-    const { roles, refs } = collectAllowedIncidentRefs(action, integrity)
-    if (roles.length === 0 || refs.length === 0) {
-      return new Response(JSON.stringify({ error: 'incident_ref_policy_not_configured' }), {
-        status: 500,
-        headers: { 'content-type': 'application/json' },
-      })
+  if (incidentAuth.requireSignatureRef) {
+    const { roles, activeRefs, overlapRefs } = collectAllowedIncidentRefs(action, integrity)
+    if (roles.length === 0 || (activeRefs.length === 0 && overlapRefs.length === 0)) {
+      return jsonErrorResponse(500, 'incident_ref_policy_not_configured')
     }
     const presentedRef = readIncidentSignatureRef(req, body)
-    if (!presentedRef || !refs.includes(presentedRef)) {
+    const refCheck = requireAuthorizedSignatureRef(presentedRef, activeRefs, overlapRefs)
+    if (!refCheck.ok) {
       inc('gateway_integrity_incident_role_blocked')
-      return new Response(JSON.stringify({ error: 'forbidden_signature_ref' }), {
-        status: 403,
-        headers: { 'content-type': 'application/json' },
-      })
+      return jsonErrorResponse(403, 'forbidden_signature_ref')
     }
   }
   if (providedIncidentId && providedIncidentId.length > 128) {
-    return new Response(JSON.stringify({ error: 'invalid_incident_id' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })
+    return jsonErrorResponse(400, 'invalid_incident_id')
+  }
+
+  const incidentId =
+    providedIncidentId && providedIncidentId.length > 0 ? providedIncidentId : crypto.randomUUID()
+  pruneIntegrityIncidentReplay()
+  const existingIncident = providedIncidentId ? integrityIncidentReplay.get(incidentId) || null : null
+  if (existingIncident) {
+    return incidentDuplicateResponse(existingIncident)
   }
 
   if (action === 'pause') {
@@ -528,8 +901,6 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
     gauge('gateway_integrity_policy_paused', 0)
   }
 
-  const incidentId =
-    providedIncidentId && providedIncidentId.length > 0 ? providedIncidentId : crypto.randomUUID()
   const details = (body as any).details ?? null
   const occurredAt =
     typeof (body as any).occurredAt === 'string' && (body as any).occurredAt.trim()
@@ -548,15 +919,30 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
   }
 
   inc('gateway_integrity_incident')
+  if (providedIncidentId) {
+    integrityIncidentReplay.set(incidentId, {
+      incidentId,
+      action,
+      event,
+      source,
+      severity: severityInput,
+      paused: integrityRuntime.state.paused,
+      recordedAt: incident.receivedAt,
+      seenAt: Date.now(),
+    })
+    pruneIntegrityIncidentReplay()
+  }
 
-  const notifyUrl = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_URL || '').trim()
+  const notifyUrl = incidentAuth.notify.url
   if (notifyUrl) {
-    const notifyToken = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_TOKEN || '').trim()
-    const notifyHmac = (process.env.GATEWAY_INTEGRITY_INCIDENT_NOTIFY_HMAC || '').trim()
+    const notifyToken = incidentAuth.notify.token || ''
+    const notifyHmac = incidentAuth.notify.hmac || ''
     const bodyRaw = JSON.stringify(incident)
     const headers: Record<string, string> = {
       'content-type': 'application/json',
     }
+    const currentTraceId = traceContext.getStore()
+    if (currentTraceId) headers['x-trace-id'] = currentTraceId
     if (notifyToken) headers.authorization = `Bearer ${notifyToken}`
     if (notifyHmac) {
       headers['x-signature'] = crypto.createHmac('sha256', notifyHmac).update(bodyRaw).digest('hex')
@@ -566,7 +952,7 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
       const res = await fetch(notifyUrl, { method: 'POST', headers, body: bodyRaw })
       if (!res.ok) {
         inc('gateway_integrity_incident_notify_fail')
-        return new Response(JSON.stringify({ error: 'incident_notify_failed', status: res.status }), {
+        return respond(JSON.stringify({ error: 'incident_notify_failed', status: res.status }), {
           status: 502,
           headers: { 'content-type': 'application/json' },
         })
@@ -574,14 +960,14 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
       inc('gateway_integrity_incident_notify_ok')
     } catch (_) {
       inc('gateway_integrity_incident_notify_fail')
-      return new Response(JSON.stringify({ error: 'incident_notify_failed' }), {
+      return respond(JSON.stringify({ error: 'incident_notify_failed' }), {
         status: 502,
         headers: { 'content-type': 'application/json' },
       })
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, incidentId, paused: integrityRuntime.state.paused, action }), {
+  return respond(JSON.stringify({ ok: true, incidentId, paused: integrityRuntime.state.paused, action }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })
@@ -589,156 +975,268 @@ async function handleIntegrityIncident(req: Request, integrity: IntegrityContext
 
 export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url)
-  const integrity = await resolveIntegrityContext()
-  const integrityPaused = integrity.state.paused
+  const traceId = resolveTraceId(request.headers.get('x-trace-id'))
 
-  if (url.pathname === '/integrity/state') {
-    markReadonlyFallback(integrityPaused)
-    return handleIntegrityState(request, integrity)
-  }
-  if (url.pathname === '/integrity/incident') {
-    return handleIntegrityIncident(request, integrity)
-  }
+  return traceContext.run(traceId, async () => {
+    if (url.pathname === '/health' || url.pathname === '/healthz') {
+      return applyNoStoreCacheControl(
+        respond(
+          JSON.stringify({
+            ok: true,
+            service: 'blackcat-darkmesh-gateway',
+            ts: new Date().toISOString(),
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+            },
+          },
+        ),
+      )
+    }
 
-  if (url.pathname.startsWith('/cache/forget')) {
-    if (request.method !== 'POST') return new Response('method', { status: 405 })
-    if (integrityPaused) return policyPausedResponse()
-    const token = process.env.GATEWAY_FORGET_TOKEN
-    if (token) {
-      const auth = request.headers.get('authorization') || request.headers.get('x-forget-token') || ''
-      const presented = auth.replace(/^Bearer\s+/i, '').trim()
-      if (presented !== token) return new Response('unauthorized', { status: 401 })
+    const integrity = await resolveIntegrityContext()
+    const integrityPaused = integrity.state.paused
+    const productionLikeMode = isProductionLikeMode()
+
+    if (url.pathname === '/integrity/state') {
+      markReadonlyFallback(integrityPaused)
+      return applyNoStoreCacheControl(await handleIntegrityState(request, integrity))
     }
-    const body = await request.json().catch(() => ({}))
-    const subject = body.subject as string | undefined
-    const key = body.key as string | undefined
-    let removed = 0
-    if (subject) removed = forgetSubject(subject)
-    if (key) removed = dropKey(key) ? 1 : removed
-    return new Response(JSON.stringify({ removed }), { status: 200, headers: { 'content-type': 'application/json' } })
-  }
-  if (url.pathname.startsWith('/cache/')) {
-    const key = url.pathname.replace('/cache/', '')
-    return handleCache(request, key, integrityPaused, integrity.snapshot)
-  }
-  if (url.pathname === '/inbox') {
-    if (integrityPaused) return policyPausedResponse()
-    return handleInbox(request)
-  }
-  if (url.pathname === '/template/call') {
-    return handleTemplateCall(request, integrityPaused)
-  }
-  if (url.pathname === '/metrics') {
-    markReadonlyFallback(integrityPaused)
-    const needBasic = !!(process.env.METRICS_BASIC_USER && process.env.METRICS_BASIC_PASS)
-    const needBearer = !!process.env.METRICS_BEARER_TOKEN
-    const mustGuard = process.env.GATEWAY_REQUIRE_METRICS_AUTH !== '0'
-    if (!needBasic && !needBearer && mustGuard) {
-      return new Response('metrics_auth_not_configured', { status: 500 })
+    if (url.pathname === '/integrity/incident') {
+      return applyNoStoreCacheControl(await handleIntegrityIncident(request, integrity))
     }
-    if (needBasic || needBearer || mustGuard) {
-      const auth = request.headers.get('authorization') || ''
-      const alt = request.headers.get('x-metrics-token') || ''
-      let authed = false
-      if (needBearer && /^Bearer\s+/i.test(auth)) {
-        authed = auth.replace(/^Bearer\s+/i, '').trim() === process.env.METRICS_BEARER_TOKEN
+
+    if (url.pathname.startsWith('/cache/forget')) {
+      if (!isInternalPlaneRouteEnabled('forget', productionLikeMode)) {
+        return applyNoStoreCacheControl(internalPlaneBlockedResponse('forget'))
       }
-      if (needBearer && !authed && alt) {
-        authed = alt === process.env.METRICS_BEARER_TOKEN
+      if (request.method !== 'POST') return applyNoStoreCacheControl(respond('method', { status: 405 }))
+      if (integrityPaused) return applyNoStoreCacheControl(policyPausedResponse())
+      const token = readForgetToken()
+      if (productionLikeMode && !token) {
+        return applyNoStoreCacheControl(respond('forget_auth_not_configured', { status: 500 }))
       }
-      if (!authed && needBasic && /^Basic\s+/i.test(auth)) {
-        const b64 = auth.replace(/^Basic\s+/i, '')
+      if (token) {
+        const auth = request.headers.get('authorization') || ''
+        const bearer = readBearerToken(request)
+        const header = readHeaderToken(request, 'x-forget-token')
+        if (!tokenEquals(token, bearer) && !tokenEquals(token, auth.trim()) && !tokenEquals(token, header)) {
+          return applyNoStoreCacheControl(respond('unauthorized', { status: 401 }))
+        }
+      }
+      const body = await request.json().catch(() => ({}))
+      const subject = body.subject as string | undefined
+      const key = body.key as string | undefined
+      let removed = 0
+      if (subject) removed = forgetSubject(subject)
+      if (key) removed = dropKey(key) ? 1 : removed
+      const forwardConfig = readForgetForwardConfig()
+      const currentTraceId = traceContext.getStore()
+      const forwardResult = await forwardForgetEvent(
+        {
+          ...(subject ? { subject } : {}),
+          ...(key ? { key } : {}),
+          removed,
+          ts: new Date().toISOString(),
+        },
+        forwardConfig,
+        (input, init) => {
+          const headers = Object.fromEntries(new Headers(init?.headers).entries())
+          if (currentTraceId) headers['x-trace-id'] = currentTraceId
+          return fetch(input, { ...init, headers })
+        },
+      )
+      return applyNoStoreCacheControl(
+        respond(
+          JSON.stringify({
+            removed,
+            forwarded: forwardResult.forwarded,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+    }
+    if (url.pathname.startsWith('/cache/')) {
+      if (!isInternalPlaneRouteEnabled('cache', productionLikeMode)) {
+        return applyNoStoreCacheControl(internalPlaneBlockedResponse('cache'))
+      }
+      const key = url.pathname.replace('/cache/', '')
+      return handleCache(request, key, integrityPaused, integrity.snapshot)
+    }
+    if (url.pathname === '/inbox') {
+      if (!isInternalPlaneRouteEnabled('inbox', productionLikeMode)) {
+        return applyNoStoreCacheControl(internalPlaneBlockedResponse('inbox'))
+      }
+      if (integrityPaused) return policyPausedResponse()
+      return handleInbox(request)
+    }
+    if (url.pathname === '/template/call') {
+      if (url.searchParams.size > 0) {
+        return jsonErrorResponse(400, 'query_not_allowed')
+      }
+      return handleTemplateCall(request, integrityPaused, url.host, productionLikeMode)
+    }
+    if (url.pathname === '/template/config') {
+      if (url.searchParams.size > 0) {
+        return jsonErrorResponse(400, 'query_not_allowed')
+      }
+      return handleTemplateConfig(request, integrityPaused)
+    }
+    if (url.pathname === '/metrics') {
+      markReadonlyFallback(integrityPaused)
+      const metricsAuth = readMetricsAuthConfig()
+      if (!metricsAuth.needBasic && !metricsAuth.needBearer && metricsAuth.mustGuard) {
+        return applyNoStoreCacheControl(respond('metrics_auth_not_configured', { status: 500 }))
+      }
+      if (metricsAuth.needBasic || metricsAuth.needBearer || metricsAuth.mustGuard) {
+        const auth = request.headers.get('authorization') || ''
+        const bearer = readBearerToken(request)
+        const alt = readHeaderToken(request, 'x-metrics-token')
+        let authed = false
+        if (metricsAuth.needBearer && auth) {
+          authed = tokenEquals(metricsAuth.bearerToken, bearer)
+        }
+        if (metricsAuth.needBearer && !authed && alt) {
+          authed = tokenEquals(metricsAuth.bearerToken, alt)
+        }
+        if (!authed && metricsAuth.needBasic) {
+          authed = basicCredentialsMatch(metricsAuth.basicUser, metricsAuth.basicPass, auth)
+        }
+        if (!authed) {
+          inc('gateway_metrics_auth_blocked')
+          return applyNoStoreCacheControl(
+            respond('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } }),
+          )
+        }
+      }
+      const prom = toProm()
+      return applyNoStoreCacheControl(
+        respond(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } }),
+      )
+    }
+    if (url.pathname === '/webhook/stripe') {
+      if (integrityPaused) return policyPausedResponse()
+      const limited = rateLimitResponse(`webhook:stripe:${requestIp(request)}`)
+      if (limited) return limited
+      return wrapWebhook('stripe', async () => {
+        const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
+        const body = await request.text()
+        if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
+          return webhookBodyTooLargeResponse()
+        }
+        const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), webhookConfig.stripeSecret, webhookConfig.stripeToleranceMs)
+        if (!ok) {
+          inc('gateway_webhook_stripe_verify_fail')
+          return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+        }
+        const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
+        if (id && markAndCheck(`stripe:${id}`)) return respond('replay', { status: 200 })
+        const forwarded = await maybeForwardWebhookWrite('stripe', body, productionLikeMode)
+        if (forwarded) return forwarded
+        inc('gateway_webhook_stripe_ok')
+        return respond('ok', { status: 200 })
+      })
+    }
+    if (url.pathname === '/webhook/paypal') {
+      if (integrityPaused) return policyPausedResponse()
+      const limited = rateLimitResponse(`webhook:paypal:${requestIp(request)}`)
+      if (limited) return limited
+      return wrapWebhook('paypal', async () => {
+        const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
+        const body = await request.text()
+        if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
+          return webhookBodyTooLargeResponse()
+        }
+        const headers = request.headers
+        const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
+        if (!certOk) {
+          inc('gateway_webhook_paypal_verify_fail')
+          return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+        }
+        const ok = await verifyPayPal(body, headers, webhookConfig.paypalWebhookSecret, traceContext.getStore())
+        if (!ok) {
+          inc('gateway_webhook_paypal_verify_fail')
+          return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+        }
+        const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
+        if (replayKey && markAndCheck(`paypal:${replayKey}`)) return respond('replay', { status: 200 })
+        const forwarded = await maybeForwardWebhookWrite('paypal', body, productionLikeMode)
+        if (forwarded) return forwarded
+        inc('gateway_webhook_paypal_ok')
+        return respond('ok', { status: 200 })
+      })
+    }
+    if (url.pathname === '/webhook/gopay') {
+      if (integrityPaused) return policyPausedResponse()
+      const limited = rateLimitResponse(`webhook:gopay:${requestIp(request)}`)
+      if (limited) return limited
+      return wrapWebhook('gopay', async () => {
+        const webhookConfig = readWebhookConfig(WEBHOOK_MAX_BODY_DEFAULT_BYTES)
+        const body = await request.text()
+        if (bodyExceedsLimit(body, webhookConfig.maxBodyBytes)) {
+          return webhookBodyTooLargeResponse()
+        }
+        const signatureHeader = request.headers.get('x-gopay-signature') || request.headers.get('gopay-signature')
+        const ok = verifyGoPayWebhook(body, signatureHeader, webhookConfig.gopayWebhookSecret)
+        if (!ok) {
+          inc('gateway_webhook_gopay_verify_fail')
+          return respond('sig invalid', { status: webhookConfig.shadowInvalid ? 202 : 401 })
+        }
+        const replayMode = getGoPayWebhookIdempotencyPolicy()
+        const idempotency = classifyGoPayWebhookIdempotency(request.headers.get('x-gopay-event-id'), body, replayMode)
+        if (idempotency.status === 'missing-id' || idempotency.status === 'conflict') {
+          return respond(idempotency.body, { status: idempotency.httpStatus })
+        }
+        if (idempotency.status === 'duplicate') {
+          inc('gateway_webhook_replay')
+          return respond(idempotency.body, { status: idempotency.httpStatus })
+        }
+        const forwarded = await maybeForwardWebhookWrite('gopay', body, productionLikeMode)
+        if (forwarded) return forwarded
+        inc('gateway_webhook_gopay_ok')
+        return respond(idempotency.body, { status: idempotency.httpStatus })
+      })
+    }
+
+    if (url.pathname === '/webhook/demo-forward') {
+      if (integrityPaused) return policyPausedResponse()
+      if (!readHandlerStrictEnabledFlag('GATEWAY_DEMO_FORWARD_ENABLED')) {
+        return respond('not found', { status: 404 })
+      }
+      const demoForwardToken = readHandlerEnvString('GATEWAY_DEMO_FORWARD_TOKEN')
+      if (!demoForwardToken) {
+        return respond('demo_forward_auth_not_configured', { status: 500 })
+      }
+      if (!checkToken(request, demoForwardToken, 'x-demo-forward-token')) {
+        return respond('unauthorized', { status: 401 })
+      }
+      const limited = rateLimitResponse(`demo-forward:${requestIp(request)}`)
+      if (limited) return limited
+      const body = await request.text()
+      if (bodyExceedsLimit(body, WEBHOOK_MAX_BODY_DEFAULT_BYTES)) {
+        return webhookBodyTooLargeResponse()
+      }
+      const provider = (() => {
+        const q = url.searchParams.get('provider')
+        if (q) return q.toLowerCase()
+        const hdr = request.headers.get('x-provider')
+        if (hdr) return hdr.toLowerCase()
         try {
-          const decoded = Buffer.from(b64, 'base64').toString()
-          const [user, pass] = decoded.split(':')
-          if (user === process.env.METRICS_BASIC_USER && pass === process.env.METRICS_BASIC_PASS) authed = true
-        } catch (_) { /* ignore */ }
-      }
-      if (!authed) {
-        inc('gateway_metrics_auth_blocked')
-        return new Response('unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm=\"metrics\"' } })
-      }
+          const parsed = JSON.parse(body)
+          if (parsed?.provider) return String(parsed.provider).toLowerCase()
+        } catch {}
+        return undefined
+      })()
+      return forwardWorkerNotifyBody(body, provider)
     }
-    const prom = toProm()
-    return new Response(prom, { status: 200, headers: { 'content-type': 'text/plain; version=0.0.4' } })
-  }
-  if (url.pathname === '/webhook/stripe') {
-    if (integrityPaused) return policyPausedResponse()
-    return wrapWebhook('stripe', async () => {
-      const body = await request.text()
-      const ok = verifyStripe(body, request.headers.get('Stripe-Signature'), process.env.STRIPE_WEBHOOK_SECRET || '', parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE_MS || '300000', 10))
-      if (!ok) {
-        inc('gateway_webhook_stripe_verify_fail')
-        const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
-        return new Response('sig invalid', { status: shadow ? 202 : 401 })
-      }
-      const id = (() => { try { return JSON.parse(body)?.id as string } catch { return undefined } })()
-      if (id && markAndCheck(`stripe:${id}`)) return new Response('replay', { status: 200 })
-      inc('gateway_webhook_stripe_ok')
-      return new Response('ok', { status: 200 })
-    })
-  }
-  if (url.pathname === '/webhook/paypal') {
-    if (integrityPaused) return policyPausedResponse()
-    return wrapWebhook('paypal', async () => {
-      const body = await request.text()
-      const headers = request.headers
-      const certOk = noteCert(headers.get('PayPal-Cert-Url') || undefined, headers.get('PayPal-Cert-Sha256') || undefined)
-      const ok = await verifyPayPal(body, headers, process.env.PAYPAL_WEBHOOK_SECRET || undefined)
-      if (!ok || !certOk) {
-        inc('gateway_webhook_paypal_verify_fail')
-        const shadow = process.env.GATEWAY_WEBHOOK_SHADOW_INVALID === '1'
-        return new Response('sig invalid', { status: shadow ? 202 : 401 })
-      }
-      const replayKey = headers.get('PayPal-Transmission-Id') || headers.get('Paypal-Transmission-Id')
-      if (replayKey && markAndCheck(`paypal:${replayKey}`)) return new Response('replay', { status: 200 })
-      inc('gateway_webhook_paypal_ok')
-      return new Response('ok', { status: 200 })
-    })
-  }
-
-  if (url.pathname === '/webhook/demo-forward') {
-    if (integrityPaused) return policyPausedResponse()
-    const target = process.env.WORKER_NOTIFY_URL || 'http://localhost:8787/notify'
-    const token = process.env.WORKER_AUTH_TOKEN || process.env.WORKER_NOTIFY_TOKEN || 'test-notify'
-    const hmacSecret = process.env.WORKER_NOTIFY_HMAC || ''
-    const body = await request.text()
-
-    // Pick breaker key by provider (query/header/body) with per-PSP overrides, fallback to generic.
-    const provider = (() => {
-      const q = url.searchParams.get('provider')
-      if (q) return q.toLowerCase()
-      const hdr = request.headers.get('x-provider')
-      if (hdr) return hdr.toLowerCase()
-      try {
-        const parsed = JSON.parse(body)
-        if (parsed?.provider) return String(parsed.provider).toLowerCase()
-      } catch {}
-      return undefined
-    })()
-
-    const breakerKey = (() => {
-      if (provider === 'stripe' && process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE) return process.env.WORKER_NOTIFY_BREAKER_KEY_STRIPE
-      if (provider === 'paypal' && process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL) return process.env.WORKER_NOTIFY_BREAKER_KEY_PAYPAL
-      if (provider === 'gopay' && process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY) return process.env.WORKER_NOTIFY_BREAKER_KEY_GOPAY
-      return process.env.WORKER_NOTIFY_BREAKER_KEY || provider || 'gateway'
-    })()
-
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-      'x-breaker-key': breakerKey,
+    // periodic sweep
+    sweep()
+    if (url.pathname === '/') {
+      markReadonlyFallback(integrityPaused)
+      return respond('Gateway skeleton', { status: 200 })
     }
-    if (hmacSecret) {
-      const sig = crypto.createHmac('sha256', hmacSecret).update(body).digest('hex')
-      headers['X-Signature'] = sig
-    }
-    const resp = await fetch(target, { method: 'POST', headers, body })
-    if (resp.ok) return new Response('forwarded', { status: 200 })
-    return new Response('notify_failed', { status: 502 })
-  }
-  // periodic sweep
-  sweep()
-  if (url.pathname === '/') markReadonlyFallback(integrityPaused)
-  return new Response('Gateway skeleton', { status: 200 })
+    return plainErrorResponse(404, 'not found')
+  })
 }

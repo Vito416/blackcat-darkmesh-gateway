@@ -1,0 +1,23 @@
+[Unit]
+Description=BlackCat DarkMesh Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=/etc/blackcat/gateway.env
+ExecStart=/usr/bin/node dist/server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=__INSTALL_DIR__/tmp /var/log/blackcat
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

@@ -8,10 +8,20 @@ import { writeIntegrityCheckpoint } from '../src/integrity/checkpoint.js'
 
 describe('integrity policy gate', () => {
   const originalEnv = { ...process.env }
+  const pausedPayload = {
+    error: 'policy_paused',
+    reason: 'integrity_policy_paused',
+    paused: true,
+    retryable: false,
+  }
 
   beforeEach(() => {
     vi.resetModules()
     process.env = { ...originalEnv }
+    process.env.WRITE_API_URL = 'https://write.example'
+    process.env.WORKER_API_URL = 'https://worker.example'
+    process.env.WORKER_AUTH_TOKEN = 'worker-token'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'template-secret'
     reset()
   })
 
@@ -25,12 +35,16 @@ describe('integrity policy gate', () => {
     return import('../src/handler.js')
   }
 
-  function makeTemplateWriteRequest() {
+  function makeTemplateWriteRequest(token = 'template-secret') {
+    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    if (token) headers['x-template-token'] = token
     return new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify({
         action: 'checkout.create-order',
+        requestId: 'req-int-policy-write',
+        role: 'shop_admin',
         payload: { siteId: 'site-1', items: [{ sku: 'sku-1', qty: 1 }] },
       }),
     })
@@ -39,11 +53,24 @@ describe('integrity policy gate', () => {
   function makeTemplateReadRequest() {
     return new Request('http://gateway/template/call', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-template-token': 'template-secret' },
       body: JSON.stringify({
         action: 'public.resolve-route',
         payload: { host: 'example.com', path: '/' },
       }),
+    })
+  }
+
+  function mockSignAndWriteSuccess() {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url === 'https://worker.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('ok', { status: 200 })
     })
   }
 
@@ -81,6 +108,13 @@ describe('integrity policy gate', () => {
     }
   }
 
+  async function expectPausedResponse(res: Response) {
+    expect(res.status).toBe(503)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    await expect(res.json()).resolves.toEqual(pausedPayload)
+  }
+
   it('blocks mutating paths when the policy is paused and keeps read-only paths available', async () => {
     process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '1'
     process.env.METRICS_BEARER_TOKEN = 'metrics-secret'
@@ -111,8 +145,7 @@ describe('integrity policy gate', () => {
     expect(templateReadRes.status).toBe(200)
 
     const templateWriteRes = await handleRequest(makeTemplateWriteRequest())
-    expect(templateWriteRes.status).toBe(503)
-    await expect(templateWriteRes.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(templateWriteRes)
 
     const cachePutRes = await handleRequest(
       new Request('http://gateway/cache/foo', {
@@ -121,8 +154,7 @@ describe('integrity policy gate', () => {
         headers: { 'content-type': 'application/octet-stream' },
       }),
     )
-    expect(cachePutRes.status).toBe(503)
-    await expect(cachePutRes.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(cachePutRes)
 
     const inboxRes = await handleRequest(
       new Request('http://gateway/inbox', {
@@ -131,7 +163,7 @@ describe('integrity policy gate', () => {
         headers: { 'content-type': 'application/json' },
       }),
     )
-    expect(inboxRes.status).toBe(503)
+    await expectPausedResponse(inboxRes)
 
     const demoForwardRes = await handleRequest(
       new Request('http://gateway/webhook/demo-forward', {
@@ -140,7 +172,7 @@ describe('integrity policy gate', () => {
         headers: { 'content-type': 'application/json' },
       }),
     )
-    expect(demoForwardRes.status).toBe(503)
+    await expectPausedResponse(demoForwardRes)
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const state = snapshot()
@@ -153,17 +185,33 @@ describe('integrity policy gate', () => {
     process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '1'
     process.env.GATEWAY_INTEGRITY_POLICY_JSON = JSON.stringify({ paused: false })
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }))
+    const fetchSpy = mockSignAndWriteSuccess()
     const { handleRequest } = await loadHandler()
 
     const res = await handleRequest(makeTemplateWriteRequest())
     expect(res.status).toBe(200)
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
 
     const state = snapshot()
     expect(state.gauges.gateway_integrity_policy_paused).toBe(0)
     expect(state.counters.gateway_integrity_unverified_block || 0).toBe(0)
+  })
+
+  it('requires the template token and accepts the matching value', async () => {
+    process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '0'
+    process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
+    process.env.GATEWAY_TEMPLATE_TOKEN = 'template-secret'
+    const fetchSpy = mockSignAndWriteSuccess()
+    const { handleRequest } = await loadHandler()
+
+    const badRes = await handleRequest(makeTemplateWriteRequest('wrong-secret'))
+    expect(badRes.status).toBe(401)
+    await expect(badRes.json()).resolves.toEqual({ error: 'unauthorized' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    const goodRes = await handleRequest(makeTemplateWriteRequest('template-secret'))
+    expect(goodRes.status).toBe(200)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 
   it('falls back to the env flag when policy JSON is malformed', async () => {
@@ -178,8 +226,7 @@ describe('integrity policy gate', () => {
         headers: { 'content-type': 'application/octet-stream' },
       }),
     )
-    expect(res.status).toBe(503)
-    await expect(res.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(res)
     expect(snapshot().gauges.gateway_integrity_policy_paused).toBe(1)
   })
 
@@ -188,7 +235,6 @@ describe('integrity policy gate', () => {
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.GATEWAY_INTEGRITY_CACHE_TTL_MS = '1'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.url
       if (url === process.env.AO_INTEGRITY_URL) {
@@ -203,8 +249,7 @@ describe('integrity policy gate', () => {
     const { handleRequest } = await loadHandler()
     const res = await handleRequest(makeTemplateWriteRequest())
 
-    expect(res.status).toBe(503)
-    await expect(res.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(res)
     expect(fetchSpy).toHaveBeenCalled()
     const state = snapshot()
     expect(state.gauges.gateway_integrity_policy_paused).toBe(1)
@@ -214,11 +259,16 @@ describe('integrity policy gate', () => {
     process.env.GATEWAY_INTEGRITY_POLICY_PAUSED = '0'
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.url
       if (url === process.env.AO_INTEGRITY_URL) {
         throw new Error('ao unavailable')
+      }
+      if (url === 'https://worker.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
       }
       return new Response('ok', { status: 200 })
     })
@@ -244,7 +294,6 @@ describe('integrity policy gate', () => {
     process.env.GATEWAY_INTEGRITY_CHECKPOINT_SECRET = 'checkpoint-secret'
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.url
       if (url === process.env.AO_INTEGRITY_URL) {
@@ -256,8 +305,7 @@ describe('integrity policy gate', () => {
     const { handleRequest } = await loadHandler()
     const res = await handleRequest(makeTemplateWriteRequest())
 
-    expect(res.status).toBe(503)
-    await expect(res.json()).resolves.toEqual({ error: 'policy_paused' })
+    await expectPausedResponse(res)
     expect(fetchSpy).toHaveBeenCalled()
     const state = snapshot()
     expect(state.gauges.gateway_integrity_policy_paused).toBe(1)
@@ -276,11 +324,16 @@ describe('integrity policy gate', () => {
     process.env.GATEWAY_INTEGRITY_CHECKPOINT_SECRET = 'checkpoint-secret'
     process.env.AO_INTEGRITY_URL = 'https://ao.example/integrity'
     process.env.GATEWAY_TEMPLATE_ALLOW_MUTATIONS = '1'
-    process.env.WRITE_API_URL = 'https://write.example'
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.url
       if (url === process.env.AO_INTEGRITY_URL) {
         throw new Error('ao unavailable')
+      }
+      if (url === 'https://worker.example/sign') {
+        return new Response(JSON.stringify({ signature: 'deadbeef', signatureRef: 'worker-ed25519' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
       }
       return new Response('ok', { status: 200 })
     })

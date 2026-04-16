@@ -1,0 +1,86 @@
+{
+  "ok": true,
+  "status": "pass",
+  "root": ".",
+  "resolvedRoot": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway",
+  "strict": true,
+  "requiredRuntimeFileCount": 8,
+  "requiredTestCount": 7,
+  "runtimeFileCount": 8,
+  "testCount": 7,
+  "importFindingCount": 0,
+  "runtimeMissing": [],
+  "testMissing": [],
+  "importScan": {
+    "sourceRoot": "src",
+    "scanned": true,
+    "findingCount": 0,
+    "findings": [],
+    "issue": ""
+  },
+  "importFindings": [],
+  "runtimeFiles": [
+    {
+      "path": "src/runtime/core/bytes.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/core/json.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/core/canonicalJson.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/core/hash.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/core/index.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/template/actions.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/template/secretGuard.ts",
+      "exists": true
+    },
+    {
+      "path": "src/runtime/template/validators.ts",
+      "exists": true
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/runtime-core-bytes.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-core-json.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-core-canonicalJson.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-core-hash.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/runtime-template-secretGuard.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/template-api.test.ts",
+      "exists": true
+    },
+    {
+      "path": "tests/validate-template-backend-contract.test.ts",
+      "exists": true
+    }
+  ]
+}

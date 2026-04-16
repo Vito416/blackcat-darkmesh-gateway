@@ -5,12 +5,65 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      gateway_base_url:
+        description: Gateway base URL for incident smoke
+        required: false
+        type: string
+      gateway_state_token:
+        description: Optional /integrity/state token override
+        required: false
+        type: string
+      gateway_incident_token:
+        description: Incident token override
+        required: false
+        type: string
+      gateway_template_token:
+        description: Template token override
+        required: false
+        type: string
+      gateway_smoke_timeout_ms:
+        description: Smoke request timeout in milliseconds
+        required: false
+        type: string
+      consistency_urls:
+        description: Comma-separated URLs for integrity consistency comparison
+        required: false
+        type: string
+      consistency_token:
+        description: Optional token for consistency comparison
+        required: false
+        type: string
+      consistency_mode:
+        description: Consistency comparison mode (pairwise|all)
+        required: false
+        type: string
+      consistency_profile:
+        description: Resource profile for drift-alert summary (vps_small|vps_medium|diskless)
+        required: false
+        type: string
+      evidence_urls:
+        description: Comma-separated URLs for evidence dry-run export
+        required: false
+        type: string
+      evidence_token:
+        description: Optional token for evidence dry-run export
+        required: false
+        type: string
+      release_label:
+        description: Release label for evidence pack (default 1.4.0)
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   test:
+    name: Core build + full tests
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -25,18 +78,14 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
-      - name: Integrity/resource hardening
-        run: npm run test:hardening
-      - name: Integrity parity
-        run: npm test -- --run tests/integrity-*.test.ts
+      - name: Full test suite
+        run: npm test
       - name: Unit + metrics auth
         run: npm test -- --run tests/metrics-auth.test.ts
-      - name: Webhook pen-tests
-        run: npm test -- --run tests/webhook-pentest.test.ts
 
-  smoke:
+  integrity-gate:
+    name: Integrity gate
     runs-on: ubuntu-24.04
-    needs: test
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -48,9 +97,1040 @@ jobs:
           cache: 'npm'
       - name: Install
         run: npm ci
-      - name: Integrity parity
-        run: npm test -- --run tests/integrity-*.test.ts
-      - name: Test (full suite)
-        run: npm test
+      - name: Run integrity gate
+        run: npm run test:integrity-fast
+
+  runtime-config-boundary:
+    name: Runtime config boundary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Check runtime config boundary
+        run: npm run ops:check-config-loader-runtime-boundary -- --strict
+
+  mailing-secret-boundary:
+    name: Mailing secret boundary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Check mailing secret boundary
+        run: npm run ops:check-mailing-secret-boundary -- --strict
+
+  migration-doc-validators:
+    name: Migration doc validators
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Validate final migration summary template shape
+        run: npm run ops:validate-final-migration-summary -- --file ops/decommission/FINAL_MIGRATION_SUMMARY.md
+      - name: Validate signoff record template shape
+        run: npm run ops:validate-signoff-record -- --file ops/decommission/SIGNOFF_RECORD.md
+      - name: Check retired path references
+        run: npm run ops:check-retired-path-references -- --strict --json
+
+  legacy-no-import-evidence:
+    name: Legacy no-import evidence
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Check legacy no-import evidence
+        run: npm run ops:check-legacy-no-import-evidence -- --strict --json
+
+  ops-evidence-validators:
+    name: Ops evidence validators
+    runs-on: ubuntu-24.04
+    env:
+      GATEWAY_TEMPLATE_WORKER_URL_MAP: ${{ vars.GATEWAY_TEMPLATE_WORKER_URL_MAP || secrets.GATEWAY_TEMPLATE_WORKER_URL_MAP || '' }}
+      GATEWAY_TEMPLATE_WORKER_TOKEN_MAP: ${{ vars.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP || secrets.GATEWAY_TEMPLATE_WORKER_TOKEN_MAP || '' }}
+      GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP: ${{ vars.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || secrets.GATEWAY_TEMPLATE_WORKER_SIGNATURE_REF_MAP || '' }}
+      GATEWAY_TEMPLATE_VARIANT_MAP: ${{ vars.GATEWAY_TEMPLATE_VARIANT_MAP || secrets.GATEWAY_TEMPLATE_VARIANT_MAP || '' }}
+      GATEWAY_REQUIRED_SITES: ${{ vars.GATEWAY_REQUIRED_SITES || secrets.GATEWAY_REQUIRED_SITES || '' }}
+      GATEWAY_FORGET_FORWARD_URL: ${{ vars.GATEWAY_FORGET_FORWARD_URL || secrets.GATEWAY_FORGET_FORWARD_URL || '' }}
+      GATEWAY_FORGET_FORWARD_TOKEN: ${{ vars.GATEWAY_FORGET_FORWARD_TOKEN || secrets.GATEWAY_FORGET_FORWARD_TOKEN || '' }}
+      GATEWAY_FORGET_FORWARD_TIMEOUT_MS: ${{ vars.GATEWAY_FORGET_FORWARD_TIMEOUT_MS || secrets.GATEWAY_FORGET_FORWARD_TIMEOUT_MS || '' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Check legacy core extraction evidence
+        run: npm run ops:check-legacy-core-extraction-evidence -- --strict --json
+      - name: Check legacy crypto boundary evidence
+        run: npm run ops:check-legacy-crypto-boundary-evidence -- --strict --json
+      - name: Check template worker map coherence
+        run: |
+          set -euo pipefail
+          url_map_count="$(node -e "const raw = process.env.GATEWAY_TEMPLATE_WORKER_URL_MAP || ''; try { const parsed = raw ? JSON.parse(raw) : null; const count = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed).length : 0; process.stdout.write(String(count)); } catch (_) { process.stdout.write('0'); }")"
+          if [ "${url_map_count}" -gt 0 ]; then
+            if [ -z "${GATEWAY_REQUIRED_SITES:-}" ]; then
+              echo "GATEWAY_REQUIRED_SITES is required when template worker maps are configured" >&2
+              exit 1
+            fi
+            npm run ops:check-template-worker-map-coherence -- --json --strict --require-token-map --require-signature-map --require-sites "${GATEWAY_REQUIRED_SITES}"
+          else
+            npm run ops:check-template-worker-map-coherence -- --json
+          fi
+      - name: Check template signature-ref map
+        run: |
+          set -euo pipefail
+          if [ -n "${GATEWAY_REQUIRED_SITES:-}" ]; then
+            npm run ops:check-template-signature-ref-map -- --strict --json --require-sites "${GATEWAY_REQUIRED_SITES}"
+          else
+            npm run ops:check-template-signature-ref-map -- --strict --json
+          fi
+      - name: Check template bridge contract compatibility
+        run: npm run ops:check-template-bridge-contract -- --strict --json
+      - name: Validate template variant map config (strict)
+        run: |
+          set -euo pipefail
+          required_sites="${GATEWAY_REQUIRED_SITES:-site-alpha,site-beta}"
+          if [ -z "${GATEWAY_TEMPLATE_VARIANT_MAP:-}" ]; then
+            export GATEWAY_TEMPLATE_VARIANT_MAP="$(cat config/template-variant-map.example.json)"
+            echo "GATEWAY_TEMPLATE_VARIANT_MAP source: config/template-variant-map.example.json (CI fallback)"
+            node scripts/validate-template-variant-map-config.js --strict --require-sites "${required_sites}" --allow-placeholders
+          else
+            echo "GATEWAY_TEMPLATE_VARIANT_MAP source: vars/secrets"
+            node scripts/validate-template-variant-map-config.js --strict --require-sites "${required_sites}"
+          fi
+      - name: Check forget-forward config
+        run: npm run ops:check-forget-forward-config -- --json
+
+  smoke:
+    name: Smoke checks
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+      - integrity-gate
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
       - name: PSP smoke (built dist)
         run: npm run smoke
+
+  incident-smoke:
+    name: Integrity incident smoke
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+      - integrity-gate
+    if: ${{ github.event_name == 'workflow_dispatch' || (secrets.GATEWAY_BASE_URL != '' && secrets.GATEWAY_INTEGRITY_INCIDENT_TOKEN != '' && secrets.GATEWAY_TEMPLATE_TOKEN != '') }}
+    env:
+      GATEWAY_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_base_url || secrets.GATEWAY_BASE_URL }}
+      GATEWAY_INTEGRITY_STATE_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_state_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
+      GATEWAY_INTEGRITY_INCIDENT_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_incident_token || secrets.GATEWAY_INTEGRITY_INCIDENT_TOKEN }}
+      GATEWAY_TEMPLATE_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_template_token || secrets.GATEWAY_TEMPLATE_TOKEN }}
+      GATEWAY_SMOKE_TIMEOUT_MS: ${{ github.event_name == 'workflow_dispatch' && inputs.gateway_smoke_timeout_ms || '5000' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Incident smoke (optional)
+        run: npm run smoke:integrity-incident
+
+  consistency-smoke:
+    name: Integrity consistency smoke
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+      - integrity-gate
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.consistency_urls != '') || github.event_name == 'schedule' }}
+    env:
+      CONSISTENCY_URLS: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_urls || vars.CONSISTENCY_URLS }}
+      CONSISTENCY_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
+      CONSISTENCY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_mode || vars.CONSISTENCY_MODE || 'pairwise' }}
+      CONSISTENCY_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'vps_medium' }}
+      CONSISTENCY_ALLOW_ANON: ${{ vars.CONSISTENCY_ALLOW_ANON }}
+      CONSISTENCY_MATRIX_JSON: ${{ runner.temp }}/consistency-matrix.json
+      CONSISTENCY_REPORT_MD: ${{ runner.temp }}/consistency-drift-report.md
+      CONSISTENCY_REPORT_JSON: ${{ runner.temp }}/consistency-drift-summary.json
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Scheduled config preflight
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          set -euo pipefail
+
+          preflight_args=(
+            --urls "$CONSISTENCY_URLS"
+            --mode "$CONSISTENCY_MODE"
+            --profile "$CONSISTENCY_PROFILE"
+          )
+
+          if [ -n "${CONSISTENCY_TOKEN:-}" ]; then
+            preflight_args+=(--token "$CONSISTENCY_TOKEN")
+          fi
+
+          allow_anon_value="$(printf '%s' "${CONSISTENCY_ALLOW_ANON:-}" | tr '[:upper:]' '[:lower:]')"
+          case "$allow_anon_value" in
+            1|true|yes)
+              preflight_args+=(--allow-anon)
+              ;;
+          esac
+
+          npm run --silent ops:validate-consistency-preflight -- "${preflight_args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Compare integrity matrix
+        id: compare_matrix
+        continue-on-error: true
+        run: |
+          node <<'NODE'
+          const { spawnSync } = require('node:child_process')
+          const { writeFileSync } = require('node:fs')
+
+          const urls = (process.env.CONSISTENCY_URLS || '')
+            .split(',')
+            .map((url) => url.trim())
+            .filter(Boolean)
+
+          if (!urls.length) {
+            console.error('[consistency-smoke] consistency_urls is required')
+            process.exit(64)
+          }
+          const mode = (process.env.CONSISTENCY_MODE || 'pairwise').trim().toLowerCase()
+          if (!['pairwise', 'all'].includes(mode)) {
+            console.error('[consistency-smoke] consistency_mode must be pairwise or all')
+            process.exit(64)
+          }
+
+          const args = []
+          for (const url of urls) {
+            args.push('--url', url)
+          }
+          if (process.env.CONSISTENCY_TOKEN) {
+            args.push('--token', process.env.CONSISTENCY_TOKEN)
+          }
+          args.push('--mode', mode, '--json')
+
+          const result = spawnSync('node', ['scripts/compare-integrity-matrix.js', ...args], {
+            encoding: 'utf8',
+            env: process.env,
+          })
+          if (result.stdout) {
+            process.stdout.write(result.stdout)
+            try {
+              writeFileSync(process.env.CONSISTENCY_MATRIX_JSON, result.stdout)
+            } catch (err) {
+              console.error(`[consistency-smoke] unable to write matrix output: ${err.message}`)
+            }
+          }
+          if (result.stderr) {
+            process.stderr.write(result.stderr)
+          }
+
+          process.exit(result.status ?? 1)
+          NODE
+      - name: Build drift alert summary
+        if: always()
+        run: |
+          node scripts/build-drift-alert-summary.js \
+            --matrix "$CONSISTENCY_MATRIX_JSON" \
+            --profile "$CONSISTENCY_PROFILE" \
+            --out "$CONSISTENCY_REPORT_MD" \
+            --json-out "$CONSISTENCY_REPORT_JSON"
+      - name: Append drift summary
+        if: always()
+        run: |
+          if [ -f "$CONSISTENCY_REPORT_MD" ]; then
+            cat "$CONSISTENCY_REPORT_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No drift report produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload consistency artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: consistency-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            ${{ env.CONSISTENCY_MATRIX_JSON }}
+            ${{ env.CONSISTENCY_REPORT_MD }}
+            ${{ env.CONSISTENCY_REPORT_JSON }}
+      - name: Enforce consistency result
+        if: ${{ steps.compare_matrix.outcome != 'success' }}
+        run: |
+          echo "Consistency comparison failed (see uploaded artifacts and job summary)."
+          exit 1
+
+  evidence-dry-run:
+    name: Evidence dry run
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+      - integrity-gate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.evidence_urls != '' }}
+    env:
+      EVIDENCE_URLS: ${{ inputs.evidence_urls }}
+      GATEWAY_INTEGRITY_STATE_TOKEN: ${{ inputs.evidence_token || secrets.GATEWAY_INTEGRITY_STATE_TOKEN }}
+      EVIDENCE_OUT_DIR: ${{ runner.temp }}/integrity-evidence-dry-run
+      CONSISTENCY_MODE: ${{ inputs.consistency_mode || vars.CONSISTENCY_MODE || 'pairwise' }}
+      CONSISTENCY_PROFILE: ${{ inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'vps_medium' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: "Help: compare"
+        run: npm run ops:compare-integrity -- --help
+      - name: "Help: compare matrix"
+        run: npm run ops:compare-integrity-matrix -- --help
+      - name: "Help: attest"
+        run: npm run ops:attest-integrity -- --help
+      - name: "Help: export"
+        run: npm run ops:export-integrity-evidence -- --help
+      - name: "Help: validate"
+        run: npm run ops:validate-integrity-attestation -- --help
+      - name: "Help: build exchange pack"
+        run: npm run ops:build-attestation-exchange-pack -- --help
+      - name: "Help: index bundles"
+        run: npm run ops:index-evidence-bundles -- --help
+      - name: "Help: suggest rate limits"
+        run: npm run ops:suggest-ratelimit-overrides -- --help
+      - name: "Help: release evidence pack"
+        run: npm run ops:build-release-evidence-pack -- --help
+      - name: "Help: build release drill manifest"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:build-release-drill-manifest'] ? 0 : 1)"; then
+            npm run ops:build-release-drill-manifest -- --help
+          else
+            echo "ops:build-release-drill-manifest is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate release drill manifest"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-release-drill-manifest'] ? 0 : 1)"; then
+            npm run ops:validate-release-drill-manifest -- --help
+          else
+            echo "ops:validate-release-drill-manifest is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: check release drill artifacts"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-release-drill-artifacts'] ? 0 : 1)"; then
+            npm run ops:check-release-drill-artifacts -- --help
+          else
+            echo "ops:check-release-drill-artifacts is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: build release evidence ledger"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:build-release-evidence-ledger'] ? 0 : 1)"; then
+            npm run ops:build-release-evidence-ledger -- --help
+          else
+            echo "ops:build-release-evidence-ledger is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: build decommission evidence log"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:build-decommission-evidence-log'] ? 0 : 1)"; then
+            npm run ops:build-decommission-evidence-log -- --help
+          else
+            echo "ops:build-decommission-evidence-log is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: check decommission manual proofs"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-decommission-manual-proofs'] ? 0 : 1)"; then
+            npm run ops:check-decommission-manual-proofs -- --help
+          else
+            echo "ops:check-decommission-manual-proofs is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: check template worker routing config"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-template-worker-routing-config'] ? 0 : 1)"; then
+            npm run ops:check-template-worker-routing-config -- --help
+          else
+            echo "ops:check-template-worker-routing-config is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: check legacy crypto boundary evidence"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-legacy-crypto-boundary-evidence'] ? 0 : 1)"; then
+            npm run ops:check-legacy-crypto-boundary-evidence -- --help
+          else
+            echo "ops:check-legacy-crypto-boundary-evidence is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: check template worker map coherence"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-template-worker-map-coherence'] ? 0 : 1)"; then
+            npm run ops:check-template-worker-map-coherence -- --help
+          else
+            echo "ops:check-template-worker-map-coherence is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: init template worker routing"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:init-template-worker-routing'] ? 0 : 1)"; then
+            npm run ops:init-template-worker-routing -- --help
+          else
+            echo "ops:init-template-worker-routing is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate worker secrets trust model"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-worker-secrets-trust-model'] ? 0 : 1)"; then
+            npm run ops:validate-worker-secrets-trust-model -- --help
+          else
+            echo "ops:validate-worker-secrets-trust-model is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: init decommission manual proofs"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:init-decommission-manual-proofs'] ? 0 : 1)"; then
+            npm run ops:init-decommission-manual-proofs -- --help
+          else
+            echo "ops:init-decommission-manual-proofs is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate decommission closeout"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-decommission-closeout'] ? 0 : 1)"; then
+            npm run ops:validate-decommission-closeout -- --help
+          else
+            echo "ops:validate-decommission-closeout is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: run decommission closeout"
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/run-decommission-closeout.js" ]; then
+            npm run ops:run-decommission-closeout -- --help
+          else
+            echo "scripts/run-decommission-closeout.js is missing; skipping help check."
+          fi
+      - name: "Help: check decommission readiness"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-decommission-readiness'] ? 0 : 1)"; then
+            npm run ops:check-decommission-readiness -- --help
+          else
+            echo "ops:check-decommission-readiness is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: check AO gate evidence"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-ao-gate-evidence'] ? 0 : 1)"; then
+            npm run ops:check-ao-gate-evidence -- --help
+          else
+            echo "ops:check-ao-gate-evidence is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate VPS readiness"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-hosting-readiness'] ? 0 : 1)"; then
+            npm run ops:validate-hosting-readiness -- --help
+          else
+            echo "ops:validate-hosting-readiness is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate AO dependency gate"
+        run: npm run ops:validate-ao-dependency-gate -- --help
+      - name: "Help: export consistency report"
+        run: npm run ops:export-consistency-report -- --help
+      - name: "Help: release sign-off checklist"
+        run: npm run ops:build-release-signoff-checklist -- --help
+      - name: "Help: release drill orchestrator"
+        run: npm run ops:run-release-drill -- --help
+      - name: "Help: bundle check"
+        run: npm run ops:check-evidence-bundle -- --help
+      - name: "Help: latest bundle"
+        run: npm run ops:latest-evidence-bundle -- --help
+      - name: "Help: dispatch"
+        run: npm run ops:dispatch-consistency-smoke -- --help
+      - name: Evidence export dry-run
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { spawnSync } = require('node:child_process')
+
+          const urls = (process.env.EVIDENCE_URLS || '')
+            .split(',')
+            .map((url) => url.trim())
+            .filter(Boolean)
+
+          if (urls.length < 2) {
+            console.error('[evidence-dry-run] evidence_urls must contain at least two URLs')
+            process.exit(64)
+          }
+
+          const outDir = process.env.EVIDENCE_OUT_DIR || `${process.env.RUNNER_TEMP}/integrity-evidence-dry-run`
+          const exportArgs = ['scripts/export-integrity-evidence.js']
+          for (const url of urls) {
+            exportArgs.push('--url', url)
+          }
+          exportArgs.push('--out-dir', outDir)
+
+          const exportResult = spawnSync('node', exportArgs, {
+            stdio: 'inherit',
+            env: process.env,
+          })
+          if ((exportResult.status ?? 1) !== 0) {
+            process.exit(exportResult.status ?? 1)
+          }
+
+          const latestResult = spawnSync(
+            'node',
+            ['scripts/latest-evidence-bundle.js', '--root', outDir, '--json', '--require-files'],
+            {
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'inherit'],
+              env: process.env,
+            },
+          )
+          if ((latestResult.status ?? 1) !== 0) {
+            process.exit(latestResult.status ?? 1)
+          }
+
+          let latest
+          try {
+            latest = JSON.parse(latestResult.stdout || '{}')
+          } catch (err) {
+            console.error(`[evidence-dry-run] unable to parse latest bundle output: ${err.message}`)
+            process.exit(1)
+          }
+
+          const bundleDir = latest.bundleDir
+          if (!bundleDir) {
+            console.error('[evidence-dry-run] missing bundleDir from latest bundle output')
+            process.exit(1)
+          }
+
+          const checkResult = spawnSync(
+            'node',
+            ['scripts/check-evidence-bundle.js', '--dir', bundleDir, '--strict'],
+            {
+              stdio: 'inherit',
+              env: process.env,
+            },
+          )
+          if ((checkResult.status ?? 1) !== 0) {
+            process.exit(checkResult.status ?? 1)
+          }
+
+          const indexResult = spawnSync(
+            'node',
+            ['scripts/index-evidence-bundles.js', '--root', outDir, '--strict', '--format', 'json'],
+            {
+              stdio: 'inherit',
+              env: process.env,
+            },
+          )
+          if ((indexResult.status ?? 1) !== 0) {
+            process.exit(indexResult.status ?? 1)
+          }
+
+          const exchangeOut = `${outDir}/attestation-exchange-pack.json`
+          const exchangeResult = spawnSync(
+            'node',
+            ['scripts/build-attestation-exchange-pack.js', '--bundle', bundleDir, '--out', exchangeOut],
+            {
+              stdio: 'inherit',
+              env: process.env,
+            },
+          )
+          if ((exchangeResult.status ?? 1) !== 0) {
+            process.exit(exchangeResult.status ?? 1)
+          }
+
+          const repo = process.env.GITHUB_REPOSITORY || ''
+          const [owner, repoName] = repo.split('/')
+          if (!owner || !repoName) {
+            console.error('[evidence-dry-run] unable to resolve owner/repo from GITHUB_REPOSITORY')
+            process.exit(1)
+          }
+
+          const dispatchArgs = [
+            'scripts/dispatch-consistency-smoke.js',
+            '--owner',
+            owner,
+            '--repo',
+            repoName,
+            '--workflow',
+            'ci.yml',
+            '--ref',
+            process.env.GITHUB_REF_NAME || 'main',
+            '--consistency-urls',
+            urls.join(','),
+            '--consistency-mode',
+            process.env.CONSISTENCY_MODE || 'pairwise',
+            '--consistency-profile',
+            process.env.CONSISTENCY_PROFILE || 'vps_medium',
+            '--evidence-urls',
+            urls.join(','),
+            '--dry-run',
+          ]
+          const dispatchResult = spawnSync('node', dispatchArgs, {
+            stdio: 'inherit',
+            env: process.env,
+          })
+
+          process.exit(dispatchResult.status ?? 1)
+          NODE
+      - name: Upload evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-dry-run-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            ${{ env.EVIDENCE_OUT_DIR }}
+
+  release-evidence-pack:
+    name: Release evidence pack
+    runs-on: ubuntu-24.04
+    needs:
+      - consistency-smoke
+      - evidence-dry-run
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.consistency_urls != '' && inputs.evidence_urls != '' }}
+    env:
+      RELEASE_LABEL: ${{ inputs.release_label || '1.4.0' }}
+      CONSISTENCY_URLS: ${{ inputs.consistency_urls }}
+      CONSISTENCY_MODE: ${{ inputs.consistency_mode || vars.CONSISTENCY_MODE || 'pairwise' }}
+      CONSISTENCY_PROFILE: ${{ inputs.consistency_profile || vars.GATEWAY_RESOURCE_PROFILE || 'vps_medium' }}
+      CONSISTENCY_ARTIFACT_DIR: ${{ runner.temp }}/release-pack/consistency
+      EVIDENCE_ARTIFACT_DIR: ${{ runner.temp }}/release-pack/evidence
+      RELEASE_PACK_WORKDIR: ${{ runner.temp }}/release-pack/work
+      RELEASE_PACK_MD: ${{ runner.temp }}/release-pack/release-evidence-pack.md
+      RELEASE_PACK_JSON: ${{ runner.temp }}/release-pack/release-evidence-pack.json
+      RELEASE_AO_GATE_VALIDATE: ${{ runner.temp }}/release-pack/ao-dependency-gate.validation.txt
+      RELEASE_READINESS_JSON: ${{ runner.temp }}/release-pack/release-readiness.json
+      RELEASE_DRILL_MANIFEST_JSON: ${{ runner.temp }}/release-pack/release-drill-manifest.json
+      RELEASE_DRILL_MANIFEST_VALIDATE: ${{ runner.temp }}/release-pack/release-drill-manifest.validation.txt
+      RELEASE_DRILL_CHECK_JSON: ${{ runner.temp }}/release-pack/release-drill-check.json
+      RELEASE_LEDGER_MD: ${{ runner.temp }}/release-pack/release-evidence-ledger.md
+      RELEASE_LEDGER_JSON: ${{ runner.temp }}/release-pack/release-evidence-ledger.json
+      RELEASE_AO_GATE_EVIDENCE_JSON: ${{ runner.temp }}/release-pack/ao-gate-evidence-check.json
+      RELEASE_DECOMMISSION_READY_JSON: ${{ runner.temp }}/release-pack/decommission-readiness.json
+      RELEASE_DECOMMISSION_LOG_MD: ${{ runner.temp }}/release-pack/decommission-evidence-log.md
+      RELEASE_DECOMMISSION_LOG_JSON: ${{ runner.temp }}/release-pack/decommission-evidence-log.json
+      RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON: ${{ runner.temp }}/release-pack/decommission-manual-proofs.json
+      RELEASE_CLOSEOUT_JSON: ${{ runner.temp }}/release-pack/decommission-closeout.json
+      RELEASE_CLOSEOUT_VALIDATION_JSON: ${{ runner.temp }}/release-pack/decommission-closeout.validation.json
+      RELEASE_SIGNOFF_MD: ${{ runner.temp }}/release-pack/release-signoff-checklist.md
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Download consistency artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: consistency-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CONSISTENCY_ARTIFACT_DIR }}
+      - name: Download evidence artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: evidence-dry-run-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_ARTIFACT_DIR }}
+      - name: Build release evidence pack
+        run: |
+          node scripts/build-release-evidence-pack.js \
+            --release "$RELEASE_LABEL" \
+            --consistency-dir "$CONSISTENCY_ARTIFACT_DIR" \
+            --evidence-dir "$EVIDENCE_ARTIFACT_DIR" \
+            --ao-gate-file "./ops/decommission/ao-dependency-gate.json" \
+            --out "$RELEASE_PACK_MD" \
+            --json-out "$RELEASE_PACK_JSON" \
+            --require-both \
+            --require-ao-gate
+      - name: Build release sign-off checklist
+        run: |
+          node scripts/build-release-signoff-checklist.js \
+            --pack "$RELEASE_PACK_JSON" \
+            --out "$RELEASE_SIGNOFF_MD"
+      - name: Validate AO dependency gate
+        run: |
+          set -euo pipefail
+          node scripts/validate-ao-dependency-gate.js --file "./ops/decommission/ao-dependency-gate.json" | tee "$RELEASE_AO_GATE_VALIDATE"
+      - name: Check release readiness
+        run: |
+          set -euo pipefail
+          npm run --silent ops:check-release-readiness -- --pack "$RELEASE_PACK_JSON" --json --strict | tee "$RELEASE_READINESS_JSON" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Build and validate release drill manifest
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$RELEASE_PACK_WORKDIR"
+          mkdir -p "$(dirname "$RELEASE_DRILL_MANIFEST_VALIDATE")"
+
+          manifest_build_status="skipped"
+          manifest_validate_status="skipped"
+          manifest_build_log="$(mktemp)"
+          manifest_validate_log="$(mktemp)"
+          : >"$manifest_build_log"
+
+          copy_artifact() {
+            local filename="$1"
+            local src="$CONSISTENCY_ARTIFACT_DIR/$filename"
+            local fallback
+
+            if [ -f "$src" ]; then
+              cp "$src" "$RELEASE_PACK_WORKDIR/$filename"
+              return 0
+            fi
+
+            fallback="$(find "$CONSISTENCY_ARTIFACT_DIR" -type f -name "$filename" -print -quit 2>/dev/null || true)"
+            if [ -n "$fallback" ] && [ -f "$fallback" ]; then
+              cp "$fallback" "$RELEASE_PACK_WORKDIR/$filename"
+            fi
+          }
+
+          if [ -f "$GITHUB_WORKSPACE/scripts/build-release-drill-manifest.js" ]; then
+            copy_artifact "consistency-matrix.json"
+            copy_artifact "consistency-drift-report.md"
+            copy_artifact "consistency-drift-summary.json"
+
+            [ -f "$RELEASE_PACK_MD" ] && cp "$RELEASE_PACK_MD" "$RELEASE_PACK_WORKDIR/release-evidence-pack.md"
+            [ -f "$RELEASE_PACK_JSON" ] && cp "$RELEASE_PACK_JSON" "$RELEASE_PACK_WORKDIR/release-evidence-pack.json"
+            [ -f "$RELEASE_SIGNOFF_MD" ] && cp "$RELEASE_SIGNOFF_MD" "$RELEASE_PACK_WORKDIR/release-signoff-checklist.md"
+            [ -f "$RELEASE_AO_GATE_VALIDATE" ] && cp "$RELEASE_AO_GATE_VALIDATE" "$RELEASE_PACK_WORKDIR/ao-dependency-gate.validation.txt"
+            [ -f "$RELEASE_READINESS_JSON" ] && cp "$RELEASE_READINESS_JSON" "$RELEASE_PACK_WORKDIR/release-readiness.json"
+
+            latest_bundle_json="$RELEASE_PACK_WORKDIR/latest-evidence-bundle.json"
+            if [ -d "$EVIDENCE_ARTIFACT_DIR" ] && [ -f "$GITHUB_WORKSPACE/scripts/latest-evidence-bundle.js" ]; then
+              if ! node "$GITHUB_WORKSPACE/scripts/latest-evidence-bundle.js" \
+                --root "$EVIDENCE_ARTIFACT_DIR" \
+                --json \
+                --require-files >"$latest_bundle_json" 2>>"$manifest_build_log"; then
+                rm -f "$latest_bundle_json"
+              fi
+            fi
+
+            if (
+              node "$GITHUB_WORKSPACE/scripts/build-release-drill-manifest.js" \
+                --dir "$RELEASE_PACK_WORKDIR" \
+                --out "$RELEASE_DRILL_MANIFEST_JSON"
+            ) >>"$manifest_build_log" 2>&1; then
+              manifest_build_status="built"
+            else
+              build_rc=$?
+              build_output="$(cat "$manifest_build_log")"
+              if printf '%s' "$build_output" | grep -Eqi 'missing|not found|enoent|no such file'; then
+                manifest_build_status="missing-inputs"
+              else
+                cat "$manifest_build_log" >&2
+                exit "$build_rc"
+              fi
+            fi
+          else
+            manifest_build_status="unavailable"
+          fi
+
+          if [ "$manifest_build_status" = "built" ] && [ -f "$RELEASE_DRILL_MANIFEST_JSON" ] && [ -f "$GITHUB_WORKSPACE/scripts/validate-release-drill-manifest.js" ]; then
+            if node "$GITHUB_WORKSPACE/scripts/validate-release-drill-manifest.js" --file "$RELEASE_DRILL_MANIFEST_JSON" --strict >"$manifest_validate_log" 2>&1; then
+              manifest_validate_status="validated"
+              cp "$manifest_validate_log" "$RELEASE_DRILL_MANIFEST_VALIDATE"
+              cp "$RELEASE_DRILL_MANIFEST_JSON" "$RELEASE_PACK_WORKDIR/release-drill-manifest.json"
+              cp "$RELEASE_DRILL_MANIFEST_VALIDATE" "$RELEASE_PACK_WORKDIR/release-drill-manifest.validation.txt"
+            else
+              cat "$manifest_validate_log" >&2
+              exit 1
+            fi
+          elif [ "$manifest_build_status" = "built" ] && [ -f "$RELEASE_DRILL_MANIFEST_JSON" ]; then
+            manifest_validate_status="unavailable"
+            cp "$RELEASE_DRILL_MANIFEST_JSON" "$RELEASE_PACK_WORKDIR/release-drill-manifest.json"
+          fi
+
+          {
+            echo "### Release drill manifest"
+            echo ""
+            echo "- Build status: ${manifest_build_status}"
+            echo "- Validate status: ${manifest_validate_status}"
+            if [ "$manifest_build_status" = "missing-inputs" ]; then
+              echo "- Result: skipped because required inputs were not available in the release-pack working dir."
+            elif [ "$manifest_build_status" = "unavailable" ]; then
+              echo "- Result: skipped because ops:build-release-drill-manifest is not defined."
+            elif [ "$manifest_validate_status" = "validated" ]; then
+              echo "- Result: manifest built and validated in strict mode."
+            fi
+            if [ -f "$RELEASE_DRILL_MANIFEST_JSON" ]; then
+              echo ""
+              echo "Manifest path: \`$RELEASE_DRILL_MANIFEST_JSON\`"
+            fi
+          if [ -f "$RELEASE_DRILL_MANIFEST_VALIDATE" ]; then
+              echo "Manifest strict validation log: \`$RELEASE_DRILL_MANIFEST_VALIDATE\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check release drill artifacts
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/check-release-drill-artifacts.js" ]; then
+            work_check_json="$RELEASE_PACK_WORKDIR/release-drill-check.json"
+            node "$GITHUB_WORKSPACE/scripts/check-release-drill-artifacts.js" \
+              --dir "$RELEASE_PACK_WORKDIR" \
+              --strict \
+              --json > "$work_check_json"
+            cp "$work_check_json" "$RELEASE_DRILL_CHECK_JSON"
+            node -e "const fs=require('node:fs');const p=process.env.RELEASE_DRILL_CHECK_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Release drill artifact check');console.log('');console.log('- Result: '+(d.ok?'OK':'ERROR'));console.log('- Missing: '+d.missing.length);console.log('- Issues: '+d.issues.length);" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Release drill artifact check" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/check-release-drill-artifacts.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - name: Build release evidence ledger
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/build-release-evidence-ledger.js" ]; then
+            work_ledger_md="$RELEASE_PACK_WORKDIR/release-evidence-ledger.md"
+            work_ledger_json="$RELEASE_PACK_WORKDIR/release-evidence-ledger.json"
+            node "$GITHUB_WORKSPACE/scripts/build-release-evidence-ledger.js" \
+              --dir "$RELEASE_PACK_WORKDIR" \
+              --decision pending \
+              --out "$work_ledger_md" \
+              --json-out "$work_ledger_json"
+            cp "$work_ledger_md" "$RELEASE_LEDGER_MD"
+            cp "$work_ledger_json" "$RELEASE_LEDGER_JSON"
+            node -e "const fs=require('node:fs');const p=process.env.RELEASE_LEDGER_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Release evidence ledger');console.log('');console.log('- Overall status: '+String(d.overallStatus||'unknown'));console.log('- Decision: '+String(d.decision||'pending'));console.log('- Artifacts hashed: '+(Array.isArray(d.artifacts)?d.artifacts.length:0));" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Release evidence ledger" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: skipped because ops:build-release-evidence-ledger is not defined." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Check AO gate evidence quality
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/check-ao-gate-evidence.js" ]; then
+            node "$GITHUB_WORKSPACE/scripts/check-ao-gate-evidence.js" \
+              --file "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
+              --strict \
+              --json > "$RELEASE_AO_GATE_EVIDENCE_JSON"
+            node -e "const fs=require('node:fs');const p=process.env.RELEASE_AO_GATE_EVIDENCE_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### AO gate evidence quality');console.log('');console.log('- Result: '+String(d.result||'unknown'));console.log('- Issues: '+(Array.isArray(d.issues)?d.issues.length:0));console.log('- Warnings: '+(Array.isArray(d.warnings)?d.warnings.length:0));" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### AO gate evidence quality" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/check-ao-gate-evidence.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - name: Check decommission readiness
+        run: |
+          set -euo pipefail
+          if [ ! -f "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" ]; then
+            echo "### Decommission readiness" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/check-decommission-readiness.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          node "$GITHUB_WORKSPACE/scripts/check-decommission-readiness.js" \
+            --dir "$RELEASE_PACK_WORKDIR" \
+            --ao-gate "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
+            --strict \
+            --json > "$RELEASE_DECOMMISSION_READY_JSON"
+          node -e "const fs=require('node:fs');const p=process.env.RELEASE_DECOMMISSION_READY_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission readiness');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Blockers: '+Number(d.blockerCount||0));" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build decommission evidence log
+        run: |
+          set -euo pipefail
+          if [ -f "$GITHUB_WORKSPACE/scripts/build-decommission-evidence-log.js" ]; then
+            node "$GITHUB_WORKSPACE/scripts/build-decommission-evidence-log.js" \
+              --dir "$RELEASE_PACK_WORKDIR" \
+              --decision pending \
+              --out "$RELEASE_DECOMMISSION_LOG_MD" \
+              --json-out "$RELEASE_DECOMMISSION_LOG_JSON"
+          else
+            echo "Decommission evidence log step skipped (script missing)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Check decommission manual proofs
+        run: |
+          set -euo pipefail
+          if [ ! -f "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" ]; then
+            echo "### Decommission manual proofs" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/check-decommission-manual-proofs.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [ ! -f "$RELEASE_DECOMMISSION_LOG_JSON" ]; then
+            echo "### Decommission manual proofs" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because decommission evidence log JSON is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          node "$GITHUB_WORKSPACE/scripts/check-decommission-manual-proofs.js" \
+            --file "$RELEASE_DECOMMISSION_LOG_JSON" \
+            --strict \
+            --json \
+            > "$RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON"
+          node -e "const fs=require('node:fs');const p=process.env.RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission manual proofs');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Provided: '+Number(d.providedCount||0));console.log('- Required: '+Number(d.requiredCount||0));console.log('- Missing: '+Number(d.missingCount||0));" >> "$GITHUB_STEP_SUMMARY"
+      - name: Check legacy module map sync
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:check-legacy-module-map-sync'] ? 0 : 1)"; then
+            legacy_sync_json="$RELEASE_PACK_WORKDIR/legacy-module-map-sync.json"
+            mkdir -p "$RELEASE_PACK_WORKDIR"
+            npm run ops:check-legacy-module-map-sync -- --strict --json > "$legacy_sync_json"
+            LEGACY_SYNC_JSON="$legacy_sync_json" node -e "const fs=require('node:fs');const p=process.env.LEGACY_SYNC_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));const docs=Array.isArray(d.documents)?d.documents:[];const missing=docs.reduce((sum,doc)=>sum+(Array.isArray(doc.missing)?doc.missing.length:0),0);const extra=docs.reduce((sum,doc)=>sum+(Array.isArray(doc.extra)?doc.extra.length:0),0);const drift=Number(d.mismatchCount ?? (missing+extra));console.log('### Legacy module map sync');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Missing: '+missing);console.log('- Extra: '+extra);console.log('- Drift: '+drift);" >> "$GITHUB_STEP_SUMMARY"
+            cp "$legacy_sync_json" "$RELEASE_PACK_WORKDIR/legacy-module-map-sync.validation.json"
+          else
+            echo "### Legacy module map sync" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: skipped because ops:check-legacy-module-map-sync is not defined." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Run decommission closeout
+        run: |
+          set -euo pipefail
+          if [ ! -f "$GITHUB_WORKSPACE/scripts/run-decommission-closeout.js" ]; then
+            echo "### Decommission closeout" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/run-decommission-closeout.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          node "$GITHUB_WORKSPACE/scripts/run-decommission-closeout.js" \
+            --dir "$RELEASE_PACK_WORKDIR" \
+            --ao-gate "$GITHUB_WORKSPACE/ops/decommission/ao-dependency-gate.json" \
+            --strict \
+            --json > "$RELEASE_CLOSEOUT_JSON"
+          node -e "const fs=require('node:fs');const p=process.env.RELEASE_CLOSEOUT_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission closeout');console.log('');console.log('- Status: '+String(d.status||d.result||'unknown'));console.log('- Blockers: '+Number(d.blockerCount ?? (Array.isArray(d.blockers)?d.blockers.length:0)));console.log('- Warnings: '+Number(d.warningCount ?? (Array.isArray(d.warnings)?d.warnings.length:0)));" >> "$GITHUB_STEP_SUMMARY"
+      - name: Validate decommission closeout artifact
+        run: |
+          set -euo pipefail
+          if [ ! -f "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" ]; then
+            echo "### Decommission closeout validation" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because scripts/validate-decommission-closeout.js is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [ ! -f "$RELEASE_CLOSEOUT_JSON" ]; then
+            echo "### Decommission closeout validation" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Result: failed because decommission closeout JSON is missing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          node "$GITHUB_WORKSPACE/scripts/validate-decommission-closeout.js" \
+            --file "$RELEASE_CLOSEOUT_JSON" \
+            --strict \
+            --json > "$RELEASE_CLOSEOUT_VALIDATION_JSON"
+          node -e "const fs=require('node:fs');const p=process.env.RELEASE_CLOSEOUT_VALIDATION_JSON;const d=JSON.parse(fs.readFileSync(p,'utf8'));console.log('### Decommission closeout validation');console.log('');console.log('- Status: '+String(d.status||'unknown'));console.log('- Ready: '+String(Boolean(d.ready)));console.log('- Issues: '+Number(d.issueCount||0));console.log('- Blockers: '+Number(d.blockerCount||0));" >> "$GITHUB_STEP_SUMMARY"
+      - name: Append release pack summary
+        if: always()
+        run: |
+          if [ -f "$RELEASE_PACK_MD" ]; then
+            cat "$RELEASE_PACK_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Release evidence pack was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Append release sign-off checklist
+        if: always()
+        run: |
+          if [ -f "$RELEASE_SIGNOFF_MD" ]; then
+            cat "$RELEASE_SIGNOFF_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Release sign-off checklist was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Append release evidence ledger
+        if: always()
+        run: |
+          if [ -f "$RELEASE_LEDGER_MD" ]; then
+            cat "$RELEASE_LEDGER_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Release evidence ledger was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Append decommission evidence log
+        if: always()
+        run: |
+          if [ -f "$RELEASE_DECOMMISSION_LOG_MD" ]; then
+            cat "$RELEASE_DECOMMISSION_LOG_MD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Decommission evidence log was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload release evidence pack
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-pack-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            ${{ env.RELEASE_PACK_MD }}
+            ${{ env.RELEASE_PACK_JSON }}
+            ${{ env.RELEASE_SIGNOFF_MD }}
+            ${{ env.RELEASE_AO_GATE_VALIDATE }}
+            ${{ env.RELEASE_READINESS_JSON }}
+            ${{ env.RELEASE_DRILL_MANIFEST_JSON }}
+            ${{ env.RELEASE_DRILL_MANIFEST_VALIDATE }}
+            ${{ env.RELEASE_DRILL_CHECK_JSON }}
+            ${{ env.RELEASE_LEDGER_MD }}
+            ${{ env.RELEASE_LEDGER_JSON }}
+            ${{ env.RELEASE_AO_GATE_EVIDENCE_JSON }}
+            ${{ env.RELEASE_DECOMMISSION_READY_JSON }}
+            ${{ env.RELEASE_DECOMMISSION_LOG_MD }}
+            ${{ env.RELEASE_DECOMMISSION_LOG_JSON }}
+            ${{ env.RELEASE_DECOMMISSION_MANUAL_PROOFS_JSON }}
+            ${{ env.RELEASE_CLOSEOUT_JSON }}
+            ${{ env.RELEASE_CLOSEOUT_VALIDATION_JSON }}

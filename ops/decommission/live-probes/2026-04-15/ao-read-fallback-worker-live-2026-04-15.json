@@ -1,0 +1,85 @@
+{
+  "status": "fail",
+  "strict": false,
+  "checkedAtUtc": "2026-04-15T16:35:11.765Z",
+  "siteId": "site-alpha",
+  "path": "/",
+  "slug": "home",
+  "profiles": {
+    "dryrun": "https://blackcat-inbox-production.vitek-pasek.workers.dev",
+    "scheduler": "https://blackcat-inbox-production.vitek-pasek.workers.dev"
+  },
+  "counts": {
+    "probeCount": 4,
+    "issueCount": 4,
+    "warningCount": 2
+  },
+  "issues": [
+    "[dryrun/ResolveRoute] response is not valid JSON",
+    "[dryrun/GetPage] response is not valid JSON",
+    "[scheduler/ResolveRoute] response is not valid JSON",
+    "[scheduler/GetPage] response is not valid JSON"
+  ],
+  "warnings": [
+    "dryrun profile did not expose transport.mode=dryrun (run AO adapter with debug transport visibility)",
+    "scheduler profile did not expose transport.mode=scheduler/scheduler-direct (run AO adapter with fallback enabled + debug transport visibility)"
+  ],
+  "probes": [
+    {
+      "profile": "dryrun",
+      "action": "ResolveRoute",
+      "endpoint": "/api/public/resolve-route",
+      "url": "https://blackcat-inbox-production.vitek-pasek.workers.dev/api/public/resolve-route",
+      "status": 401,
+      "ok": false,
+      "startedAt": "2026-04-15T16:35:11.098Z",
+      "finishedAt": "2026-04-15T16:35:11.627Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "bodyPreview": "unauthorized"
+    },
+    {
+      "profile": "dryrun",
+      "action": "GetPage",
+      "endpoint": "/api/public/page",
+      "url": "https://blackcat-inbox-production.vitek-pasek.workers.dev/api/public/page",
+      "status": 401,
+      "ok": false,
+      "startedAt": "2026-04-15T16:35:11.627Z",
+      "finishedAt": "2026-04-15T16:35:11.715Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "bodyPreview": "unauthorized"
+    },
+    {
+      "profile": "scheduler",
+      "action": "ResolveRoute",
+      "endpoint": "/api/public/resolve-route",
+      "url": "https://blackcat-inbox-production.vitek-pasek.workers.dev/api/public/resolve-route",
+      "status": 401,
+      "ok": false,
+      "startedAt": "2026-04-15T16:35:11.715Z",
+      "finishedAt": "2026-04-15T16:35:11.739Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "bodyPreview": "unauthorized"
+    },
+    {
+      "profile": "scheduler",
+      "action": "GetPage",
+      "endpoint": "/api/public/page",
+      "url": "https://blackcat-inbox-production.vitek-pasek.workers.dev/api/public/page",
+      "status": 401,
+      "ok": false,
+      "startedAt": "2026-04-15T16:35:11.739Z",
+      "finishedAt": "2026-04-15T16:35:11.765Z",
+      "transportMode": "",
+      "parseOk": false,
+      "body": null,
+      "bodyPreview": "unauthorized"
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "1.1.0",
+  "templateId": "gateway-default",
+  "templateVersion": "1.1.0",
+  "allowedActions": [
+    {
+      "name": "public.resolve-route",
+      "method": "POST",
+      "path": "/api/public/resolve-route",
+      "auth": {
+        "requiredRole": "public"
+      },
+      "requestSchemaRef": "schemas/template/public.resolve-route.request.json",
+      "responseSchemaRef": "schemas/template/public.resolve-route.response.json",
+      "ratelimitProfile": "template_public_read",
+      "idempotency": {
+        "mode": "optional",
+        "keyHeader": "x-request-id"
+      }
+    },
+    {
+      "name": "public.site-by-host",
+      "method": "POST",
+      "path": "/api/public/site-by-host",
+      "auth": {
+        "requiredRole": "public"
+      },
+      "requestSchemaRef": "schemas/template/public.site-by-host.request.json",
+      "responseSchemaRef": "schemas/template/public.site-by-host.response.json",
+      "ratelimitProfile": "template_public_read",
+      "idempotency": {
+        "mode": "optional",
+        "keyHeader": "x-request-id"
+      }
+    },
+    {
+      "name": "public.get-page",
+      "method": "POST",
+      "path": "/api/public/page",
+      "auth": {
+        "requiredRole": "public"
+      },
+      "requestSchemaRef": "schemas/template/public.get-page.request.json",
+      "responseSchemaRef": "schemas/template/public.get-page.response.json",
+      "ratelimitProfile": "template_public_read",
+      "idempotency": {
+        "mode": "optional",
+        "keyHeader": "x-request-id"
+      }
+    },
+    {
+      "name": "checkout.create-order",
+      "method": "POST",
+      "path": "/api/checkout/order",
+      "auth": {
+        "requiredRole": "shop_admin"
+      },
+      "requestSchemaRef": "schemas/template/checkout.create-order.request.json",
+      "responseSchemaRef": "schemas/template/checkout.create-order.response.json",
+      "ratelimitProfile": "template_checkout_write",
+      "idempotency": {
+        "mode": "required",
+        "keyHeader": "x-request-id"
+      }
+    },
+    {
+      "name": "checkout.create-payment-intent",
+      "method": "POST",
+      "path": "/api/checkout/payment-intent",
+      "auth": {
+        "requiredRole": "shop_admin"
+      },
+      "requestSchemaRef": "schemas/template/checkout.create-payment-intent.request.json",
+      "responseSchemaRef": "schemas/template/checkout.create-payment-intent.response.json",
+      "ratelimitProfile": "template_checkout_write",
+      "idempotency": {
+        "mode": "required",
+        "keyHeader": "x-request-id"
+      }
+    }
+  ],
+  "forbiddenCapabilities": [
+    "raw-sql",
+    "arbitrary-outbound-http",
+    "eval",
+    "secret-access"
+  ]
+}
