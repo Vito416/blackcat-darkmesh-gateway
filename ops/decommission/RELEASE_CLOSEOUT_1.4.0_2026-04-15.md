@@ -90,3 +90,26 @@ Recorded outcome for this run:
 - strict drill: passed
 - manual proofs: complete
 - production readiness: **GO / ready**
+
+---
+
+## Addendum — 2026-04-17 (live VPS stabilization follow-up)
+
+Post-closeout live hardening/verification on `https://gateway.blgateway.fun`:
+
+- VPS gateway runtime was updated to latest hardening branch revision and rebuilt (`npm ci`, `npm run build`, service restart).
+- gateway env alignment was completed for live template path:
+  - `GATEWAY_TEMPLATE_TOKEN`
+  - `GATEWAY_TEMPLATE_UPSTREAM_TOKEN_MAP`
+  - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1`
+  - `GATEWAY_TEMPLATE_UPSTREAM_TIMEOUT_MS_READ=30000`
+- Cloudflare tunnel transport was switched to `protocol: http2`; this cleared persistent public write-path `504` behavior.
+
+Observed live behavior after update:
+- `GET /health` -> `200`
+- `POST /template/call` (`checkout.create-order`) -> `202 ACCEPTED_ASYNC` (public domain path)
+- read path (`public.resolve-route`) is mostly stable; may still show intermittent first-hit `504` (warmup/outage window), then returns deterministic app-state result on retry.
+
+Operational status:
+- write flow is production-like healthy.
+- read flow is acceptable with retry/circuit policy; keep ongoing watch in runbook until warmup `504` rate is reduced further.
