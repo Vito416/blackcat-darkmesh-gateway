@@ -157,6 +157,7 @@ Configuration (per site)
     - `GATEWAY_FRONT_CONTROLLER_CACHE_TTL_MS` (in-process template cache TTL, default `60000`)
     - `GATEWAY_FRONT_CONTROLLER_TIMEOUT_MS` (upstream fetch timeout, default `4000`)
     - `GATEWAY_FRONT_CONTROLLER_REQUIRE_HASH=1` (fail-closed when tx source does not include expected sha256)
+    - release map example for v0.1.0: `config/releases/front-controller-template-map.v0.1.0.json`
   - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
   - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.
