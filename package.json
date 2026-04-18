@@ -40,6 +40,7 @@
     "ops:check-template-variant-map": "node scripts/check-template-variant-map.js",
     "ops:probe-ao-read-fallback": "node scripts/probe-ao-read-fallback.js",
     "ops:validate-template-variant-map-config": "node scripts/validate-template-variant-map-config.js",
+    "ops:verify-front-controller-map": "node scripts/verify-front-controller-map.js --strict --require-wildcard",
     "ops:build-template-variant-fallback-map": "node scripts/build-template-variant-fallback-map.js",
     "ops:check-forget-forward-config": "node scripts/check-forget-forward-config.js",
     "ops:check-retired-path-references": "node scripts/check-retired-path-references.js",

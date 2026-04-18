@@ -148,4 +148,20 @@ describe('front-controller route', () => {
       detail: 'front_controller_template_hash_mismatch',
     })
   })
+
+  it('rejects dynamic index URL when locked-release mode is enabled', async () => {
+    process.env.GATEWAY_FRONT_CONTROLLER_ENABLED = '1'
+    process.env.GATEWAY_FRONT_CONTROLLER_LOCKED_RELEASE = '1'
+    process.env.GATEWAY_FRONT_CONTROLLER_INDEX_URL = 'https://index.example/front-controller.json'
+    process.env.GATEWAY_FRONT_CONTROLLER_TEMPLATE_TXID = 'tx-front-locked'
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const res = await handleRequest(new Request('https://gateway.example/front-controller/search'))
+
+    expect(res.status).toBe(503)
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'front_controller_locked_release_index_url_forbidden',
+    })
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
 })

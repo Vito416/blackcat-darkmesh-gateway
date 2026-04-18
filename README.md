@@ -149,6 +149,7 @@ Configuration (per site)
     - strict production-readiness checks can still require a non-empty host map for deterministic allowlisting
   - Front-controller runtime:
     - `GATEWAY_FRONT_CONTROLLER_ENABLED=1` (enable strict front-controller; when enabled, root `/` serves front-controller output)
+    - `GATEWAY_FRONT_CONTROLLER_LOCKED_RELEASE=1` (pin-only mode; fails closed when `GATEWAY_FRONT_CONTROLLER_INDEX_URL` is set)
     - `GATEWAY_FRONT_CONTROLLER_TEMPLATE_TXID` (static fallback tx id for public search page)
     - `GATEWAY_FRONT_CONTROLLER_TEMPLATE_SHA256` (optional expected hash for static fallback tx id)
     - `GATEWAY_FRONT_CONTROLLER_TEMPLATE_MAP` (optional JSON host map: string txids or objects with `templateTxId` + optional `templateSha256` + `manifestTxId`)
@@ -158,6 +159,8 @@ Configuration (per site)
     - `GATEWAY_FRONT_CONTROLLER_TIMEOUT_MS` (upstream fetch timeout, default `4000`)
     - `GATEWAY_FRONT_CONTROLLER_REQUIRE_HASH=1` (fail-closed when tx source does not include expected sha256)
     - release map example for v0.1.0: `config/releases/front-controller-template-map.v0.1.0.json`
+    - install/ops verification command:
+      - `npm run ops:verify-front-controller-map -- --map-file config/releases/front-controller-template-map.v0.1.0.json --ar-gateway-base https://arweave.net`
   - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
   - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.

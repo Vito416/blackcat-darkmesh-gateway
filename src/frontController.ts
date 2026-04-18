@@ -85,6 +85,10 @@ function readRequireHash(): boolean {
   return isTruthy(readStringEnv('GATEWAY_FRONT_CONTROLLER_REQUIRE_HASH'))
 }
 
+function readLockedReleaseMode(): boolean {
+  return isTruthy(readStringEnv('GATEWAY_FRONT_CONTROLLER_LOCKED_RELEASE'))
+}
+
 function readFallbackExpectedHash(): string | null {
   return parseSha256(readStringEnv('GATEWAY_FRONT_CONTROLLER_TEMPLATE_SHA256'))
 }
@@ -160,6 +164,19 @@ function resolveTemplateFromIndexPayload(payload: unknown, host: string): Templa
 function isTruthy(raw: string | undefined): boolean {
   const value = (raw || '').trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function validateFrontControllerRuntimeConfig(): string | null {
+  if (!readLockedReleaseMode()) return null
+  if (readStringEnv('GATEWAY_FRONT_CONTROLLER_INDEX_URL')) {
+    return 'front_controller_locked_release_index_url_forbidden'
+  }
+  const hasPinnedMap = Boolean(readStringEnv('GATEWAY_FRONT_CONTROLLER_TEMPLATE_MAP'))
+  const hasPinnedFallback = Boolean(parseTxId(readStringEnv('GATEWAY_FRONT_CONTROLLER_TEMPLATE_TXID')))
+  if (!hasPinnedMap && !hasPinnedFallback) {
+    return 'front_controller_locked_release_pinned_source_required'
+  }
+  return null
 }
 
 export function isFrontControllerEnabled(): boolean {
@@ -251,6 +268,13 @@ export async function handleFrontControllerRequest(request: Request): Promise<Re
 
   if (!isFrontControllerEnabled()) {
     return new Response(JSON.stringify({ error: 'front_controller_not_configured' }), {
+      status: 503,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  const configError = validateFrontControllerRuntimeConfig()
+  if (configError) {
+    return new Response(JSON.stringify({ error: configError }), {
       status: 503,
       headers: { 'content-type': 'application/json' },
     })
