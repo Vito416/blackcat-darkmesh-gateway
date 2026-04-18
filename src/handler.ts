@@ -7,6 +7,7 @@ import { check as rateCheck } from './ratelimit.js'
 import { verifyStripe, verifyPayPal, noteCert } from './webhooks.js'
 import { markAndCheck } from './replay.js'
 import { proxyTemplateCall } from './templateApi.js'
+import { handleFrontControllerRequest, isFrontControllerEnabled } from './frontController.js'
 import { fetchIntegritySnapshot } from './integrity/client.js'
 import { readIntegrityCheckpoint, writeIntegrityCheckpoint } from './integrity/checkpoint.js'
 import { sha256Hex, verifyManifestEntry } from './integrity/verifier.js'
@@ -1084,6 +1085,13 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       return handleTemplateConfig(request, integrityPaused)
     }
+    if (url.pathname === '/front-controller' || url.pathname === '/front-controller/search') {
+      if (url.searchParams.size > 1 || (url.searchParams.size === 1 && !url.searchParams.has('refresh'))) {
+        return jsonErrorResponse(400, 'query_not_allowed')
+      }
+      markReadonlyFallback(integrityPaused)
+      return secureResponse(await handleFrontControllerRequest(request))
+    }
     if (url.pathname === '/metrics') {
       markReadonlyFallback(integrityPaused)
       const metricsAuth = readMetricsAuthConfig()
@@ -1235,6 +1243,9 @@ export async function handleRequest(request: Request): Promise<Response> {
     sweep()
     if (url.pathname === '/') {
       markReadonlyFallback(integrityPaused)
+      if (isFrontControllerEnabled()) {
+        return secureResponse(await handleFrontControllerRequest(request))
+      }
       return respond('Gateway skeleton', { status: 200 })
     }
     return plainErrorResponse(404, 'not found')

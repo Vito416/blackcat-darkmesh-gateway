@@ -147,6 +147,16 @@ Configuration (per site)
   - `GATEWAY_SITE_RESOLVE_ALLOW_BODY_FALLBACK=1` (optional override; permits body-provided `siteId` fallback when resolvers fail/miss)
     - production-like mode (`NODE_ENV=production` or `GATEWAY_PRODUCTION_LIKE=1`) fails closed when no resolver source is available unless this fallback override is set
     - strict production-readiness checks can still require a non-empty host map for deterministic allowlisting
+  - Front-controller runtime:
+    - `GATEWAY_FRONT_CONTROLLER_ENABLED=1` (enable strict front-controller; when enabled, root `/` serves front-controller output)
+    - `GATEWAY_FRONT_CONTROLLER_TEMPLATE_TXID` (static fallback tx id for public search page)
+    - `GATEWAY_FRONT_CONTROLLER_TEMPLATE_SHA256` (optional expected hash for static fallback tx id)
+    - `GATEWAY_FRONT_CONTROLLER_TEMPLATE_MAP` (optional JSON host map: string txids or objects with `templateTxId` + optional `templateSha256` + `manifestTxId`)
+    - `GATEWAY_FRONT_CONTROLLER_INDEX_URL` (optional JSON index endpoint with latest tx references)
+    - `GATEWAY_FRONT_CONTROLLER_AR_GATEWAY_URL` (AR gateway base, default `https://arweave.net`)
+    - `GATEWAY_FRONT_CONTROLLER_CACHE_TTL_MS` (in-process template cache TTL, default `60000`)
+    - `GATEWAY_FRONT_CONTROLLER_TIMEOUT_MS` (upstream fetch timeout, default `4000`)
+    - `GATEWAY_FRONT_CONTROLLER_REQUIRE_HASH=1` (fail-closed when tx source does not include expected sha256)
   - Notify → Worker:
   - `WORKER_NOTIFY_URL`, `WORKER_AUTH_TOKEN` (alias: `WORKER_NOTIFY_TOKEN`), `WORKER_NOTIFY_HMAC`
   - `WORKER_NOTIFY_BREAKER_KEY` (default) or per provider `WORKER_NOTIFY_BREAKER_KEY_STRIPE` / `..._PAYPAL` / `..._GOPAY`; forwarded as `x-breaker-key` to isolate breaker state per provider.
@@ -206,6 +216,7 @@ Open items to design/implement
 - `/webhook/:psp` → PSP bridge ingress.
 - `/template/call` → constrained template backend API (allowlisted actions only, schema-validated, optional token + HMAC).
 - `/template/config` → machine-readable template backend/runtime contract snapshot for operators and template loaders.
+- `/front-controller/search` → strict front-controller endpoint serving decentralized search page bundles from AR (server-side cached).
 - `/integrity/state` → read current runtime integrity state + latest AO/checkpoint snapshot details (optional token).
 - `/integrity/incident` → authenticated incident intake (`report|ack|pause|resume`) with optional forwarding hook.
 - `/metrics` → Prom/OpenMetrics (protected, text format; set `GATEWAY_REQUIRE_METRICS_AUTH=1` + bearer/basic creds).
