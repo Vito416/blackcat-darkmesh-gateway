@@ -56,6 +56,7 @@ The script:
 Preflight note:
 - If AO read endpoints are auth-protected, include AO headers in the generated scenario (`--ao-api-token`, `--ao-bearer-token`, and/or `--ao-template-token`).
 - If `resolve-route` enforces tenant scope, pass `--site-id` so the generated payload includes site binding.
+- For `public.site-by-host`, treat `404` as a valid outcome when the host is not bound yet.
 
 ## Acceptance criteria (initial)
 

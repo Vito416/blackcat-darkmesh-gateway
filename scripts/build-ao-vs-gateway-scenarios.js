@@ -167,7 +167,7 @@ function buildScenarioConfig(args) {
   const scenarios = [
     {
       name: 'public-site-by-host',
-      expectStatus: [200],
+      expectStatus: [200, 404],
       ao: {
         url: `${args.aoBase}/api/public/site-by-host`,
         method: 'POST',

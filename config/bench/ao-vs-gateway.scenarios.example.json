@@ -8,7 +8,7 @@
   "scenarios": [
     {
       "name": "public-site-by-host",
-      "expectStatus": [200],
+      "expectStatus": [200, 404],
       "ao": {
         "url": "http://127.0.0.1:8788/api/public/site-by-host",
         "method": "POST",
