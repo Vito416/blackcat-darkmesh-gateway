@@ -10,6 +10,7 @@
 - Scenario file: `config/bench/ao-vs-gateway.scenarios.live.json` (local operator artifact; ignored)
 - Raw benchmark report: `tmp/bench/ao-vs-gateway.20260419T085558Z.json`
 - Raw benchmark report (rerun after worker hardening): `tmp/bench/ao-vs-gateway.20260419T095242Z.json`
+- Raw benchmark report (long-timeout rerun): `tmp/bench/ao-vs-gateway.20260419T100404Z.json`
 
 ## Result summary
 Benchmark completed, but the compared paths are not in a healthy state yet, so p95/RPS comparisons are **not release-meaningful**.
@@ -66,3 +67,24 @@ Rerun snapshot (`tmp/bench/ao-vs-gateway.20260419T095242Z.json`):
 Conclusion after rerun:
 - Hardening improved error semantics and observability (no opaque `internal_error` on read timeouts).
 - However, AO read semantic readiness for route/page remains blocked; A/B performance comparison is still not release-meaningful until AO read responses are consistently semantic (`status=OK|ERROR` envelopes).
+
+## Long-timeout rerun (to separate transport timeout vs semantic failure)
+
+Profile override:
+- `requests=6`, `concurrency=2`, `timeoutMs=70000`
+
+Observed:
+- `public.site-by-host` partially healthy:
+  - AO: `5/6` success (`200|404`), `1/6` fail (`502`)
+  - Gateway: `5/6` success (`200|404`), `1/6` fail (`502`)
+  - p95 latency roughly `8.7s-9.8s`
+- `public.resolve-route` remains blocked:
+  - AO direct: `0/6` success, failures mostly `504` around `~60s`
+  - Gateway: `0/6` success, failures `504` around `~30s` (gateway upstream read timeout boundary)
+- `public.get-page` remains blocked:
+  - AO direct: `0/6` success, failures mostly `504` around `~60s`
+  - Gateway: `0/6` success, failures `504` around `~30s`
+
+Interpretation:
+- The bottleneck is upstream AO read behavior for route/page on current process/runtime path, not benchmark tooling.
+- Gateway read timeout simply makes the failure surface earlier and deterministic.
