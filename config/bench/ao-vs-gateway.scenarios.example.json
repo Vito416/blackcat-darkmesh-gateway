@@ -1,0 +1,77 @@
+{
+  "defaults": {
+    "requests": 200,
+    "concurrency": 20,
+    "warmup": 10,
+    "timeoutMs": 5000
+  },
+  "scenarios": [
+    {
+      "name": "public-site-by-host",
+      "expectStatus": [200],
+      "ao": {
+        "url": "http://127.0.0.1:8788/api/public/site-by-host",
+        "method": "POST",
+        "body": {
+          "host": "example.com"
+        }
+      },
+      "gateway": {
+        "url": "http://127.0.0.1:8080/template/call",
+        "method": "POST",
+        "body": {
+          "action": "public.site-by-host",
+          "payload": {
+            "host": "example.com"
+          }
+        }
+      }
+    },
+    {
+      "name": "public-resolve-route",
+      "expectStatus": [200],
+      "ao": {
+        "url": "http://127.0.0.1:8788/api/public/resolve-route",
+        "method": "POST",
+        "body": {
+          "host": "example.com",
+          "path": "/"
+        }
+      },
+      "gateway": {
+        "url": "http://127.0.0.1:8080/template/call",
+        "method": "POST",
+        "body": {
+          "action": "public.resolve-route",
+          "payload": {
+            "host": "example.com",
+            "path": "/"
+          }
+        }
+      }
+    },
+    {
+      "name": "public-get-page",
+      "expectStatus": [200, 404],
+      "ao": {
+        "url": "http://127.0.0.1:8788/api/public/page",
+        "method": "POST",
+        "body": {
+          "siteId": "replace-with-site-id",
+          "slug": "/"
+        }
+      },
+      "gateway": {
+        "url": "http://127.0.0.1:8080/template/call",
+        "method": "POST",
+        "body": {
+          "action": "public.get-page",
+          "payload": {
+            "siteId": "replace-with-site-id",
+            "slug": "/"
+          }
+        }
+      }
+    }
+  ]
+}

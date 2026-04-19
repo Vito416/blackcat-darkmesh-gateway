@@ -30,6 +30,7 @@ ops/install/**/*.local.*
 
 # Local operator artifacts / drill outputs
 tmp/
+config/bench/*.live.json
 ops/decommission/consistency-matrix.json
 ops/decommission/consistency-drift-report.md
 ops/decommission/consistency-drift-summary.json

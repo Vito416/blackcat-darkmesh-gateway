@@ -145,6 +145,45 @@ describe('template api policy gateway', () => {
     expect(String(url)).toBe('https://ao.example/api/public/resolve-route')
   })
 
+  it('forwards public.site-by-host using host-only upstream payload', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_TEMPLATE_VARIANT_MAP = JSON.stringify({
+      'site-1': {
+        variant: 'signal',
+        templateTxId: 'tx-alpha',
+        manifestTxId: 'manifest-alpha',
+      },
+    })
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ siteId: 'site-1' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const req = new Request('http://gateway/template/call', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'public.site-by-host',
+        siteId: 'site-1',
+        requestId: 'req-site-host-1',
+        payload: { host: 'shop.example.test' },
+      }),
+    })
+    const res = await handleRequest(req)
+    expect(res.status).toBe(200)
+    expect(spy).toHaveBeenCalledTimes(1)
+    const [url, init] = spy.mock.calls[0] as [string, RequestInit]
+    expect(String(url)).toBe('https://ao.example/api/public/site-by-host')
+    const body = JSON.parse(String(init.body || '{}'))
+    expect(body.host).toBe('shop.example.test')
+    expect(body.requestId).toBe('req-site-host-1')
+    expect(body).not.toHaveProperty('action')
+    expect(body).not.toHaveProperty('payload')
+    expect(body).not.toHaveProperty('templateVariant')
+  })
+
   it('propagates trace ids through template upstream calls and response headers', async () => {
     process.env.AO_PUBLIC_API_URL = 'https://ao.example'
     const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(

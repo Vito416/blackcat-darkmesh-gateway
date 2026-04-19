@@ -575,6 +575,22 @@ function injectTemplateVariant(payload: unknown, templateVariant: TemplateVarian
   }
 }
 
+function buildSiteByHostUpstreamBody(
+  payload: unknown,
+  requestId: string | undefined,
+  traceId: string,
+): Record<string, unknown> | null {
+  if (!isObj(payload)) return null
+  const host = asNonEmptyString(payload.host) || asNonEmptyString(payload.Host)
+  if (!host) return null
+  const normalized: Record<string, unknown> = { host }
+  const effectiveRequestId = asNonEmptyString(payload.requestId) || asNonEmptyString(payload['Request-Id']) || requestId
+  if (effectiveRequestId) normalized.requestId = effectiveRequestId
+  const effectiveTraceId = asNonEmptyString(payload.traceId) || asNonEmptyString(payload['Trace-Id']) || traceId
+  if (effectiveTraceId) normalized.traceId = effectiveTraceId
+  return normalized
+}
+
 async function signWriteEnvelope(
   signerBaseUrl: string,
   signerToken: string,
@@ -688,7 +704,10 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
     const templateVariantError = resolvedTemplateVariant as Extract<TemplateVariantResolveResult, { ok: false }>
     return jsonError(templateVariantError.status, templateVariantError.error, templateVariantError.detail, traceId)
   }
-  const payloadWithTemplateVariant = injectTemplateVariant(input.payload, resolvedTemplateVariant.value)
+  const payloadWithTemplateVariant =
+    input.action === 'public.site-by-host'
+      ? input.payload
+      : injectTemplateVariant(input.payload, resolvedTemplateVariant.value)
 
   const resolvedTarget = resolveBackendBaseUrl(policy.local.target)
   if (resolvedTarget.ok === false) {
@@ -803,15 +822,20 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   }
 
   const url = new URL(policy.local.path, baseUrl).toString()
+  const bodyPayload =
+    policy.local.kind === 'read' && input.action === 'public.site-by-host'
+      ? buildSiteByHostUpstreamBody(payloadWithTemplateVariant, effectiveRequestId, traceId)
+      : null
   const body = JSON.stringify(
-    writeEnvelope || {
-      action: input.action,
-      payload: payloadWithTemplateVariant,
-      requestId: effectiveRequestId,
-      siteId: resolvedSiteId,
-      actor: input.actor,
-      role: input.role,
-    },
+    bodyPayload ||
+      writeEnvelope || {
+        action: input.action,
+        payload: payloadWithTemplateVariant,
+        requestId: effectiveRequestId,
+        siteId: resolvedSiteId,
+        actor: input.actor,
+        role: input.role,
+      },
   )
 
   const maxBodyBytes = getTemplateMaxBodyBytes()

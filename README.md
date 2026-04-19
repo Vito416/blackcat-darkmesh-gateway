@@ -187,6 +187,94 @@ Flows (high level)
 - **Inbox/PII**: Browser encrypts with admin pubkey → Gateway caches encrypted blob (TTL) → Worker inbox (optional) → Admin pulls via Web console; ForgetSubject wipes gateway cache.
 - **Notify**: Write AO event → Gateway → Worker /notify → email/webhook.
 
+## Detailed runtime flow (site browse + gateway internals)
+
+### 1) User-facing flow (domain -> page render)
+
+```mermaid
+flowchart LR
+  U[User enters site domain] --> DNS[Cloudflare DNS/Proxy]
+  DNS --> GW[Selected Gateway instance]
+  GW --> RESOLVE[Resolve host -> siteId]
+  RESOLVE --> AO[(AO public registry/read API)]
+  AO --> RESOLVE
+  RESOLVE --> FC[Front-controller/template resolver]
+  FC --> AR[(Arweave template tx)]
+  AR --> FC
+  FC --> CACHE[Gateway cache TTL + integrity checks]
+  CACHE --> U2[Browser gets rendered page]
+```
+
+What this means in practice:
+- User keeps seeing the requested site domain in the browser (web2-like UX).
+- Gateway is only transport/render/orchestration; AO remains source of truth.
+- Gateway resolves site identity per host, then serves front-controller/template content from AR (with cache + hash policy).
+
+### 2) Parallel gateway-internal flow (what happens on each request)
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant G as Gateway
+  participant R as Host Resolver
+  participant A as AO Read API
+  participant I as Template Index (optional)
+  participant F as Front Controller
+  participant AR as Arweave
+  participant W as Write API
+  participant K as Worker (secret holder)
+
+  B->>G: GET / (Host: site.tld)
+  G->>R: resolveTemplateSiteIdFromHost(host)
+  R->>A: POST /api/public/site-by-host (hybrid/ao mode)
+  A-->>R: siteId + runtime hints
+  R-->>G: site binding
+  G->>F: handleFrontControllerRequest()
+  F->>I: (optional) fetch template index
+  F->>AR: fetch template by txid
+  F-->>G: txid + hash policy result
+  G-->>B: HTML bundle (cached when possible)
+
+  B->>G: POST /template/call (checkout.create-order)
+  G->>R: enforce host<->site binding
+  G->>K: /sign (site-scoped signature only)
+  K-->>G: signature + signatureRef
+  G->>W: forward signed write envelope
+  W-->>G: write response
+  G-->>B: API response
+```
+
+### 3) Status check vs requested flow
+
+| Flow item | Status in this repo | Notes |
+|---|---|---|
+| Host -> site resolution via AO/map/hybrid | Implemented | `GATEWAY_SITE_RESOLVE_MODE=map|ao|hybrid`, AO resolver cache + unavailable cache + circuit-breaker in `src/runtime/template/siteResolver.ts`. |
+| Gateway cache for repeated lookups/content | Implemented | Host resolver cache + front-controller template cache + TTL/env controls. |
+| User sees original site domain | Implemented (when DNS/proxy routes domain to gateway) | Domain masking is infra concern (Cloudflare/tunnel/load balancer), gateway already respects Host-bound site resolution. |
+| Gateway availability-aware selection (least loaded/latency) | Not implemented in gateway code yet | Must be solved in DNS/edge routing control plane (outside this Node runtime) or dedicated AO+edge registry policy layer. |
+| Persist “selected gateway/site” in browser session to avoid repeated AO lookups | Not implemented as browser session feature | Current optimization is server-side resolver cache and front-controller cache. |
+| Public page flow with AO as source of truth | Implemented | Gateway fetches routing/site metadata from AO and serves templates with integrity controls. |
+| Auth login (email+password+OTP) with gateway as untrusted transport only | Partially prepared, not complete | Secret boundary and worker-sign routing exist; full user auth/session protocol is still an explicit next implementation step. |
+
+### 4) Auth flow boundary (next step, required for web2-like login)
+
+```mermaid
+flowchart TD
+  B[Browser] -->|public bootstrap| G[Gateway]
+  G --> AO[(AO public config)]
+  B -->|auth challenge + otp| WK[Per-site Worker trusted origin]
+  WK -->|signed short-lived auth token| B
+  B -->|token only| G
+  G -->|signed write/public calls| WRITE[(Write AO)]
+  G -->|public reads| AO
+```
+
+Rules locked by design:
+- Gateway is untrusted for secrets/PIP.
+- Worker is the only secret holder and signer.
+- AO/Write keep public/pseudonymous state; no raw PIP.
+- Any future login/register/mailer flow must preserve this split.
+
 “Next-gen” capabilities (ideas)
 - **Content integrity by default**: manifest with signed template hashes; automatic hash-pin of all assets; optional COOP/CSP headers locked to verified origins.
 - **Smart cache policy**: per-merchant TTL, admission control (don’t cache oversized blobs), probabilistic early refresh for hot assets.
@@ -287,6 +375,29 @@ When cache admission limits are exceeded, cache PUT returns:
 - Metrics auth smoke: `npm test -- --run tests/metrics-auth.test.ts`
 - Webhook pen-tests: `npm test -- --run tests/webhook-pentest.test.ts`
 - Bez lokálního Node: `docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm test -- --run tests/webhook-pentest.test.ts"`
+
+### AO vs Gateway A/B benchmark
+- Plan/runbook: `ops/perf/AO_VS_GATEWAY_BENCHMARK_PLAN.md`
+- Example scenario file: `config/bench/ao-vs-gateway.scenarios.example.json`
+- Build live scenario from your actual AO/Gateway endpoints:
+  ```bash
+  npm run ops:build-benchmark-scenarios -- \
+    --ao-base http://127.0.0.1:8788 \
+    --gateway-base http://127.0.0.1:8080 \
+    --host your-site.example \
+    --site-id your-site-id \
+    --ao-api-token "$AO_PUBLIC_API_TOKEN" \
+    --ao-template-token "$UPSTREAM_TEMPLATE_TOKEN" \
+    --out config/bench/ao-vs-gateway.scenarios.live.json
+  ```
+- Run:
+  ```bash
+  npm run ops:benchmark-ao-vs-gateway -- \
+    --scenarios config/bench/ao-vs-gateway.scenarios.live.json \
+    --out tmp/bench/ao-vs-gateway.$(date -u +%Y%m%dT%H%M%SZ).json \
+    --json \
+    --strict-status
+  ```
 
 ### Production-like controls: concise verification
 ```bash
