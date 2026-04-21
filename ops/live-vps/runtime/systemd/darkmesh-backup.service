@@ -1,0 +1,20 @@
+[Unit]
+Description=Darkmesh encrypted backup (restic)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/darkmesh-backup.sh
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+CacheDirectory=restic
+StateDirectory=darkmesh
+ReadWritePaths=/etc/darkmesh /srv/darkmesh /root/.cloudflared

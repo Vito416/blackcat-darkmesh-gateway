@@ -79,6 +79,46 @@ describe('front-controller route', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 
+  it('prefers AO runtime template pointer for front-controller resolution', async () => {
+    process.env.GATEWAY_FRONT_CONTROLLER_ENABLED = '1'
+    process.env.GATEWAY_SITE_RESOLVE_MODE = 'ao'
+    process.env.GATEWAY_SITE_RESOLVE_AO_URL = 'https://resolver.example'
+    process.env.GATEWAY_FRONT_CONTROLLER_AR_GATEWAY_URL = 'https://arweave.net'
+    process.env.GATEWAY_FRONT_CONTROLLER_CACHE_TTL_MS = '60000'
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === 'https://resolver.example/api/public/site-by-host') {
+        return new Response(
+          JSON.stringify({
+            status: 'OK',
+            data: {
+              siteId: 'site-runtime-front',
+              runtime: {
+                templateTxId: 'tx-front-runtime',
+              },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      if (url === 'https://arweave.net/tx-front-runtime') {
+        return new Response('<html><body>front-runtime</body></html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
+      }
+      throw new Error(`unexpected url: ${url}`)
+    })
+
+    const res = await handleRequest(new Request('https://gateway.example/front-controller/search'))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-front-controller-source')).toBe('runtime')
+    expect(res.headers.get('x-front-controller-template-txid')).toBe('tx-front-runtime')
+    await expect(res.text()).resolves.toContain('front-runtime')
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
   it('falls back to stale cache when refresh fetch fails', async () => {
     process.env.GATEWAY_FRONT_CONTROLLER_ENABLED = '1'
     process.env.GATEWAY_FRONT_CONTROLLER_TEMPLATE_TXID = 'tx-front-stale'
@@ -163,5 +203,30 @@ describe('front-controller route', () => {
       error: 'front_controller_locked_release_index_url_forbidden',
     })
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('fails closed on front-controller when AO host resolver rejects host in production-like mode', async () => {
+    process.env.GATEWAY_FRONT_CONTROLLER_ENABLED = '1'
+    process.env.GATEWAY_FRONT_CONTROLLER_TEMPLATE_TXID = 'tx-front-should-not-load'
+    process.env.GATEWAY_SITE_RESOLVE_MODE = 'ao'
+    process.env.GATEWAY_SITE_RESOLVE_AO_URL = 'https://resolver.example'
+    process.env.NODE_ENV = 'production'
+    process.env.GATEWAY_PRODUCTION_LIKE = '1'
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === 'https://resolver.example/api/public/site-by-host') {
+        return new Response(JSON.stringify({ error: 'not_found' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      throw new Error(`unexpected url: ${url}`)
+    })
+
+    const res = await handleRequest(new Request('https://blocked.example/front-controller/search'))
+    expect(res.status).toBe(403)
+    await expect(res.json()).resolves.toMatchObject({ error: 'site_host_not_allowed' })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 })

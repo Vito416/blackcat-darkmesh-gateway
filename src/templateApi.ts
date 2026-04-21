@@ -15,6 +15,7 @@ type TemplateCallInput = {
   requestId?: string
   siteId?: string
   runtimeHints?: RuntimeRoutingHints
+  runtimeHintsTrusted?: boolean
   actor?: string
   role?: string
   traceId?: string
@@ -69,6 +70,8 @@ const DEFAULT_TEMPLATE_UPSTREAM_TIMEOUT_MS = 7_000
 const DEFAULT_TEMPLATE_SIGN_TIMEOUT_MS = 5_000
 const SAFE_TRACE_ID_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/
 const SAFE_WRITE_PID_RE = /^[A-Za-z0-9_-]{20,128}$/
+const SAFE_TEMPLATE_TXID_RE = /^[A-Za-z0-9_-]{8,128}$/
+const SAFE_TEMPLATE_VARIANT_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$/
 const WRITE_PID_OVERRIDE_HEADER = 'x-write-process-id'
 
 const TEMPLATE_TO_WRITE_ACTION: Record<string, string> = {
@@ -123,6 +126,13 @@ function resolveRuntimeWritePid(runtimeHints: RuntimeRoutingHints | undefined): 
 
 function resolveRuntimeWorkerUrl(runtimeHints: RuntimeRoutingHints | undefined): string | undefined {
   return resolveRuntimeHintValue(runtimeHints, ['workerUrl', 'worker_url'])
+}
+
+function normalizeSha256(value: string): string {
+  const trimmed = value.trim().toLowerCase()
+  if (trimmed.startsWith('sha256-')) return trimmed.slice(7)
+  if (trimmed.startsWith('0x')) return trimmed.slice(2)
+  return trimmed
 }
 
 function isValidHttpUrl(value: string): boolean {
@@ -399,7 +409,84 @@ function resolveExpectedSignatureRef(siteId: string): ResolveResult {
   return { ok: true, value: expected }
 }
 
-function resolveTemplateVariantMetadata(siteId: string | undefined): TemplateVariantResolveResult {
+function resolveTemplateVariantMetadataFromRuntimeHints(
+  runtimeHints: RuntimeRoutingHints | undefined,
+): TemplateVariantResolveResult {
+  const runtimeVariant = resolveRuntimeHintValue(runtimeHints, ['templateVariant', 'template_variant'])
+  const runtimeTemplateTxId = resolveRuntimeHintValue(runtimeHints, ['templateTxId', 'template_tx_id'])
+  const runtimeManifestTxId = resolveRuntimeHintValue(runtimeHints, ['manifestTxId', 'manifest_tx_id'])
+
+  if (!runtimeVariant && !runtimeTemplateTxId && !runtimeManifestTxId) {
+    return { ok: true, value: null }
+  }
+
+  if (!runtimeVariant || !runtimeTemplateTxId || !runtimeManifestTxId) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'invalid_runtime_template_variant_hints',
+      detail: {
+        required: ['templateVariant', 'templateTxId', 'manifestTxId'],
+      },
+    }
+  }
+
+  if (!SAFE_TEMPLATE_VARIANT_RE.test(runtimeVariant)) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'invalid_runtime_template_variant_hints',
+      detail: { field: 'templateVariant' },
+    }
+  }
+  if (!SAFE_TEMPLATE_TXID_RE.test(runtimeTemplateTxId)) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'invalid_runtime_template_variant_hints',
+      detail: { field: 'templateTxId' },
+    }
+  }
+  if (!SAFE_TEMPLATE_TXID_RE.test(runtimeManifestTxId)) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'invalid_runtime_template_variant_hints',
+      detail: { field: 'manifestTxId' },
+    }
+  }
+
+  const runtimeSha = resolveRuntimeHintValue(runtimeHints, ['templateSha256', 'template_sha256'])
+  if (runtimeSha) {
+    const normalized = normalizeSha256(runtimeSha)
+    if (!/^[a-f0-9]{64}$/.test(normalized)) {
+      return {
+        ok: false,
+        status: 502,
+        error: 'invalid_runtime_template_variant_hints',
+        detail: { field: 'templateSha256' },
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      variant: runtimeVariant,
+      templateTxId: runtimeTemplateTxId,
+      manifestTxId: runtimeManifestTxId,
+    },
+  }
+}
+
+function resolveTemplateVariantMetadata(
+  siteId: string | undefined,
+  runtimeHints: RuntimeRoutingHints | undefined,
+): TemplateVariantResolveResult {
+  const runtimeResolved = resolveTemplateVariantMetadataFromRuntimeHints(runtimeHints)
+  if (runtimeResolved.ok === false) return runtimeResolved
+  if (runtimeResolved.value) return runtimeResolved
+
   if (!siteId) return { ok: true, value: null }
 
   const mapRaw = readStringEnv('GATEWAY_TEMPLATE_VARIANT_MAP')
@@ -497,6 +584,10 @@ function runtimeWorkerUrlOverrideEnabled(): boolean {
   const explicit = readStringEnv('GATEWAY_TEMPLATE_ALLOW_RUNTIME_WORKER_URL_OVERRIDE')
   if (explicit) return explicit === '1'
   return runtimeOverridesEnabled()
+}
+
+function runtimeHintsTrusted(input: TemplateCallInput): boolean {
+  return input.runtimeHintsTrusted === true
 }
 
 function jsonError(status: number, error: string, detail?: Record<string, unknown>, traceId?: string): Response {
@@ -699,7 +790,10 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   }
 
   const siteIdForVariantMap = resolveSiteId(input)
-  const resolvedTemplateVariant = resolveTemplateVariantMetadata(siteIdForVariantMap)
+  const resolvedTemplateVariant = resolveTemplateVariantMetadata(
+    siteIdForVariantMap,
+    input.runtimeHints,
+  )
   if (resolvedTemplateVariant.ok === false) {
     const templateVariantError = resolvedTemplateVariant as Extract<TemplateVariantResolveResult, { ok: false }>
     return jsonError(templateVariantError.status, templateVariantError.error, templateVariantError.detail, traceId)
@@ -725,6 +819,7 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   let writeEnvelope: Record<string, unknown> | null = null
   const runtimeWritePid = resolveRuntimeWritePid(input.runtimeHints)
   const runtimeWorkerUrl = resolveRuntimeWorkerUrl(input.runtimeHints)
+  const trustedRuntimeHints = runtimeHintsTrusted(input)
 
   if (runtimeWritePid && !SAFE_WRITE_PID_RE.test(runtimeWritePid)) {
     return jsonError(502, 'invalid_runtime_write_process_id', { value: runtimeWritePid }, traceId)
@@ -732,10 +827,10 @@ export async function proxyTemplateCall(input: TemplateCallInput): Promise<Respo
   if (runtimeWorkerUrl && !isValidHttpUrl(runtimeWorkerUrl)) {
     return jsonError(502, 'invalid_runtime_worker_url', { value: runtimeWorkerUrl }, traceId)
   }
-  if (runtimeWritePid && !runtimeWritePidOverrideEnabled()) {
+  if (runtimeWritePid && !runtimeWritePidOverrideEnabled() && !trustedRuntimeHints) {
     return jsonError(403, 'runtime_write_process_id_override_disabled', undefined, traceId)
   }
-  if (runtimeWorkerUrl && !runtimeWorkerUrlOverrideEnabled()) {
+  if (runtimeWorkerUrl && !runtimeWorkerUrlOverrideEnabled() && !trustedRuntimeHints) {
     return jsonError(403, 'runtime_worker_url_override_disabled', undefined, traceId)
   }
   if ((runtimeWritePid || runtimeWorkerUrl) && !allowlist) {

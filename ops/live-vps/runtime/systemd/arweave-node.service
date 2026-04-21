@@ -1,0 +1,22 @@
+[Unit]
+Description=Arweave node (non-mining)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=adminops
+Group=adminops
+WorkingDirectory=/srv/darkmesh/arweave-data
+Environment=HOME=/home/adminops
+ExecStart=/opt/arweave/current/bin/start data_dir /srv/darkmesh/arweave-data peer peers.arweave.xyz
+Restart=always
+RestartSec=15
+LimitNOFILE=1048576
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+ReadWritePaths=/srv/darkmesh/arweave-data /opt/arweave /home/adminops
+
+[Install]
+WantedBy=multi-user.target

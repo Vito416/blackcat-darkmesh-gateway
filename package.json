@@ -76,7 +76,20 @@
     "smoke:integrity-incident": "npm run build && node scripts/e2e-integrity-incident-smoke.js",
     "chaos": "npm run build && node scripts/e2e-psp-chaos.js",
     "ops:check-legacy-core-extraction-evidence": "node scripts/check-legacy-core-extraction-evidence.js",
-    "ops:check-legacy-crypto-boundary-evidence": "node scripts/check-legacy-crypto-boundary-evidence.js"
+    "ops:check-legacy-crypto-boundary-evidence": "node scripts/check-legacy-crypto-boundary-evidence.js",
+    "worker:site:install": "npm --prefix workers/site-inbox-worker ci --ignore-scripts",
+    "worker:site:test": "npm --prefix workers/site-inbox-worker run test",
+    "worker:site:dev": "npm --prefix workers/site-inbox-worker run dev",
+    "worker:site:deploy": "npm --prefix workers/site-inbox-worker run deploy",
+    "worker:edge:install": "npm --prefix workers/edge-routing-worker install --ignore-scripts",
+    "worker:edge:test": "npm --prefix workers/edge-routing-worker run test",
+    "worker:edge:dev": "npm --prefix workers/edge-routing-worker run dev",
+    "worker:edge:deploy": "npm --prefix workers/edge-routing-worker run deploy",
+    "worker:mailer:install": "npm --prefix workers/site-mailer-worker install --ignore-scripts",
+    "worker:mailer:test": "npm --prefix workers/site-mailer-worker run test",
+    "worker:mailer:dev": "npm --prefix workers/site-mailer-worker run dev",
+    "worker:mailer:deploy": "npm --prefix workers/site-mailer-worker run deploy",
+    "workers:test": "npm run worker:site:test && npm run worker:edge:test && npm run worker:mailer:test"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

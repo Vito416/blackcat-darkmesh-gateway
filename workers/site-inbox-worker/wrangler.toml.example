@@ -1,0 +1,96 @@
+name = "blackcat-inbox"
+main = "src/index.ts"
+compatibility_date = "2024-08-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
+
+[vars]
+INBOX_TTL_DEFAULT = "3600"
+INBOX_TTL_MAX = "86400"
+RATE_LIMIT_MAX = "50"
+RATE_LIMIT_WINDOW = "60"
+REPLAY_TTL = "600"
+REPLAY_STRONG_MODE = "1"
+SUBJECT_MAX_ENVELOPES = "10"
+PAYLOAD_MAX_BYTES = "16384"
+NOTIFY_RATE_MAX = "20"
+NOTIFY_RATE_WINDOW = "60"
+NOTIFY_SUBJECT_MAX = "20"
+NOTIFY_SUBJECT_WINDOW = "60"
+NOTIFY_FROM = "no-reply@example.com"
+WORKER_STRICT_TOKEN_SCOPES = "1"
+TEST_IN_MEMORY_KV = "0"
+REQUIRE_SECRETS = "1"
+REQUIRE_METRICS_AUTH = "1"
+AUTH_REQUIRE_SIGNATURE = "1"
+AUTH_REQUIRE_NONCE = "1"
+DISABLE_JANITOR = "0"
+HTTP_TIMEOUT_MS = "8000"
+UNIQUE_SUBJECT_MAX_PER_IP = "20"
+UNIQUE_SUBJECT_WINDOW = "60"
+FORGET_MAX_KEYS = "500"
+MAX_JANITOR_KEYS = "2000"
+# NOTIFY_WEBHOOK_ALLOWLIST can be comma-separated hostnames (e.g. "hooks.slack.com,api.mycorp.com")
+
+[triggers]
+# Run janitor hourly by default; set DISABLE_JANITOR=1 to skip
+crons = ["0 * * * *"]
+
+[[kv_namespaces]]
+binding = "INBOX_KV"
+id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+[[durable_objects.bindings]]
+name = "REPLAY_LOCKS"
+class_name = "ReplayLockDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ReplayLockDurableObject"]
+
+[env.production.vars]
+INBOX_TTL_DEFAULT = "3600"
+INBOX_TTL_MAX = "86400"
+RATE_LIMIT_MAX = "50"
+RATE_LIMIT_WINDOW = "60"
+REPLAY_TTL = "600"
+REPLAY_STRONG_MODE = "1"
+SUBJECT_MAX_ENVELOPES = "10"
+PAYLOAD_MAX_BYTES = "16384"
+NOTIFY_RATE_MAX = "20"
+NOTIFY_RATE_WINDOW = "60"
+NOTIFY_SUBJECT_MAX = "20"
+NOTIFY_SUBJECT_WINDOW = "60"
+NOTIFY_FROM = "no-reply@example.com"
+WORKER_STRICT_TOKEN_SCOPES = "1"
+TEST_IN_MEMORY_KV = "0"
+REQUIRE_SECRETS = "1"
+REQUIRE_METRICS_AUTH = "1"
+AUTH_REQUIRE_SIGNATURE = "1"
+AUTH_REQUIRE_NONCE = "1"
+DISABLE_JANITOR = "0"
+HTTP_TIMEOUT_MS = "8000"
+UNIQUE_SUBJECT_MAX_PER_IP = "20"
+UNIQUE_SUBJECT_WINDOW = "60"
+FORGET_MAX_KEYS = "500"
+MAX_JANITOR_KEYS = "2000"
+# NOTIFY_WEBHOOK_ALLOWLIST can be comma-separated hostnames (e.g. "hooks.slack.com,api.mycorp.com")
+
+# Required secrets (set via `wrangler secret put ...`, not here):
+# - INBOX_HMAC_SECRET
+# - NOTIFY_HMAC_SECRET (unless NOTIFY_HMAC_OPTIONAL=1)
+# - WORKER_AUTH_TOKEN (legacy fallback token for read/forget/notify)
+# - WORKER_READ_TOKEN
+# - WORKER_FORGET_TOKEN
+# - WORKER_NOTIFY_TOKEN
+# - WORKER_SIGN_TOKEN
+# - FORGET_TOKEN (optional override)
+
+[env.production]
+  [[env.production.kv_namespaces]]
+  binding = "INBOX_KV"
+  id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  [[env.production.durable_objects.bindings]]
+  name = "REPLAY_LOCKS"
+  class_name = "ReplayLockDurableObject"

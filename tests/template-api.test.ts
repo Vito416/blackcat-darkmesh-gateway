@@ -318,6 +318,47 @@ describe('template api policy gateway', () => {
     })
   })
 
+  it('prefers runtime template variant metadata over env map entries', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    process.env.GATEWAY_TEMPLATE_VARIANT_MAP = JSON.stringify({
+      'site-1': {
+        variant: 'env-variant',
+        templateTxId: 'tx-env',
+        manifestTxId: 'manifest-env',
+      },
+    })
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      siteId: 'site-1',
+      payload: { host: 'example.com', path: '/shop' },
+      runtimeHints: {
+        runtime: {
+          templateVariant: 'runtime-variant',
+          templateTxId: 'tx-runtime',
+          manifestTxId: 'manifest-runtime',
+        },
+      },
+    })
+
+    expect(res.status).toBe(200)
+    expect(spy).toHaveBeenCalledTimes(1)
+    const init = spy.mock.calls[0][1] as RequestInit
+    const body = JSON.parse(String(init.body))
+    expect(body.payload.templateVariant).toEqual({
+      variant: 'runtime-variant',
+      templateTxId: 'tx-runtime',
+      manifestTxId: 'manifest-runtime',
+    })
+  })
+
   it('does not inject template variant metadata when the site has no map entry', async () => {
     process.env.AO_PUBLIC_API_URL = 'https://ao.example'
     process.env.GATEWAY_TEMPLATE_VARIANT_MAP = JSON.stringify({
@@ -372,6 +413,31 @@ describe('template api policy gateway', () => {
 
     expect(res.status).toBe(500)
     await expect(res.text()).resolves.toContain('template_variant_map_invalid')
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when runtime template variant hints are partial', async () => {
+    process.env.AO_PUBLIC_API_URL = 'https://ao.example'
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await proxyTemplateCall({
+      action: 'public.resolve-route',
+      siteId: 'site-1',
+      payload: { host: 'example.com', path: '/shop' },
+      runtimeHints: {
+        runtimePointers: {
+          templateVariant: 'runtime-only',
+        },
+      },
+    })
+
+    expect(res.status).toBe(502)
+    await expect(res.text()).resolves.toContain('invalid_runtime_template_variant_hints')
     expect(spy).not.toHaveBeenCalled()
   })
 

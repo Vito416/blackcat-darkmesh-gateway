@@ -15,6 +15,18 @@ Consolidation status
 - Crypto policy bundle is maintained in `security/crypto-policy/` (gateway-owned, not a vendored snapshot).
 - Template code remains intentionally separate in `blackcat-darkmesh-templates`; gateway enforces controlled backend access for deployed templates.
 
+Worker ownership (new canonical location)
+- Cloudflare Worker runtimes are now owned in this repo under `workers/`.
+- Current worker set:
+  - `workers/site-inbox-worker` (migrated from `blackcat-darkmesh-ao/worker`, production-ready signer/inbox runtime).
+  - `workers/edge-routing-worker` (edge ingress scaffold for host->HB selection).
+  - `workers/site-mailer-worker` (optional per-site mail worker scaffold).
+- Quick commands:
+  - `npm run worker:site:test`
+  - `npm run worker:edge:test`
+  - `npm run worker:mailer:test`
+  - `npm run workers:test`
+
 Migration status
 - Active backlog and blocker split: `ops/decommission/BACKLOG.md`
 - Decommission evidence checklist: `ops/decommission/DECOMMISSION_CHECKLIST.md`
@@ -374,7 +386,7 @@ When cache admission limits are exceeded, cache PUT returns:
 - Resource hardening lane: `npm run test:hardening`
 - Metrics auth smoke: `npm test -- --run tests/metrics-auth.test.ts`
 - Webhook pen-tests: `npm test -- --run tests/webhook-pentest.test.ts`
-- Bez lokálního Node: `docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm test -- --run tests/webhook-pentest.test.ts"`
+- Without local Node: `docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm test -- --run tests/webhook-pentest.test.ts"`
 
 ### AO vs Gateway A/B benchmark
 - Plan/runbook: `ops/perf/AO_VS_GATEWAY_BENCHMARK_PLAN.md`

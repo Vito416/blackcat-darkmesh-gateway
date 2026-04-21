@@ -1,0 +1,6 @@
+/etc/darkmesh/backup.env
+/root/.cloudflared/**
+/srv/darkmesh/hb/keys/**
+/srv/darkmesh/arweave-data/wallets/**
+**/.DS_Store
+**/tmp/**

@@ -1,0 +1,16 @@
+services:
+  hyperbeam:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: darkmesh-hyperbeam
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      ARWEAVE_NODE: http://127.0.0.1:1984
+      HB_PORT: "8734"
+      DATA_DIR: /data/rolling
+      AUTO_INDEX: "false"
+    volumes:
+      - /srv/darkmesh/hb/data:/data
+      - /srv/darkmesh/hb/keys/hyperbeam-key.json:/app/hb/hyperbeam-key.json:ro

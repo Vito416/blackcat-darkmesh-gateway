@@ -1,0 +1,13 @@
+[Unit]
+Description=DarkMesh alert hook for failed unit %i
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/darkmesh/alerts.env
+ExecStart=/usr/local/sbin/darkmesh-health-alert.sh %i
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

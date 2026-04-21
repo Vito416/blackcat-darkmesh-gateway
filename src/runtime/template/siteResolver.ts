@@ -91,6 +91,22 @@ const RUNTIME_POINTER_FIELDS = [
   'Scheduler-Id',
   'schedulerId',
   'scheduler_id',
+  'templateTxId',
+  'TemplateTxId',
+  'Template-Tx-Id',
+  'template_tx_id',
+  'manifestTxId',
+  'ManifestTxId',
+  'Manifest-Tx-Id',
+  'manifest_tx_id',
+  'templateSha256',
+  'TemplateSha256',
+  'Template-Sha256',
+  'template_sha256',
+  'templateVariant',
+  'TemplateVariant',
+  'Template-Variant',
+  'template_variant',
 ] as const
 
 function normalizeHost(hostRaw: string): string {

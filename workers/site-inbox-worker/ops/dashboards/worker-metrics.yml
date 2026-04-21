@@ -1,0 +1,79 @@
+# Minimal Grafana dashboard (YAML) for worker inbox/notify health
+apiVersion: 1
+providers:
+  - name: "worker-metrics"
+    orgId: 1
+    folder: "Blackcat Mesh / Worker"
+    type: file
+    options:
+      path: /etc/grafana/dashboards/worker-metrics.json
+
+dashboard:
+  title: "Worker Inbox/Notify"
+  tags: ["blackcat", "worker"]
+  timezone: browser
+  panels:
+    - title: "Inbox put/get/delete"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(worker_inbox_put_total[5m])
+          legendFormat: put/s
+        - expr: rate(worker_inbox_get_total[5m])
+          legendFormat: get/s
+        - expr: rate(worker_forget_deleted_total[5m])
+          legendFormat: forget/s
+    - title: "Inbox expirations"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(worker_inbox_expired_total[5m])
+          legendFormat: expired/s
+    - title: "Notify successes/failures"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(worker_notify_sent_total[5m])
+          legendFormat: sent/s
+        - expr: rate(worker_notify_failed_total[5m])
+          legendFormat: failed/s
+        - expr: rate(worker_notify_retry_total[5m])
+          legendFormat: retry/s
+    - title: "Notify breaker/dedupe"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(worker_notify_breaker_open_total[5m])
+          legendFormat: breaker_open/s
+        - expr: rate(worker_notify_deduped_total[5m])
+          legendFormat: deduped/s
+        - expr: rate(worker_notify_breaker_blocked_total[5m])
+          legendFormat: breaker_blocked/s
+    - title: "Notify breaker per provider"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(worker_notify_breaker_open_total_stripe[5m])
+          legendFormat: stripe_open/s
+        - expr: rate(worker_notify_breaker_blocked_total_stripe[5m])
+          legendFormat: stripe_blocked/s
+        - expr: rate(worker_notify_breaker_open_total_paypal[5m])
+          legendFormat: paypal_open/s
+        - expr: rate(worker_notify_breaker_blocked_total_paypal[5m])
+          legendFormat: paypal_blocked/s
+        - expr: rate(worker_notify_breaker_open_total_gopay[5m])
+          legendFormat: gopay_open/s
+        - expr: rate(worker_notify_breaker_blocked_total_gopay[5m])
+          legendFormat: gopay_blocked/s
+    - title: "Notify HMAC optional flag"
+      type: stat
+      datasource: Prometheus
+      targets:
+        - expr: worker_notify_hmac_optional
+          legendFormat: hmac_optional
+    - title: "Notify HMAC invalid"
+      type: timeseries
+      datasource: Prometheus
+      targets:
+        - expr: rate(worker_notify_hmac_invalid_total[5m])
+          legendFormat: hmac_invalid/s

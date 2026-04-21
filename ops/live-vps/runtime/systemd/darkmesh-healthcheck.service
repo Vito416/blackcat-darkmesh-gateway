@@ -1,0 +1,14 @@
+[Unit]
+Description=DarkMesh VPS health check
+After=network-online.target tailscaled.service cloudflared-tunnel.service docker.service arweave-node.service
+Wants=network-online.target
+OnFailure=darkmesh-healthcheck-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/darkmesh-healthcheck.sh
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

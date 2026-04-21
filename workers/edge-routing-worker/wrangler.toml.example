@@ -1,0 +1,12 @@
+name = "blackcat-edge-routing"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Comma-separated HB targets, e.g. "https://hb-eu.example,https://hb-us.example"
+HB_TARGETS = ""
+# Optional URL to site registry resolver; if empty, worker only validates host header.
+AO_SITE_RESOLVE_URL = ""
+# If set, unknown hosts fail closed unless resolve endpoint validates them.
+STRICT_SITE_RESOLVE = "1"

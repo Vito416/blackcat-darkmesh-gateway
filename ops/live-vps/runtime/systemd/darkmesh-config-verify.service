@@ -1,0 +1,13 @@
+[Unit]
+Description=DarkMesh config backup integrity verification
+After=network-online.target
+OnFailure=darkmesh-healthcheck-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/darkmesh-backup-verify.sh
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

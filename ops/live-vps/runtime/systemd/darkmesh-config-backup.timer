@@ -1,0 +1,10 @@
+[Unit]
+Description=Run DarkMesh config backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+Persistent=true
+Unit=darkmesh-config-backup.service
+
+[Install]
+WantedBy=timers.target

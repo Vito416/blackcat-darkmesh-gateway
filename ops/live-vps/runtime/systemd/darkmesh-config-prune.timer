@@ -1,0 +1,10 @@
+[Unit]
+Description=Run DarkMesh config backup prune weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 04:40:00
+Persistent=true
+Unit=darkmesh-config-prune.service
+
+[Install]
+WantedBy=timers.target

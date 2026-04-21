@@ -1,0 +1,95 @@
+name = "blackcat-inbox"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
+
+[vars]
+INBOX_TTL_DEFAULT = "3600"
+INBOX_TTL_MAX = "86400"
+RATE_LIMIT_MAX = "50"
+RATE_LIMIT_WINDOW = "60"
+REPLAY_TTL = "600"
+REPLAY_STRONG_MODE = "1"
+SUBJECT_MAX_ENVELOPES = "10"
+PAYLOAD_MAX_BYTES = "16384"
+NOTIFY_RATE_MAX = "20"
+NOTIFY_RATE_WINDOW = "60"
+NOTIFY_FROM = "no-reply@example.com"
+NOTIFY_SUBJECT_MAX = "20"
+NOTIFY_SUBJECT_WINDOW = "60"
+NOTIFY_WEBHOOK_ALLOWLIST = ""
+TEST_IN_MEMORY_KV = "0"
+REQUIRE_SECRETS = "1"
+REQUIRE_METRICS_AUTH = "1"
+AUTH_REQUIRE_SIGNATURE = "1"
+AUTH_REQUIRE_NONCE = "1"
+DISABLE_JANITOR = "0"
+AO_MODE = "mainnet"
+AO_HB_URL = "https://push.forward.computer"
+AO_HB_SCHEDULER = "n_XZJhUnmldNFo4dhajoPZWhBXuJk-OcQr5JQ49c4Zo"
+GATEWAY_TEMPLATE_TOKEN_OPTIONAL = "0"
+GATEWAY_READ_TIMEOUT_MS = "60000"
+GATEWAY_WRITE_TIMEOUT_MS = "45000"
+GATEWAY_WRITE_RETRIES = "4"
+GATEWAY_WRITE_ACCEPT_EMPTY_RESULT = "1"
+GATEWAY_WRITE_AUTO_SIGN = "1"
+
+[triggers]
+# Run janitor at most once an hour (set DISABLE_JANITOR=1 to skip completely)
+crons = ["0 * * * *"]
+
+[[kv_namespaces]]
+binding = "INBOX_KV"
+id = "0a00b23608a2417690d6f8a84c49ca72"
+
+[[durable_objects.bindings]]
+name = "REPLAY_LOCKS"
+class_name = "ReplayLockDurableObject"
+
+[[migrations]]
+tag = "v2-replay-lock-2026-04-15"
+new_sqlite_classes = ["ReplayLockDurableObject"]
+
+[env.production.vars]
+INBOX_TTL_DEFAULT = "3600"
+INBOX_TTL_MAX = "86400"
+RATE_LIMIT_MAX = "50"
+RATE_LIMIT_WINDOW = "60"
+REPLAY_TTL = "600"
+REPLAY_STRONG_MODE = "1"
+SUBJECT_MAX_ENVELOPES = "10"
+PAYLOAD_MAX_BYTES = "16384"
+NOTIFY_RATE_MAX = "20"
+NOTIFY_RATE_WINDOW = "60"
+NOTIFY_FROM = "no-reply@example.com"
+TEST_IN_MEMORY_KV = "0"
+REQUIRE_SECRETS = "1"
+REQUIRE_METRICS_AUTH = "1"
+NOTIFY_SUBJECT_MAX = "20"
+NOTIFY_SUBJECT_WINDOW = "60"
+NOTIFY_WEBHOOK_ALLOWLIST = "httpbin.org"
+AUTH_REQUIRE_SIGNATURE = "1"
+AUTH_REQUIRE_NONCE = "1"
+DISABLE_JANITOR = "0"
+AO_MODE = "mainnet"
+AO_HB_URL = "https://push.forward.computer"
+AO_HB_SCHEDULER = "n_XZJhUnmldNFo4dhajoPZWhBXuJk-OcQr5JQ49c4Zo"
+AO_SITE_PROCESS_ID = "Zv01GLNx1TBKxoswGi-tWoxNmgVYr1JSJJbjA3DDcJM"
+AO_REGISTRY_PROCESS_ID = "tIItgtKIdmozH0pk_-N6IWr-1cFHYObijGAp0J4ZDtU"
+WRITE_PROCESS_ID = "nczlDAlXZ3kfKKX9QIpeR37RSDhB4TsaDLKXHdXX5eA"
+GATEWAY_TEMPLATE_TOKEN_OPTIONAL = "0"
+GATEWAY_READ_TIMEOUT_MS = "60000"
+GATEWAY_WRITE_TIMEOUT_MS = "45000"
+GATEWAY_WRITE_RETRIES = "4"
+GATEWAY_WRITE_ACCEPT_EMPTY_RESULT = "1"
+GATEWAY_WRITE_AUTO_SIGN = "1"
+
+[env.production]
+  [[env.production.kv_namespaces]]
+  binding = "INBOX_KV"
+  id = "0a00b23608a2417690d6f8a84c49ca72"
+  [[env.production.durable_objects.bindings]]
+  name = "REPLAY_LOCKS"
+  class_name = "ReplayLockDurableObject"

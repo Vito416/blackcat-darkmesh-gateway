@@ -1,0 +1,18 @@
+[Unit]
+Description=Cloudflare Tunnel (darkmesh-gateway)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cloudflared --config /etc/cloudflared/config.yml tunnel run
+Restart=always
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/root/.cloudflared /etc/cloudflared /var/log
+
+[Install]
+WantedBy=multi-user.target

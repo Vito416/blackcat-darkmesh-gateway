@@ -1,0 +1,10 @@
+[Unit]
+Description=Run DarkMesh config backup integrity verification weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 04:20:00
+Persistent=true
+Unit=darkmesh-config-verify.service
+
+[Install]
+WantedBy=timers.target

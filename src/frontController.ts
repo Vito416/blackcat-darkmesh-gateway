@@ -1,6 +1,7 @@
 import { inc } from './metrics.js'
 import { sha256Hex } from './integrity/verifier.js'
 import { loadIntegerConfig, loadStringConfig } from './runtime/config/loader.js'
+import type { RuntimeRoutingHints } from './runtime/template/siteResolver.js'
 
 type CachedTemplate = {
   txId: string
@@ -14,7 +15,7 @@ type TemplateIndexRecord = {
   txId: string
   templateSha256?: string
   manifestTxId?: string
-  source: 'index' | 'host-map' | 'default'
+  source: 'runtime' | 'index' | 'host-map' | 'default'
 }
 
 const DEFAULT_TIMEOUT_MS = 4000
@@ -79,6 +80,52 @@ function parseSha256(value: unknown): string | null {
   }
   if (!SHA256_HEX_RE.test(normalized)) return null
   return normalized.toLowerCase()
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function resolveRuntimeHintValue(runtimeHints: RuntimeRoutingHints | undefined, keys: string[]): string | undefined {
+  if (!runtimeHints) return undefined
+  const records = [runtimeHints.runtime, runtimeHints.runtimePointers]
+  for (const record of records) {
+    if (!record) continue
+    for (const key of keys) {
+      const value = asString(record[key])
+      if (value) return value
+    }
+  }
+  return undefined
+}
+
+function resolveTemplateRecordFromRuntimeHints(
+  runtimeHints: RuntimeRoutingHints | undefined,
+): TemplateIndexRecord | { error: string } | null {
+  if (!runtimeHints) return null
+  const txIdRaw = resolveRuntimeHintValue(runtimeHints, ['templateTxId', 'template_tx_id'])
+  const shaRaw = resolveRuntimeHintValue(runtimeHints, ['templateSha256', 'template_sha256'])
+  const manifestRaw = resolveRuntimeHintValue(runtimeHints, ['manifestTxId', 'manifest_tx_id'])
+
+  if (!txIdRaw && !shaRaw && !manifestRaw) return null
+  if (!txIdRaw) return { error: 'front_controller_runtime_template_txid_missing' }
+
+  const txId = parseTxId(txIdRaw)
+  if (!txId) return { error: 'front_controller_runtime_template_txid_invalid' }
+
+  const templateSha256 = shaRaw ? parseSha256(shaRaw) : null
+  if (shaRaw && !templateSha256) return { error: 'front_controller_runtime_template_sha256_invalid' }
+
+  const manifestTxId = manifestRaw ? parseTxId(manifestRaw) : null
+  if (manifestRaw && !manifestTxId) return { error: 'front_controller_runtime_manifest_txid_invalid' }
+
+  return {
+    txId,
+    ...(templateSha256 ? { templateSha256 } : {}),
+    ...(manifestTxId ? { manifestTxId } : {}),
+    source: 'runtime',
+  }
 }
 
 function readRequireHash(): boolean {
@@ -146,8 +193,8 @@ function fromIndexHostMap(payload: Record<string, unknown>, host: string): Templ
 }
 
 function resolveTemplateFromIndexPayload(payload: unknown, host: string): TemplateIndexRecord | null {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
-  const record = payload as Record<string, unknown>
+  const record = asRecord(payload)
+  if (!record) return null
 
   const hostMapped = fromIndexHostMap(record, host)
   if (hostMapped) return hostMapped
@@ -199,7 +246,17 @@ async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<Res
   }
 }
 
-async function resolveTemplateRecord(host: string, timeoutMs: number): Promise<TemplateIndexRecord | null> {
+async function resolveTemplateRecord(
+  host: string,
+  timeoutMs: number,
+  runtimeHints?: RuntimeRoutingHints,
+): Promise<TemplateIndexRecord | null> {
+  const runtimeRecord = resolveTemplateRecordFromRuntimeHints(runtimeHints)
+  if (runtimeRecord) {
+    if ('error' in runtimeRecord) throw new Error(runtimeRecord.error)
+    return runtimeRecord
+  }
+
   const mapRaw = readStringEnv('GATEWAY_FRONT_CONTROLLER_TEMPLATE_MAP')
   if (mapRaw) {
     const map = parseTemplateMap(mapRaw)
@@ -261,7 +318,10 @@ function buildHtmlResponse(
   })
 }
 
-export async function handleFrontControllerRequest(request: Request): Promise<Response> {
+export async function handleFrontControllerRequest(
+  request: Request,
+  runtimeHints?: RuntimeRoutingHints,
+): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('method', { status: 405 })
   }
@@ -294,7 +354,7 @@ export async function handleFrontControllerRequest(request: Request): Promise<Re
 
   let resolved: TemplateIndexRecord | null
   try {
-    resolved = await resolveTemplateRecord(host, timeoutMs)
+    resolved = await resolveTemplateRecord(host, timeoutMs, runtimeHints)
   } catch (error) {
     inc('gateway_front_controller_refresh_fail')
     if (cached) {

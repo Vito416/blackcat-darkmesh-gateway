@@ -1,0 +1,12 @@
+[Unit]
+Description=DarkMesh config backup snapshot (no secrets)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/darkmesh-backup-config.sh
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

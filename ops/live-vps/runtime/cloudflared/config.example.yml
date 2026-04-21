@@ -1,0 +1,13 @@
+tunnel: YOUR_TUNNEL_UUID
+credentials-file: /root/.cloudflared/YOUR_TUNNEL_UUID.json
+
+originRequest:
+  connectTimeout: 10s
+  noTLSVerify: false
+
+ingress:
+  - hostname: hyperbeam.example.com
+    service: http://127.0.0.1:8744
+  - hostname: arweave.example.com
+    service: http://127.0.0.1:1984
+  - service: http_status:404

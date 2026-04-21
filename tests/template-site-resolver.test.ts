@@ -207,7 +207,7 @@ describe('template host resolver', () => {
     expect(String(fetchSpy.mock.calls[2]?.[0])).toBe('https://write.example/api/checkout/order')
   })
 
-  it('rejects runtime write PID overrides unless explicitly enabled', async () => {
+  it('requires allowlist for AO-trusted runtime write PID overrides', async () => {
     process.env.GATEWAY_SITE_RESOLVE_MODE = 'ao'
     process.env.GATEWAY_SITE_RESOLVE_AO_URL = 'https://resolver.example'
     process.env.WRITE_API_URL = 'https://write.example'
@@ -252,9 +252,9 @@ describe('template host resolver', () => {
       }),
     )
 
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(503)
     await expect(res.json()).resolves.toMatchObject({
-      error: 'runtime_write_process_id_override_disabled',
+      error: 'template_target_allowlist_required_for_runtime_overrides',
     })
     expect(fetchSpy).toHaveBeenCalledTimes(1)
   })

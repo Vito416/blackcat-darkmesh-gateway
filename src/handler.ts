@@ -723,6 +723,7 @@ async function handleTemplateCall(
     requestId: typeof (body as any).requestId === 'string' ? (body as any).requestId : undefined,
     siteId: effectiveSiteId || undefined,
     runtimeHints: resolvedHostSite.runtimeHints,
+    runtimeHintsTrusted: Boolean(resolvedHostSite.runtimeHints),
     actor: typeof (body as any).actor === 'string' ? (body as any).actor : undefined,
     role: typeof (body as any).role === 'string' ? (body as any).role : undefined,
     traceId: traceContext.getStore(),
@@ -1090,7 +1091,12 @@ export async function handleRequest(request: Request): Promise<Response> {
         return jsonErrorResponse(400, 'query_not_allowed')
       }
       markReadonlyFallback(integrityPaused)
-      return secureResponse(await handleFrontControllerRequest(request))
+      const resolvedHostSite = await resolveTemplateSiteIdFromHost(url.host, productionLikeMode)
+      if (resolvedHostSite.ok === false) {
+        return jsonErrorResponse(resolvedHostSite.status, resolvedHostSite.error)
+      }
+      const runtimeHints = resolvedHostSite.ok ? resolvedHostSite.runtimeHints : undefined
+      return secureResponse(await handleFrontControllerRequest(request, runtimeHints))
     }
     if (url.pathname === '/metrics') {
       markReadonlyFallback(integrityPaused)
@@ -1244,7 +1250,12 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (url.pathname === '/') {
       markReadonlyFallback(integrityPaused)
       if (isFrontControllerEnabled()) {
-        return secureResponse(await handleFrontControllerRequest(request))
+        const resolvedHostSite = await resolveTemplateSiteIdFromHost(url.host, productionLikeMode)
+        if (resolvedHostSite.ok === false) {
+          return jsonErrorResponse(resolvedHostSite.status, resolvedHostSite.error)
+        }
+        const runtimeHints = resolvedHostSite.ok ? resolvedHostSite.runtimeHints : undefined
+        return secureResponse(await handleFrontControllerRequest(request, runtimeHints))
       }
       return respond('Gateway skeleton', { status: 200 })
     }

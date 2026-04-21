@@ -1,0 +1,12 @@
+[Unit]
+Description=DarkMesh config backup retention prune
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/darkmesh-config-backup-prune.sh
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

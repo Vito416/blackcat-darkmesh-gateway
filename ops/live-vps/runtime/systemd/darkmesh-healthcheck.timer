@@ -1,0 +1,11 @@
+[Unit]
+Description=Run DarkMesh VPS health check every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=darkmesh-healthcheck.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

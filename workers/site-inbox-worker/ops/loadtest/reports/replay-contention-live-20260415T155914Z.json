@@ -1,0 +1,36 @@
+{
+  "startedAt": "2026-04-15T15:59:14.365Z",
+  "finishedAt": "2026-04-15T15:59:15.163Z",
+  "baseUrl": "https://blackcat-inbox-production.vitek-pasek.workers.dev",
+  "attempts": 4,
+  "subject": "drill-replay-20260415155914",
+  "nonce": "collision-1",
+  "hasHmac": true,
+  "counts": {
+    "201": 3,
+    "409": 1
+  },
+  "pass": false,
+  "results": [
+    {
+      "index": 1,
+      "status": 409,
+      "body": "replay"
+    },
+    {
+      "index": 2,
+      "status": 201,
+      "body": "{\"status\":\"OK\",\"exp\":1776272355}"
+    },
+    {
+      "index": 3,
+      "status": 201,
+      "body": "{\"status\":\"OK\",\"exp\":1776272355}"
+    },
+    {
+      "index": 4,
+      "status": 201,
+      "body": "{\"status\":\"OK\",\"exp\":1776272355}"
+    }
+  ]
+}
