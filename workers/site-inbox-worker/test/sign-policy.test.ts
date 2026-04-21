@@ -58,6 +58,18 @@ describe('Worker sign policy', () => {
       },
     },
   })
+  const controlPlanePolicy = JSON.stringify({
+    sites: {
+      'site-demo': {
+        RegisterSite: ['admin'],
+      },
+    },
+    signatureRefs: {
+      'worker-ed25519-site-demo': {
+        RegisterSite: ['admin'],
+      },
+    },
+  })
 
   it('keeps legacy signing behavior when no policy is configured', async () => {
     const body = signBody()
@@ -257,6 +269,47 @@ describe('Worker sign policy', () => {
     expect(res.status).toBe(403)
     const text = await res.text()
     expect(text).toContain('sign_action_not_allowed_for_site')
+  })
+
+  it('blocks control-plane actions by default even when policy allows them', async () => {
+    const body = signBody({ action: 'RegisterSite' })
+    const res = await call(
+      '/sign',
+      {
+        method: 'POST',
+        body,
+        headers: {
+          'content-type': 'application/json',
+          Authorization: 'Bearer t',
+        },
+      },
+      { SIGN_POLICY_JSON: controlPlanePolicy },
+    )
+
+    expect(res.status).toBe(403)
+    const text = await res.text()
+    expect(text).toContain('sign_control_plane_action_blocked')
+  })
+
+  it('allows control-plane signing only when explicitly enabled', async () => {
+    const body = signBody({ action: 'RegisterSite' })
+    const res = await call(
+      '/sign',
+      {
+        method: 'POST',
+        body,
+        headers: {
+          'content-type': 'application/json',
+          Authorization: 'Bearer t',
+        },
+      },
+      {
+        SIGN_POLICY_JSON: controlPlanePolicy,
+        ALLOW_CONTROL_PLANE_SIGN: '1',
+      },
+    )
+
+    expect(res.status).toBe(200)
   })
 
   it('rejects mismatched top-level and payload site identifiers', async () => {

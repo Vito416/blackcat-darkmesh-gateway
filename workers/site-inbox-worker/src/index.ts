@@ -1168,6 +1168,34 @@ function roleAllowed(allowedRoles: string[], role: string) {
   return allowedRoles.includes('*') || allowedRoles.includes(role)
 }
 
+const CONTROL_PLANE_SIGN_ACTIONS = new Set(
+  [
+    'RegisterSite',
+    'BindDomain',
+    'SetSiteRuntime',
+    'UpsertSiteRuntime',
+    'SetActiveVersion',
+    'GrantRole',
+    'RegisterGateway',
+    'UpdateGatewayStatus',
+    'SetPolicyMode',
+    'PublishPolicySnapshot',
+    'RevokePolicySnapshot',
+    'SetSiteServingPolicy',
+    'SetSiteFundingState',
+    'RegisterHBNode',
+    'UpdateHBNodeStatus',
+  ].map((action) => action.toLowerCase()),
+)
+
+function allowControlPlaneSign(env: Env) {
+  return cleanEnv((env as any).ALLOW_CONTROL_PLANE_SIGN) === '1'
+}
+
+function isControlPlaneSignAction(action: string) {
+  return CONTROL_PLANE_SIGN_ACTIONS.has(action.trim().toLowerCase())
+}
+
 function resolveSignRequestContext(body: Record<string, unknown>, env: Env) {
   const payload = asRecord(body.payload) || asRecord(body.Payload)
   const siteId = resolveCanonicalSiteId(topLevelSiteId(body), payloadSiteId(payload), '', false)
@@ -1178,12 +1206,17 @@ function resolveSignRequestContext(body: Record<string, unknown>, env: Env) {
 }
 
 function enforceSignPolicy(env: Env, body: Record<string, unknown>) {
+  const context = resolveSignRequestContext(body, env)
+  if (context.action && isControlPlaneSignAction(context.action) && !allowControlPlaneSign(env)) {
+    throw new HTTPException(403, { message: 'sign_control_plane_action_blocked' })
+  }
+
   const rawPolicy = resolveSignPolicyRaw(env)
   if (!rawPolicy) {
     if (signPolicyRequired(env)) {
       throw new HTTPException(500, { message: 'missing_sign_policy' })
     }
-    return resolveSignRequestContext(body, env)
+    return context
   }
 
   const policy = parseSignPolicy(rawPolicy)
@@ -1191,7 +1224,6 @@ function enforceSignPolicy(env: Env, body: Record<string, unknown>) {
     throw new HTTPException(500, { message: 'invalid_sign_policy' })
   }
 
-  const context = resolveSignRequestContext(body, env)
   if (!context.action) {
     throw new HTTPException(400, { message: 'sign_policy_action_required' })
   }
