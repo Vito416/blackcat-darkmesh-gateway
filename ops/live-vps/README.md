@@ -30,6 +30,10 @@ curl -fsS https://gateway.blgateway.fun/healthz
 - `HB_NON_MINER_BOOTSTRAP_CHECKLIST.md` - dedicated VPS bootstrap checklist for stock HB + non-mining Arweave path.
 - `HB_TRAFFIC_MODEL_NO_LB_VS_CF_LB.md` - architecture model for default (no LB) and premium (CF LB) traffic steering.
 - `CF_DNS_AND_LB_OPERATOR_CHECKLIST.md` - practical Cloudflare dashboard checklist (free-first DNS mode + paid LB mode).
+- `DEMO_DOMAIN_E2E_PLAYBOOK.md` - exact per-domain DNS/TLS settings + AO host-binding workflow for demo rollout.
+- `HB_FULL_PARITY_GATE.md` - mandatory read+write parity gate to avoid "read-only healthy" false positives on fresh installs.
+- `DARKMESH_HB_POLICY_SPEC_V1.md` - future-proof HB policy and reward-pool access specification with non-disruptive rollout modes.
+- `HB_CONFIG_CHANGELOG_AND_FUTURE_GUIDE.md` - what changed in HB-facing runtime config, why it changed, and config-only future improvements.
 - `HARDENING_COMMAND_LOG_2026-04-20.md` - exact command log from first hardening/bootstrap run (for recreate).
 - `HB_ARWEAVE_BRINGUP_NEXT.md` - next-step commands for bringing HB + Arweave containers up after hardening.
 - `VPS_SECURITY_AUDIT_2026-04-20.md` - current security audit with findings, fixed items, and pending hardening checklist.
@@ -45,5 +49,8 @@ curl -fsS https://gateway.blgateway.fun/healthz
 - `local-tools/prodlike-smoke.sh` - quick smoke checks against a live gateway URL.
 - `local-tools/prodlike-deep-check.sh` - deeper API/security contract checks.
 - `local-tools/prodlike-full-suite.sh` - smoke + deep checks for one or two hostnames.
+- `local-tools/demo-domain-smoke.sh` - multi-domain DNS/HTTPS/AO host-binding smoke checks.
+- `local-tools/demo-domains.example.txt` - example input file for demo-domain smoke runs.
+- `local-tools/hb-full-parity-gate.sh` - mandatory parity check: meta read + signed scheduler write on the same HB endpoint.
 
 If you need to keep temporary operator credentials locally, do it outside git-tracked paths.

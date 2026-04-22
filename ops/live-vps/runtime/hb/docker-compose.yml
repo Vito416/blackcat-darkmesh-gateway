@@ -6,11 +6,25 @@ services:
     container_name: darkmesh-hyperbeam
     network_mode: host
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
     environment:
       ARWEAVE_NODE: http://127.0.0.1:1984
       HB_PORT: "8734"
       DATA_DIR: /data/rolling
       AUTO_INDEX: "false"
+      REMOTE_GATEWAY: https://arweave.net
+      RESULT_ROUTE_GATEWAY: https://arweave.net
+      DRY_RUN_ROUTE_GATEWAY: https://arweave.net
+      ARWEAVE_INDEX_BLOCKS: "true"
+      LOAD_REMOTE_DEVICES: "true"
+      HB_NUM_ACCEPTORS: "64"
+      HB_MAX_CONNECTIONS: "4096"
+      HB_ARWEAVE_INDEX_WORKERS: "24"
+      HB_LMDB_MAX_READERS: "1024"
+      HB_LMDB_CAPACITY: "137438953472"
     volumes:
       - /srv/darkmesh/hb/data:/data
       - /srv/darkmesh/hb/keys/hyperbeam-key.json:/app/hb/hyperbeam-key.json:ro

@@ -8,6 +8,21 @@ Use this after Node gateway + cloudflared are up on VPS.
 - `cloudflared.service` is active and tunnel DNS is mapped (`gateway.blgateway.fun` or equivalent).
 - Firewall allows only required ingress (tunnel + tailscale/admin path).
 
+## 0.5) HyperBEAM full parity gate (mandatory)
+
+Run:
+
+```bash
+bash ./hb-full-parity-gate.sh \
+  --hb-url https://hyperbeam.<your-domain> \
+  --registry-pid <registry_pid> \
+  --wallet <wallet.json>
+```
+
+Rule:
+- if this gate fails, endpoint is not full parity yet (read may work, scheduler writes may still fail).
+- keep control-plane writes on fallback push endpoints until parity gate passes.
+
 ## 1) Smoke check
 
 ```bash

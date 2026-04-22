@@ -5,38 +5,132 @@ ARWEAVE_NODE="${ARWEAVE_NODE:-http://localhost:1984}"
 HB_PORT="${HB_PORT:-8001}"
 DATA_DIR="${DATA_DIR:-/data/rolling}"
 AUTO_INDEX="${AUTO_INDEX:-true}"
+REMOTE_GATEWAY="${REMOTE_GATEWAY:-https://arweave.net}"
+ARWEAVE_INDEX_BLOCKS="${ARWEAVE_INDEX_BLOCKS:-true}"
+LOAD_REMOTE_DEVICES="${LOAD_REMOTE_DEVICES:-true}"
+HB_NUM_ACCEPTORS="${HB_NUM_ACCEPTORS:-64}"
+HB_MAX_CONNECTIONS="${HB_MAX_CONNECTIONS:-4096}"
+HB_ARWEAVE_INDEX_WORKERS="${HB_ARWEAVE_INDEX_WORKERS:-24}"
+HB_LMDB_MAX_READERS="${HB_LMDB_MAX_READERS:-1024}"
+HB_LMDB_CAPACITY="${HB_LMDB_CAPACITY:-137438953472}"
+RESULT_ROUTE_GATEWAY="${RESULT_ROUTE_GATEWAY:-${REMOTE_GATEWAY}}"
+DRY_RUN_ROUTE_GATEWAY="${DRY_RUN_ROUTE_GATEWAY:-${REMOTE_GATEWAY}}"
+
+# Keep persistent store paths explicit to avoid partial-store behavior.
+mkdir -p "${DATA_DIR}" "${DATA_DIR}/lmdb" "${DATA_DIR}/fs-mainnet"
 
 cat > /app/config.json <<EOF
 {
   "ao-types": "generate_index=atom,max_connections=integer,num_acceptors=integer",
   "port": ${HB_PORT},
-  "num_acceptors": 32,
-  "max_connections": 512,
-  "arweave_index_workers": 16,
-  "arweave_index_blocks": false,
+  "num_acceptors": ${HB_NUM_ACCEPTORS},
+  "max_connections": ${HB_MAX_CONNECTIONS},
+  "arweave_index_workers": ${HB_ARWEAVE_INDEX_WORKERS},
+  "arweave_index_blocks": ${ARWEAVE_INDEX_BLOCKS},
+  "load_remote_devices": ${LOAD_REMOTE_DEVICES},
+  "gateway": "${REMOTE_GATEWAY}",
   "routes": [
     {
-      "template": "^/arweave",
+      "template": "^/arweave(?:/.*)?$",
       "node": {
-        "match": "^/arweave",
-        "with": "${ARWEAVE_NODE}"
+        "prefix": "${ARWEAVE_NODE}"
+      }
+    },
+    {
+      "template": "^/graphql(?:\\\\?.*)?$",
+      "node": {
+        "prefix": "${REMOTE_GATEWAY}"
+      }
+    },
+    {
+      "template": "^/[A-Za-z0-9_-]{43}(?:\\\\?.*)?$",
+      "node": {
+        "prefix": "${REMOTE_GATEWAY}"
+      }
+    },
+    {
+      "template": "^/tx/[A-Za-z0-9_-]{43}(?:\\\\?.*)?$",
+      "node": {
+        "prefix": "${REMOTE_GATEWAY}"
+      }
+    },
+    {
+      "template": "^/result/[0-9]+(?:\\\\?.*)?$",
+      "node": {
+        "prefix": "${RESULT_ROUTE_GATEWAY}"
+      }
+    },
+    {
+      "template": "^/dry-run(?:\\\\?.*)?$",
+      "node": {
+        "prefix": "${DRY_RUN_ROUTE_GATEWAY}"
       }
     }
   ],
   "store": [
     {
+      "ao-types": "store-module=atom",
+      "store-module": "hb_store_lmdb",
+      "name": "${DATA_DIR}/lmdb",
+      "access": ["read", "write"],
+      "max-readers": ${HB_LMDB_MAX_READERS},
+      "capacity": ${HB_LMDB_CAPACITY}
+    },
+    {
+      "ao-types": "store-module=atom",
+      "store-module": "hb_store_fs",
+      "name": "${DATA_DIR}/fs-mainnet",
+      "access": ["read", "write"]
+    },
+    {
       "ao-types": "store-module=atom,scope=atom",
       "store-module": "hb_store_arweave",
+      "name": "cache-arweave",
       "access": ["read"],
       "scope": "remote",
+      "arweave-node": "${REMOTE_GATEWAY}",
       "index-store": [
         {
-          "ao-types": "store-module=atom,read-only=atom",
+          "ao-types": "store-module=atom",
           "store-module": "hb_store_lmdb",
-          "name": "${DATA_DIR}",
+          "name": "${DATA_DIR}/lmdb",
           "access": ["read", "write"],
-          "max-readers": 512,
-          "capacity": 68719476736
+          "max-readers": ${HB_LMDB_MAX_READERS},
+          "capacity": ${HB_LMDB_CAPACITY}
+        }
+      ]
+    },
+    {
+      "ao-types": "store-module=atom",
+      "store-module": "hb_store_gateway",
+      "subindex": [
+        {
+          "name": "Data-Protocol",
+          "value": "ao"
+        }
+      ],
+      "local-store": [
+        {
+          "ao-types": "store-module=atom",
+          "store-module": "hb_store_lmdb",
+          "name": "${DATA_DIR}/lmdb",
+          "access": ["read", "write"],
+          "max-readers": ${HB_LMDB_MAX_READERS},
+          "capacity": ${HB_LMDB_CAPACITY}
+        }
+      ]
+    },
+    {
+      "ao-types": "store-module=atom",
+      "store-module": "hb_store_gateway",
+      "local-store": [
+        {
+          "ao-types": "store-module=atom",
+          "store-module": "hb_store_lmdb",
+          "name": "${DATA_DIR}/lmdb",
+          "access": ["read", "write"],
+          "max-readers": ${HB_LMDB_MAX_READERS},
+          "capacity": ${HB_LMDB_CAPACITY}
         }
       ]
     }

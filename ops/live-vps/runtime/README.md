@@ -69,18 +69,36 @@ sudo ./restore.sh --apply --reload-systemd --enable-backup-timer
 - set executable: `chmod 750 /usr/local/sbin/darkmesh-*.sh`
 
 3) HyperBEAM compose:
-- copy `runtime/hb/docker-compose.yml` (+ `entrypoint.sh` if used) to `/srv/darkmesh/hb/`
-- run `docker compose up -d`
+- copy `runtime/hb/docker-compose.yml` + `entrypoint.sh` + `Dockerfile` to `/srv/darkmesh/hb/`
+- run `docker compose up -d --build`
+- runtime Dockerfile is intentionally stock/minimal (default `rebar3 release`).
+- delegated-compute routes default to `REMOTE_GATEWAY` (`arweave.net`) unless explicitly overridden.
 
 4) Cloudflared:
 - copy `runtime/cloudflared/config.example.yml` to `/etc/cloudflared/config.yml`
 - replace placeholders (`YOUR_TUNNEL_UUID`, hostnames)
 - ensure credentials file exists at `/root/.cloudflared/`
+- default template expects:
+  - `hyperbeam.<domain>` -> `127.0.0.1:8744` (read/frontend loopback)
+  - `write.<domain>` -> `127.0.0.1:8734` (direct control-plane)
+  - `arweave.<domain>` -> `127.0.0.1:1984`
+- optional strict write-guard mode:
+  - set `write.<domain>` -> `127.0.0.1:8745`
+  - enable `runtime/nginx/write-loopback.conf`
 
 5) Nginx loopback:
 - copy `runtime/nginx/hyperbeam-loopback.conf` to `/etc/nginx/sites-available/`
+- copy `runtime/nginx/write-loopback.conf` to `/etc/nginx/sites-available/`
 - enable site and reload nginx if not already enabled on host.
 
 ## Security note
 
 Do not store live secrets in this folder. Keep only templates/examples.
+
+## Runtime audit helper
+
+For quick post-deploy error scans on host:
+
+```bash
+sudo /usr/local/sbin/hb-runtime-audit.sh --hours 6 --strict
+```

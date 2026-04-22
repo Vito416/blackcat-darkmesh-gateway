@@ -6,6 +6,9 @@ Date: 2026-04-21
 
 Keep gateway runtime as universal HyperBEAM edge while moving gateway business logic into AO/-write process contracts.
 
+Companion execution checklist (P0->P2, cross-repo):  
+`ops/migrations/DARKMESH_POLICY_IMPLEMENTATION_CHECKLIST_P0_P2.md`.
+
 ## Current architecture target
 
 - Gateway/HB: transport + cache + edge controls only (untrusted boundary).

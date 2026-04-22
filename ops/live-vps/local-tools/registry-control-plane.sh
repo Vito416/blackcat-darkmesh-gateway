@@ -9,7 +9,7 @@ This script sends:
   1) RegisterSite
   2) BindDomain (for every host)
 
-Primary endpoint defaults to hyperbeam.darkmesh.fun.
+Primary endpoint defaults to write.darkmesh.fun.
 Push servers are used only as fallback.
 
 Usage:
@@ -35,7 +35,7 @@ Example:
 USAGE
 }
 
-PRIMARY_URL_DEFAULT="https://hyperbeam.darkmesh.fun"
+PRIMARY_URL_DEFAULT="https://write.darkmesh.fun"
 FALLBACK_URLS_DEFAULT="https://push.forward.computer,https://push-1.forward.computer"
 ACTOR_ROLE="registry-admin"
 SCHEMA_VERSION="1.0"
@@ -218,4 +218,3 @@ done
 echo
 echo "Done. Payloads + responses:"
 echo "  ${RUN_DIR}"
-

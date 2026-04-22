@@ -46,6 +46,43 @@ check_http_code() {
   esac
 }
 
+check_container_file() {
+  local container="$1"
+  local path="$2"
+  local label="$3"
+  if docker exec "$container" sh -lc "test -f \"$path\""; then
+    log "OK file:$label"
+  else
+    log "FAIL file:$label"
+    fail=1
+  fi
+}
+
+check_hb_route_target() {
+  local container="$1"
+  local needle="$2"
+  local expected="$3"
+  local label="$4"
+  local current
+
+  current="$(
+    docker exec "$container" sh -lc 'cat /app/config.json' \
+      | jq -r --arg needle "$needle" '
+          .routes
+          | map(select(.template | contains($needle)))
+          | .[0].node as $node
+          | if $node == null then empty else ($node.with // $node.prefix // empty) end
+        '
+  )"
+
+  if [[ -n "$current" && "$current" == "$expected"* ]]; then
+    log "OK route:$label:$current"
+  else
+    log "FAIL route:$label:${current:-missing}"
+    fail=1
+  fi
+}
+
 check_service tailscaled
 check_service ufw
 check_service docker
@@ -55,11 +92,31 @@ check_service arweave-node
 PUBLIC_ARWEAVE_URL="${DARKMESH_PUBLIC_ARWEAVE_URL:-https://arweave.example.com/info}"
 PUBLIC_HB_ROOT_URL="${DARKMESH_PUBLIC_HB_ROOT_URL:-https://hyperbeam.example.com/}"
 PUBLIC_HB_META_URL="${DARKMESH_PUBLIC_HB_META_URL:-https://hyperbeam.example.com/~meta@1.0/info}"
+HB_CONTAINER="${DARKMESH_HB_CONTAINER:-darkmesh-hyperbeam}"
+REQUIRE_GENESIS_WASM="${DARKMESH_REQUIRE_GENESIS_WASM:-0}"
+RESULT_ROUTE_EXPECT="${DARKMESH_RESULT_ROUTE_EXPECT:-}"
+DRY_RUN_ROUTE_EXPECT="${DARKMESH_DRY_RUN_ROUTE_EXPECT:-}"
 
 check_http_json "http://127.0.0.1:1984/info" "arweave_local"
 check_http_json "$PUBLIC_ARWEAVE_URL" "arweave_public"
 check_http_code "$PUBLIC_HB_ROOT_URL" "hyperbeam_root"
 check_http_code "$PUBLIC_HB_META_URL" "hyperbeam_meta"
+
+if docker ps --format '{{.Names}}' | grep -qx "$HB_CONTAINER"; then
+  if [[ "$REQUIRE_GENESIS_WASM" == "1" ]]; then
+    check_container_file "$HB_CONTAINER" "/app/hb/genesis-wasm-server/launch-monitored.sh" "genesis_launch_script"
+    check_container_file "$HB_CONTAINER" "/app/hb/genesis-wasm-server/package.json" "genesis_package"
+  fi
+  if [[ -n "$RESULT_ROUTE_EXPECT" ]]; then
+    check_hb_route_target "$HB_CONTAINER" "/result/" "$RESULT_ROUTE_EXPECT" "result_route"
+  fi
+  if [[ -n "$DRY_RUN_ROUTE_EXPECT" ]]; then
+    check_hb_route_target "$HB_CONTAINER" "/dry-run" "$DRY_RUN_ROUTE_EXPECT" "dry_run_route"
+  fi
+else
+  log "FAIL container:$HB_CONTAINER not-running"
+  fail=1
+fi
 
 # disk guardrail
 usage_root=$(df --output=pcent / | tail -1 | tr -dc 0-9)

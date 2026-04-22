@@ -134,7 +134,9 @@ done
 
 copy_file "$RUNTIME_DIR/hb/docker-compose.yml" "/srv/darkmesh/hb/docker-compose.yml" 0640
 copy_file "$RUNTIME_DIR/hb/entrypoint.sh" "/srv/darkmesh/hb/entrypoint.sh" 0755
+copy_file "$RUNTIME_DIR/hb/Dockerfile" "/srv/darkmesh/hb/Dockerfile" 0644
 copy_file "$RUNTIME_DIR/nginx/hyperbeam-loopback.conf" "/etc/nginx/sites-available/hyperbeam-loopback.conf" 0644
+copy_file "$RUNTIME_DIR/nginx/write-loopback.conf" "/etc/nginx/sites-available/write-loopback.conf" 0644
 
 if [[ -f "$RUNTIME_DIR/etc/darkmesh/alerts.env.example" ]]; then
   copy_file "$RUNTIME_DIR/etc/darkmesh/alerts.env.example" "/etc/darkmesh/alerts.env.example" 0640
@@ -170,6 +172,14 @@ else
   else
     echo "[dry-run] /etc/cloudflared/config.yml exists; would keep it"
   fi
+fi
+
+if [[ "$APPLY" -eq 1 ]]; then
+  ln -sfn /etc/nginx/sites-available/hyperbeam-loopback.conf /etc/nginx/sites-enabled/hyperbeam-loopback.conf
+  ln -sfn /etc/nginx/sites-available/write-loopback.conf /etc/nginx/sites-enabled/write-loopback.conf
+else
+  echo "[dry-run] ln -sfn /etc/nginx/sites-available/hyperbeam-loopback.conf /etc/nginx/sites-enabled/hyperbeam-loopback.conf"
+  echo "[dry-run] ln -sfn /etc/nginx/sites-available/write-loopback.conf /etc/nginx/sites-enabled/write-loopback.conf"
 fi
 
 if [[ "$RELOAD_SYSTEMD" -eq 1 ]]; then

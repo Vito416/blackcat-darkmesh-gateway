@@ -69,8 +69,14 @@ Read path validation uses:
 
 Use:
 
-- primary endpoint: `https://hyperbeam.darkmesh.fun`
+- read/demo endpoint: `https://hyperbeam.darkmesh.fun`
+- primary control-plane endpoint: `https://write.darkmesh.fun`
 - fallback endpoints (verification / resilience): `https://push.forward.computer`, `https://push-1.forward.computer`
+
+Important:
+- do **not** send control-plane scheduler writes to demo domains (`jdwt.fun`, `vddl.fun`, etc.),
+- demo domains are transport catch-all hosts for read/demo UX,
+- control-plane writes must target `write.darkmesh.fun` (or fallback push nodes).
 
 Use helper:
 
@@ -83,6 +89,7 @@ bash ops/live-vps/local-tools/registry-control-plane.sh \
 ```
 
 The helper automatically tries HyperBEAM first and only falls back when needed.
+Default is now `write.darkmesh.fun` for control-plane writes.
 
 ### Optional DNS ownership proof before bind
 
@@ -109,11 +116,16 @@ Spec reference: `ops/live-vps/DNS_PROOF_ONBOARDING_SPEC_V1.md`.
 
 ## 3) Deploy order (safe sequence)
 
-1. Add DNS records in Cloudflare.
-2. Wait until edge propagation finishes (usually short).
-3. Bind hostnames in AO (`RegisterSite` + `BindDomain`) using `registry-control-plane.sh`.
-4. Deploy/activate demo landing template for that `siteId`.
-5. Run smoke checks (`demo-domain-smoke.sh`).
+1. Run HB full parity gate (`hb-full-parity-gate.sh`) and confirm PASS.
+2. Add DNS records in Cloudflare.
+3. Wait until edge propagation finishes (usually short).
+4. Bind hostnames in AO (`RegisterSite` + `BindDomain`) using `registry-control-plane.sh`.
+5. Deploy/activate demo landing template for that `siteId`.
+6. Run smoke checks (`demo-domain-smoke.sh`).
+
+If parity gate fails:
+- keep serving traffic on HB endpoint,
+- run control-plane writes via `push`/`push1` until parity is fixed.
 
 ## 4) Smoke command
 

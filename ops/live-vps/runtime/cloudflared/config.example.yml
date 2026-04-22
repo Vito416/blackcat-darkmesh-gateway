@@ -7,7 +7,14 @@ originRequest:
 
 ingress:
   - hostname: hyperbeam.example.com
+    # Public read/demo hostname (safe frontend path).
+    # Keep this on nginx loopback profile for stable browser-facing behavior.
     service: http://127.0.0.1:8744
+  - hostname: write.example.com
+    # Control-plane hostname (write/scheduler operations).
+    # Default: direct HB control-plane path.
+    # Optional hardened mode: route to 127.0.0.1:8745 (write-loopback.conf).
+    service: http://127.0.0.1:8734
   - hostname: arweave.example.com
     service: http://127.0.0.1:1984
-  - service: http_status:404
+  - service: http://127.0.0.1:8744

@@ -82,6 +82,9 @@ services:
       HB_PORT: "8734"
       DATA_DIR: /data/rolling
       AUTO_INDEX: "false"
+      REMOTE_GATEWAY: https://arweave.net
+      ARWEAVE_INDEX_BLOCKS: "true"
+      LOAD_REMOTE_DEVICES: "true"
     volumes:
       - /srv/darkmesh/hb/data:/data
 ```
@@ -145,3 +148,18 @@ Expected today:
 If `AUTO_INDEX=true` during initial sync, Arweave can temporarily return `429 Too Many Requests`
 to local HB copycat polling. Keep `AUTO_INDEX=false` until baseline stability is verified, then
 enable intentionally for indexing tests.
+
+## 7) Parity-focused routing/profile flags (control-plane)
+
+For scheduler/process parity (spawn + scheduler lookup), keep these enabled:
+
+- `REMOTE_GATEWAY=https://arweave.net`  
+  Enables remote lookup routes for `/graphql` and tx-id fetches required by scheduler-location resolution.
+- `ARWEAVE_INDEX_BLOCKS=true`  
+  Improves availability of block/index data for process/scheduler resolution.
+- `LOAD_REMOTE_DEVICES=true`  
+  Allows fetching remote device/process metadata required for cross-scheduler flows.
+
+These are now part of the runtime template in:
+- `ops/live-vps/runtime/hb/entrypoint.sh`
+- `ops/live-vps/runtime/hb/docker-compose.yml`

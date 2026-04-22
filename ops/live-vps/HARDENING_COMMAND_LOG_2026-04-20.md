@@ -260,6 +260,96 @@ Expected hardening state:
 
 ---
 
+## 11) 2026-04-21 cloudflared/HB routing split (control-plane transport fix)
+
+Context:
+- read-plane was healthy,
+- control-plane scheduler calls through public hostname returned `502` (`cloudflared -> nginx -> hb` chain),
+- direct local HB (`127.0.0.1:8734`) returned HB-native errors (transport OK).
+
+Applied via Tailscale SSH (`adminops`):
+
+```bash
+sudo cp -a /etc/cloudflared/config.yml /etc/cloudflared/config.yml.bak.$(date -u +%Y%m%dT%H%M%SZ)
+sudoedit /etc/cloudflared/config.yml
+sudo cloudflared tunnel ingress validate
+sudo systemctl restart cloudflared-tunnel
+sudo systemctl status cloudflared-tunnel --no-pager
+```
+
+Final `/etc/cloudflared/config.yml` ingress:
+
+```yaml
+ingress:
+  - hostname: hyperbeam.darkmesh.fun
+    service: http://127.0.0.1:8734
+  - hostname: arweave.darkmesh.fun
+    service: http://127.0.0.1:1984
+  - service: http://127.0.0.1:8744
+```
+
+Validation:
+
+```bash
+sudo cloudflared tunnel ingress validate
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8734/~meta@1.0/info
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8744/~meta@1.0/info
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:1984/info
+```
+
+Expected:
+- all three checks return `200`.
+
+Operational note:
+- control-plane writes should target `https://hyperbeam.darkmesh.fun` (direct to HB, no nginx hop),
+- fallback/demo domains still traverse nginx catch-all (`8744`) profile for demo UX.
+
+Observed external behavior after rollout:
+
+```bash
+# read path
+curl -sS -o /dev/null -w '%{http_code}\n' https://hyperbeam.darkmesh.fun/~meta@1.0/info
+# -> 200
+
+# signed scheduler send (valid ANS104) to primary HB endpoint
+node blackcat-darkmesh-ao/scripts/cli/send_ans104_scheduler.js \
+  --pid tIItgtKIdmozH0pk_-N6IWr-1cFHYObijGAp0J4ZDtU \
+  --url https://hyperbeam.darkmesh.fun \
+  --wallet blackcat-darkmesh-write/wallet.json \
+  --action Ping --data '{}'
+# -> 500 process_not_available (transport path is healthy, process missing on this scheduler)
+
+# same send through demo domain (catch-all path)
+node blackcat-darkmesh-ao/scripts/cli/send_ans104_scheduler.js \
+  --pid tIItgtKIdmozH0pk_-N6IWr-1cFHYObijGAp0J4ZDtU \
+  --url https://jdwt.fun \
+  --wallet blackcat-darkmesh-write/wallet.json \
+  --action Ping --data '{}'
+# -> 502 (known catch-all/nginx control-plane limitation)
+```
+
+---
+
+## 11) Mandatory HyperBEAM full parity gate (new install guard)
+
+Purpose:
+- prevent false-positive "healthy" state where read plane works but scheduler write path is broken.
+
+Command:
+
+```bash
+bash ops/live-vps/local-tools/hb-full-parity-gate.sh \
+  --hb-url https://hyperbeam.<your-domain> \
+  --registry-pid <registry_pid> \
+  --wallet <wallet.json>
+```
+
+Interpretation:
+- PASS => full parity (read + control-plane write on same endpoint).
+- FAIL => keep control-plane writes on `push`/`push1` until ingress path is fixed.
+
+---
+
 ## 11) Fresh clean-run completion snapshot (applied)
 
 This section captures the **successful clean rerun** on the reinstalled VPS.
@@ -428,6 +518,40 @@ journalctl -u cloudflared-tunnel --no-pager -n 40
 On this host, duplicate apt targets appeared (legacy `/etc/apt/sources.list` + `ubuntu.sources`).
 
 Applied:
+
+---
+
+## 12) 2026-04-21 NASA control-plane parity diagnostics
+
+Goal:
+- verify why NASA dashboard visibility looked inconsistent,
+- confirm whether `arweave.darkmesh.fun` was actually used by live config,
+- isolate whether fallback behavior was transport vs runtime-route debt.
+
+Executed checks (via Tailscale SSH + external probes):
+
+```bash
+# live config anchors
+grep -n 'ARWEAVE_NODE\|REMOTE_GATEWAY' /srv/darkmesh/hb/docker-compose.yml
+grep -n 'arweave.darkmesh.fun\|127.0.0.1:1984' /etc/cloudflared/config.yml
+
+# NASA routes state
+curl -fsSL 'https://push-9.forward.computer/1V65_gzlifHH_surfFzL6HGfRlLJuEX_y0VbPHwIKec/now/routes?require-codec=application/json&accept-bundle=true'
+
+# stake/balance sanity
+curl -fsSL 'https://push-9.forward.computer/1V65_gzlifHH_surfFzL6HGfRlLJuEX_y0VbPHwIKec/now/required-stake?require-codec=application/json&accept-bundle=true'
+curl -fsSL 'https://push-9.forward.computer/1V65_gzlifHH_surfFzL6HGfRlLJuEX_y0VbPHwIKec/now/balances/_wCF37G9t-xfJuYZqc6JXI9VrG4dzM5WUFgDfOn9LdM?require-codec=application/json&accept-bundle=true'
+
+# local HB failure trace extraction
+curl -sS 'https://hyperbeam.darkmesh.fun/l_0YGt3W5KBM2kVHa9uEz8yFmbU_wj-D3rR4Ez-xVzo/now?require-codec=application/json&accept-bundle=true'
+```
+
+Findings:
+- registration/stake are healthy (node is present in NASA routes map),
+- `arweave.darkmesh.fun` is wired correctly to local `127.0.0.1:1984`,
+- active runtime debt is `no_viable_route` for delegated compute relay path:
+  - `/result/0?process-id=<pid>`
+- this is a route-parity/runtime issue, not a stake registration failure.
 
 ```bash
 mv /etc/apt/sources.list /etc/apt/sources.list.disabled-by-hardening
@@ -732,6 +856,40 @@ Status after fix:
 Note:
 - first revision had a jq-expression quoting bug and was corrected on-host.
 
+## 18) Demo-domain catch-all ingress (2026-04-21)
+
+Goal:
+- allow temporary onboarding of arbitrary demo domains without adding a per-domain tunnel hostname,
+- keep this as transport-only behavior (policy enforcement remains out of cloudflared).
+
+Changes applied on host (via Tailscale SSH):
+- `/etc/cloudflared/config.yml`
+  - fallback ingress changed from:
+    - `service: http_status:404`
+  - to:
+    - `service: http://127.0.0.1:8744`
+- command validation and rollout:
+  - `cloudflared --config /etc/cloudflared/config.yml tunnel ingress validate`
+  - `systemctl restart cloudflared-tunnel.service`
+
+Additional fix discovered during validation:
+- `https://<demo-domain>/` redirected to `http://<demo-domain>:8744/...` due nginx absolute redirect behavior.
+- `/etc/nginx/sites-available/hyperbeam-loopback.conf` updated with:
+  - `absolute_redirect off;`
+- verification:
+  - `nginx -t`
+  - `systemctl reload nginx`
+
+Observed result after both changes:
+- `https://jdwt.fun` => `200`
+- `https://jdwt.fun/~meta@1.0/info` => `200`
+- `https://www.jdwt.fun` => `200`
+
+Known remaining item (separate layer):
+- AO host mapping is still unresolved for `jdwt.fun`:
+  - `/api/public/site-by-host` currently returns `NOT_FOUND`,
+  - requires AO `BindDomain` on the intended site id.
+
 ---
 
 ## 18) Config backup automation closure (2026-04-21)
@@ -975,3 +1133,294 @@ Local staging prepared for Proton upload:
   - `darkmesh-config-20260420T232849Z.tar.zst`
   - checksum files (`.sha256`, `.local.sha256`)
   - `ROTATION_INFO.txt`
+
+---
+
+## 25) HB tuning profile rollout (2026-04-21)
+
+Goal:
+- raise request-serving headroom for better contribution score potential,
+- keep stock HyperBEAM code and apply config-only tuning.
+
+Changes staged from repo runtime templates:
+- `ops/live-vps/runtime/hb/entrypoint.sh`
+- `ops/live-vps/runtime/hb/docker-compose.yml`
+
+Applied on host via Tailscale SSH:
+
+```bash
+sudo cp -a /srv/darkmesh/hb/entrypoint.sh /srv/darkmesh/hb/entrypoint.sh.bak-20260421T164720Z
+sudo cp -a /srv/darkmesh/hb/docker-compose.yml /srv/darkmesh/hb/docker-compose.yml.bak-20260421T164720Z
+sudo tee /srv/darkmesh/hb/entrypoint.sh >/dev/null < <(cat ops/live-vps/runtime/hb/entrypoint.sh)
+sudo tee /srv/darkmesh/hb/docker-compose.yml >/dev/null < <(cat ops/live-vps/runtime/hb/docker-compose.yml)
+sudo chown root:root /srv/darkmesh/hb/entrypoint.sh /srv/darkmesh/hb/docker-compose.yml
+sudo chmod 755 /srv/darkmesh/hb/entrypoint.sh
+sudo chmod 640 /srv/darkmesh/hb/docker-compose.yml
+cd /srv/darkmesh/hb
+sudo docker compose up -d --build
+```
+
+Tuning values now active:
+- `num_acceptors=64`
+- `max_connections=4096`
+- `arweave_index_workers=24`
+- `load_remote_devices=true`
+- `gateway=https://arweave.net`
+- container `ulimit -n = 1048576`
+
+Validation snapshot:
+
+```bash
+curl -sS http://127.0.0.1:8734/~meta@1.0/info/num_acceptors        # 64
+curl -sS http://127.0.0.1:8734/~meta@1.0/info/max_connections      # 4096
+curl -sS http://127.0.0.1:8734/~meta@1.0/info/arweave_index_workers # 24
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8734/~meta@1.0/info         # 200
+curl -sS -o /dev/null -w '%{http_code}\n' https://hyperbeam.darkmesh.fun/~meta@1.0/info # 200
+curl -sS -o /dev/null -w '%{http_code}\n' https://hyperbeam.darkmesh.fun/~hyperbuddy@1.0/metrics # 200
+```
+
+Operational note:
+- this is throughput/capacity tuning, not control-plane parity fix;
+- scheduler-path parity issue remains tracked separately in `HB_FULL_PARITY_GATE.md`.
+
+---
+
+## 26) Scheduler parity re-test + host-header fix (2026-04-21)
+
+Problem observed:
+- old PIDs (`tIIt...`, `pv5...`) still returned scheduler `500` on local HB,
+- root error in logs for slot reads:
+  - `No location found for address: n_XZ...` (legacy push scheduler),
+- public `/push` path under `hyperbeam.darkmesh.fun` returned non-control-plane
+  payload for some requests (host-sensitive behavior).
+
+Actions applied:
+
+```bash
+# backup current cloudflared config
+sudo cp -a /etc/cloudflared/config.yml /etc/cloudflared/config.yml.bak-<timestamp>
+
+# set hyperbeam route host normalization
+# ingress:
+#   - hostname: hyperbeam.darkmesh.fun
+#     service: http://127.0.0.1:8734
+#     originRequest:
+#       httpHostHeader: 127.0.0.1
+
+sudo cloudflared tunnel ingress validate
+sudo systemctl restart cloudflared-tunnel.service
+```
+
+Validation results:
+- `GET https://hyperbeam.darkmesh.fun/TrNj8...~module@1.0?accept-bundle=true` -> `200`
+- spawn via public endpoint with local scheduler succeeded:
+  - command:
+    - `node scripts/deploy/spawn_process_wasm_tn.mjs --module TrNj8... --url https://hyperbeam.darkmesh.fun --scheduler _wCF...`
+  - result:
+    - `status=200`
+    - `pid=l_0YGt3W5KBM2kVHa9uEz8yFmbU_wj-D3rR4Ez-xVzo`
+- scheduler direct send succeeded:
+  - `node scripts/cli/send_ans104_scheduler.js --pid l_0Y... --url https://hyperbeam.darkmesh.fun --action Ping`
+  - response:
+    - `status=200`
+    - `slot=1`
+    - `process=l_0YGt3W5KBM2kVHa9uEz8yFmbU_wj-D3rR4Ez-xVzo`
+
+Conclusion:
+- scheduler service is on the same HB port (`8734`), not a separate hidden port,
+- control-plane works when scheduler matches local HB identity and host handling is normalized,
+- legacy processes bound to foreign scheduler (`n_XZ...`) still require fallback/compat path.
+
+---
+
+## 27) Live parity + hidden-surface audit (2026-04-21)
+
+Goal:
+- verify end-to-end behavior for demo domains + HB control-plane,
+- identify unexpected/publicly exposed runtime surfaces ("hidden functions"),
+- remove healthcheck false-negative state.
+
+Actions applied:
+
+```bash
+# cloudflared ingress update (hyperbeam host via nginx loopback frontend)
+sudo cp /etc/cloudflared/config.yml /etc/cloudflared/config.yml.bak-<timestamp>
+# changed:
+#   - hostname: hyperbeam.darkmesh.fun
+#     service: http://127.0.0.1:8744
+#     originRequest:
+#       httpHostHeader: 127.0.0.1
+sudo cloudflared tunnel ingress validate
+sudo systemctl restart cloudflared-tunnel.service
+
+# manual parity check
+node blackcat-darkmesh-ao/scripts/cli/send_ans104_scheduler.js \
+  --pid l_0YGt3W5KBM2kVHa9uEz8yFmbU_wj-D3rR4Ez-xVzo \
+  --url https://hyperbeam.darkmesh.fun \
+  --wallet blackcat-darkmesh-write/wallet.json \
+  --action Ping \
+  --data '{}'
+
+# domain smoke check
+bash blackcat-darkmesh-gateway/ops/live-vps/local-tools/demo-domain-smoke.sh \
+  jdwt.fun vddl.fun blgateway.fun hyperbeam.darkmesh.fun
+
+# healthcheck re-run
+sudo systemctl start darkmesh-healthcheck.service
+sudo journalctl -u darkmesh-healthcheck.service -n 40 --no-pager
+```
+
+Results:
+- Control-plane write verified (`status=200`, `slot` present, `process` present).
+- Domain smoke passed for `jdwt.fun`, `vddl.fun`, `blgateway.fun`, `hyperbeam.darkmesh.fun`.
+- `darkmesh-healthcheck.service` now reports `HEALTHCHECK PASS` (root check returns `302`).
+
+Audit findings captured:
+- public `~cron@1.0/*` and `~copycat@1.0/*` device paths respond on public HB endpoint;
+  policy hardening task is required before calling the node strict production-grade.
+
+---
+
+## 28) Spawn retest + bottleneck snapshot (2026-04-21)
+
+Goal:
+- rerun spawn validation,
+- confirm current parity behavior,
+- capture a quick bottleneck snapshot.
+
+Commands executed:
+
+```bash
+# parity gate
+bash blackcat-darkmesh-gateway/ops/live-vps/local-tools/hb-full-parity-gate.sh \
+  --hb-url https://hyperbeam.darkmesh.fun \
+  --registry-pid l_0YGt3W5KBM2kVHa9uEz8yFmbU_wj-D3rR4Ez-xVzo \
+  --wallet blackcat-darkmesh-write/wallet.json
+
+# spawn attempt (default HB URL) -> fails in current config
+node blackcat-darkmesh-ao/scripts/deploy/spawn_process_wasm_tn.mjs \
+  --module TrNj8CSFaevoYSAsnxuQ97SkdDuPvpkgxR-L6i3QCzY \
+  --wallet blackcat-darkmesh-write/wallet.json \
+  --url https://hyperbeam.darkmesh.fun \
+  --scheduler _wCF37G9t-xfJuYZqc6JXI9VrG4dzM5WUFgDfOn9LdM \
+  --name blackcat-ao-registry-audit-20260421
+
+# spawn workaround (device-qualified URL) -> pass
+node blackcat-darkmesh-ao/scripts/deploy/spawn_process_wasm_tn.mjs \
+  --module TrNj8CSFaevoYSAsnxuQ97SkdDuPvpkgxR-L6i3QCzY \
+  --wallet blackcat-darkmesh-write/wallet.json \
+  --url https://hyperbeam.darkmesh.fun/~process@1.0/ \
+  --scheduler _wCF37G9t-xfJuYZqc6JXI9VrG4dzM5WUFgDfOn9LdM \
+  --name blackcat-ao-registry-audit-20260421 \
+  --wait-module 0
+
+# verify new pid
+node blackcat-darkmesh-ao/scripts/cli/send_ans104_scheduler.js \
+  --pid u9o5qKGwgbZKFoMbmVguwS4nSGd-ZenptA8qVOjrjBQ \
+  --url https://hyperbeam.darkmesh.fun \
+  --wallet blackcat-darkmesh-write/wallet.json \
+  --action Ping \
+  --data '{}'
+
+# domain smoke
+bash blackcat-darkmesh-gateway/ops/live-vps/local-tools/demo-domain-smoke.sh \
+  jdwt.fun vddl.fun blgateway.fun hyperbeam.darkmesh.fun
+```
+
+Observed:
+- Parity gate: `PASS` (`tmp/hb-full-parity-gate-20260421T182942Z`).
+- Default spawn URL currently fails:
+  - module readiness probe on `<module>~module@1.0` returns `500` (`module_not_ready`),
+  - `/push` response shape is not parseable for PID in this path.
+- Device-qualified spawn succeeded:
+  - new PID: `u9o5qKGwgbZKFoMbmVguwS4nSGd-ZenptA8qVOjrjBQ`,
+  - status `200`, scheduler ping status `200` and slot increments.
+- Readback gap remains:
+  - `/<pid>/now?...` returns `404 not_found`,
+  - `/result/<slot>?process-id=<pid>` returns `404 not_found`.
+
+Bottleneck snapshot:
+- endpoint sample artifact: `blackcat-darkmesh-gateway/tmp/hb-audit-20260421T183843Z.txt`
+- scheduler ping timing artifact: `blackcat-darkmesh-gateway/tmp/scheduler-ping-latency-20260421T184006Z.txt`
+- signed scheduler ping latency in sample:
+  - avg `12.486s`, min `11.290s`, max `13.394s` (8/8 success, no transport error).
+
+---
+
+## 29) Live host-role split via Tailscale (2026-04-21)
+
+Goal:
+- make `hyperbeam.darkmesh.fun` frontend/read host,
+- make `write.darkmesh.fun` raw control-plane host with push-like parity.
+
+Commands executed (over Tailscale SSH):
+
+```bash
+sudo cp /etc/cloudflared/config.yml /etc/cloudflared/config.yml.bak.$(date -u +%Y%m%dT%H%M%SZ)
+
+sudo tee /etc/cloudflared/config.yml >/dev/null <<'EOF'
+tunnel: b79fc4d4-41ee-450a-8e28-c705fb67580f
+credentials-file: /root/.cloudflared/b79fc4d4-41ee-450a-8e28-c705fb67580f.json
+
+originRequest:
+  connectTimeout: 10s
+  noTLSVerify: false
+
+ingress:
+  - hostname: hyperbeam.darkmesh.fun
+    service: http://127.0.0.1:8744
+  - hostname: write.darkmesh.fun
+    service: http://127.0.0.1:8734
+  - hostname: arweave.darkmesh.fun
+    service: http://127.0.0.1:1984
+  - service: http://127.0.0.1:8744
+EOF
+
+sudo cloudflared tunnel ingress validate
+sudo systemctl restart cloudflared-tunnel
+sudo systemctl is-active cloudflared-tunnel
+```
+
+Validation:
+
+```bash
+curl -I https://hyperbeam.darkmesh.fun/
+curl -I https://write.darkmesh.fun/
+curl -I https://jdwt.fun/
+curl -I https://vddl.fun/
+curl -I https://blgateway.fun/
+```
+
+Observed:
+- `hyperbeam.darkmesh.fun` root now returns `302 /~meta@1.0/info` (frontend path via 8744),
+- `write.darkmesh.fun` root now returns raw HB `404` (expected for control-plane host),
+- demo domains still resolve via frontend/catch-all path (`302` to `~meta`).
+
+Control-plane parity check after split:
+
+```bash
+bash blackcat-darkmesh-gateway/ops/live-vps/local-tools/hb-full-parity-gate.sh \
+  --hb-url https://write.darkmesh.fun \
+  --registry-pid tIItgtKIdmozH0pk_-N6IWr-1cFHYObijGAp0J4ZDtU \
+  --wallet ../blackcat-darkmesh-write/wallet.json
+```
+
+Result:
+- `PASS` (`status=200`, `slot=524`).
+
+Bare write-host spawn check (no `~process@1.0` suffix):
+
+```bash
+node blackcat-darkmesh-ao/scripts/deploy/spawn_process_wasm_tn.mjs \
+  --module TrNj8CSFaevoYSAsnxuQ97SkdDuPvpkgxR-L6i3QCzY \
+  --wallet ../blackcat-darkmesh-write/wallet.json \
+  --url https://write.darkmesh.fun \
+  --scheduler _wCF37G9t-xfJuYZqc6JXI9VrG4dzM5WUFgDfOn9LdM \
+  --wait-module 0 \
+  --name darkmesh-spawn-bare-write-test \
+  --out ../blackcat-darkmesh-gateway/tmp/spawn-bare-write-test-20260421T1953Z.json
+```
+
+Result:
+- spawned PID `qRXh1nDuD3FGTgO2J9wzp-JdXpCHqai1RPuOhtj4eL0`,
+- `spawnPath=/push`, `status=200` (parity behavior preserved on write host).

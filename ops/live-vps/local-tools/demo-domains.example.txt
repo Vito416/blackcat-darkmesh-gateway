@@ -1,0 +1,7 @@
+# one domain per line
+# comments and blank lines are ignored
+
+example-one.tld
+www.example-one.tld
+example-two.tld
+www.example-two.tld
