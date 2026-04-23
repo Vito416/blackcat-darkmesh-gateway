@@ -237,12 +237,30 @@ jobs:
       - name: Check forget-forward config
         run: npm run ops:check-forget-forward-config -- --json
 
+  two-worker-bootstrap-preflight:
+    name: Two-worker bootstrap preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Use Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Validate two-worker bootstrap preflight
+        run: npm run ops:validate-two-worker-bootstrap-preflight -- --json
+
   smoke:
     name: Smoke checks
     runs-on: ubuntu-24.04
     needs:
       - test
       - integrity-gate
+      - two-worker-bootstrap-preflight
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -593,6 +611,14 @@ jobs:
             npm run ops:validate-hosting-readiness -- --help
           else
             echo "ops:validate-hosting-readiness is not defined in package.json; skipping help check."
+          fi
+      - name: "Help: validate two-worker bootstrap preflight"
+        run: |
+          set -euo pipefail
+          if node -e "const pkg = require('./package.json'); process.exit(pkg.scripts && pkg.scripts['ops:validate-two-worker-bootstrap-preflight'] ? 0 : 1)"; then
+            npm run ops:validate-two-worker-bootstrap-preflight -- --help
+          else
+            echo "ops:validate-two-worker-bootstrap-preflight is not defined in package.json; skipping help check."
           fi
       - name: "Help: validate AO dependency gate"
         run: npm run ops:validate-ao-dependency-gate -- --help

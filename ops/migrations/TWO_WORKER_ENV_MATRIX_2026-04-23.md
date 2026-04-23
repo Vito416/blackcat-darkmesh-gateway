@@ -11,16 +11,20 @@ Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 - [x] Secrets Worker route assertion endpoint exists and requires auth/signing inputs.
 - [x] Async Worker DNS/TXT + cfg validation flow exists and requires explicit upstream allowlists.
 - [x] Async Worker job + scheduled refresh wiring exists and needs production-safe limits.
+- [x] Tenant bootstrap runbook exists (`ops/migrations/TWO_WORKER_TENANT_BOOTSTRAP_RUNBOOK_2026-04-23.md`).
+- [x] Worker bootstrap preflight script exists (`scripts/validate-two-worker-bootstrap-preflight.js`).
+- [x] Copy/paste command companion exists (`ops/migrations/TWO_WORKER_TENANT_BOOTSTRAP_COMMANDS_2026-04-23.md`).
+- [x] CI gate is wired (`two-worker-bootstrap-preflight` job in `.github/workflows/ci.yml`).
 
 ### What is next (objective)
 
-- [ ] Align wrangler templates with this matrix for both workers (required values present, no placeholders).
+- [x] Align wrangler templates with this matrix for both workers (required values present, no placeholders).
 - [ ] Add per-environment secret rotation checklist and verification command set.
-- [ ] Add a preflight script that fails deploy if required env/bindings are missing.
+- [x] Add a preflight script that fails deploy if required env/bindings are missing.
 
 ### Blockers
 
-- [ ] Tenant provisioning is still partially manual.
+- [ ] Tenant provisioning is still partially manual (runbook is available; automation is pending).
 - [ ] Some production values (allowlists/cohorts) are not yet centrally versioned.
 
 ## Constraint
@@ -55,7 +59,7 @@ Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 | `WORKER_SIGN_TOKEN` | Required (secret) | none | Scoped legacy sign token | Keep for existing endpoints until full route-assert cutover. |
 | `ROUTE_ASSERT_TOKEN` | Required (secret) | none | Auth token for `POST /route/assert` | Must be distinct from generic worker tokens. |
 | `ROUTE_ASSERT_SIGNING_KEY_HEX` | Required (secret) | none | Private key for route assertion signatures | 64-hex Ed25519 private key; rotate on compromise. |
-| `INTERNAL_CALL_HMAC_SECRET` | Required (secret) | none | HMAC for async->runtime internal envelope | Distinct from inbox/notify HMAC secrets. |
+| `ROUTE_ASSERT_INTERNAL_HMAC_SECRET` | Required (secret) | none | HMAC for async->runtime internal envelope (`x-dm-*`) | Distinct from inbox/notify HMAC secrets. |
 | `ROUTE_ASSERT_TTL_SEC` | Optional | `120` | Max assertion validity window | Keep <=120s to reduce replay window. |
 | `ROUTE_ASSERT_SIGNATURE_REF` | Optional | `worker-ed25519` | Signature reference included in assertion response | Pin verify policy to expected refs. |
 | `HB_ALLOWED_HOSTS` | Required | `hyperbeam.darkmesh.fun` | Allowlist of HB hosts Secrets Worker can sign for | Must be strict allowlist, comma-separated. |
@@ -126,7 +130,7 @@ Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 - `AUTH_REQUIRE_NONCE=1`
 - `REQUIRE_SECRETS=1`
 - `REQUIRE_METRICS_AUTH=1`
-- secrets: `WORKER_AUTH_TOKEN`, `WORKER_READ_TOKEN`, `WORKER_SIGN_TOKEN`, `ROUTE_ASSERT_TOKEN`, `ROUTE_ASSERT_SIGNING_KEY_HEX`, `INTERNAL_CALL_HMAC_SECRET`
+- secrets: `WORKER_AUTH_TOKEN`, `WORKER_READ_TOKEN`, `WORKER_SIGN_TOKEN`, `ROUTE_ASSERT_TOKEN`, `ROUTE_ASSERT_SIGNING_KEY_HEX`, `ROUTE_ASSERT_INTERNAL_HMAC_SECRET`
 - bindings: `REPLAY_LOCKS`, `DOMAIN_MAP_KV`
 
 ### Async Worker minimum required

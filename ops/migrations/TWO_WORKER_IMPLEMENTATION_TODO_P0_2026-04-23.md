@@ -4,6 +4,10 @@ Date: 2026-04-23
 Status: execution plan  
 Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 
+Runbook reference:
+- `ops/migrations/TWO_WORKER_TENANT_BOOTSTRAP_RUNBOOK_2026-04-23.md`
+- `ops/migrations/TWO_WORKER_PHASE_GATE_EVIDENCE_PACK_2026-04-23.md`
+
 ## Changelog (2026-04-23 sync)
 
 ### Landed in this wave
@@ -12,12 +16,23 @@ Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 - [x] Async Worker domain map persistence/state-transition modules are present (`domainMapStore.ts`, `domainStateMachine.ts`).
 - [x] Secrets Worker route assertion endpoint is wired (`POST /route/assert`).
 - [x] Async Worker async wiring is present (`/jobs/enqueue`, `/jobs/refresh-domain`, `scheduledHandler`).
+- [x] Async Worker now verifies Secrets Worker route assertions before `valid` map promotion when assertion verification is required.
+- [x] Secrets Worker now rejects `hbHost` outside allowlist (`HB_ALLOWED_HOSTS` / fallback host policy).
+- [x] Async Worker now enforces AR gateway host allowlist and response size/time bounds on DNS/AR fetch path.
+- [x] Async Worker now applies per-domain cooldown for non-valid entries (`REFRESH_DOMAIN_COOLDOWN_SEC`) to reduce hot-loop abuse.
+- [x] Secrets Worker route assertion response now includes `workerKid` (and optional `nextWorkerKid` metadata).
+- [x] Async Worker now signs async->secrets `/route/assert` internal envelope (`x-dm-*`) when configured.
+- [x] Secrets Worker now verifies signed internal envelope (HMAC + skew + replay protection) for `/route/assert` when enabled.
+- [x] Phase-gate evidence pack is documented with threshold templates and initial lab evidence.
+- [x] Tenant bootstrap runbook is documented for production tenant-by-tenant provisioning.
+- [x] Two-worker bootstrap preflight script landed (`scripts/validate-two-worker-bootstrap-preflight.js`).
+- [x] Copy/paste bootstrap commands companion landed (`ops/migrations/TWO_WORKER_TENANT_BOOTSTRAP_COMMANDS_2026-04-23.md`).
 
 ### What is next
 
-- [ ] Add Async Worker verification of Secrets Worker signed assertions before `valid` promotion.
-- [ ] Attach phase-gate evidence bundle (observe/shadow/enforce) with objective thresholds.
-- [ ] Finalize production secret/bootstrap runbook for tenant-by-tenant deployment.
+- [x] Add Async Worker verification of Secrets Worker signed assertions before `valid` promotion.
+- [x] Attach phase-gate evidence bundle (observe/shadow/enforce) with objective thresholds.
+- [x] Finalize production secret/bootstrap runbook for tenant-by-tenant deployment.
 
 ### Current blockers
 
@@ -71,12 +86,12 @@ Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 - [x] Add `POST /route/assert` contract (challenge in, signed assertion out).
 - [x] Require `domain`, `cfgTx`, `hbHost`, `challengeNonce`, `challengeExp`.
 - [x] Return assertion envelope with `iat`, `exp`, `challengeNonce`, and optional target fields (`siteProcess`, `writeProcess`, `entryPath`).
-- [ ] Reject if `hbHost` is not in allowlist.
+- [x] Reject if `hbHost` is not in allowlist.
 
 ### A.2 Signature and key controls (must)
 
 - [ ] Sign assertions with dedicated Secrets Worker signing key (not shared with other functions).
-- [ ] Include `workerKid` and `sigAlg` in response.
+- [x] Include `workerKid` and `sigAlg` in response.
 - [ ] Implement key-id pinning against verified config context.
 - [ ] Add rotation support (`activeKid`, `nextKid`) and overlap window.
 
@@ -110,7 +125,7 @@ Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 - [x] Implement scheduled refresh trigger (cron) with jitter.
 - [x] Add manual trigger endpoint `POST /jobs/refresh-domain` (auth-required).
 - [ ] Add bounded batch processing and global rate caps.
-- [ ] Add per-domain cooldown to prevent hot-loop retries.
+- [x] Add per-domain cooldown to prevent hot-loop retries.
 
 ### B.2 DNS TXT validation (must)
 
@@ -121,17 +136,17 @@ Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 
 ### B.3 AR config validation (must)
 
-- [ ] Fetch cfg JSON from allowlisted Arweave gateway list only.
+- [x] Fetch cfg JSON from allowlisted Arweave gateway list only.
 - [ ] Validate schema fields (`domain`, `siteProcess`, `writeProcess`, `validFrom`, `validTo`, `sig`).
 - [ ] Verify signature and `kid` linkage to TXT.
-- [ ] Enforce max payload size + timeout budgets.
+- [x] Enforce max payload size + timeout budgets.
 
 ### B.4 HB integrity checks (must)
 
-- [ ] Probe HB target existence for resolved `siteProcess`/entry path.
-- [ ] Validate HB host against allowlist from config/policy.
-- [ ] Mark map `invalid` if probe fails or mismatches expected target.
-- [ ] Persist `hbVerifiedAt` and probe status reason.
+- [x] Probe HB target existence for resolved `siteProcess`/entry path.
+- [x] Validate HB host against allowlist from config/policy.
+- [x] Mark map `invalid` if probe fails or mismatches expected target.
+- [x] Persist `hbVerifiedAt` and probe status reason.
 
 ### B.5 Domain map state machine (must)
 
@@ -151,7 +166,7 @@ Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 
 ## Shared integration TODO (Secrets Worker <-> Async Worker)
 
-- [ ] Define signed internal envelope format (timestamp + nonce + HMAC).
+- [x] Define signed internal envelope format (timestamp + nonce + HMAC).
 - [ ] Standardize error codes and response envelopes.
 - [ ] Standardize map schema version (`mapV1`) and migration strategy.
 - [ ] Add contract tests for Secrets Worker/Async Secrets WorkerPIs.

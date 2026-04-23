@@ -13,9 +13,13 @@ Primary contract reference:
 - Async DNS/TXT workflow: `ops/migrations/ASYNC_WORKER_DNS_TXT_RESOLUTION_WORKFLOW_2026-04-23.md`
 - Two-worker hybrid protocol v1: `ops/migrations/DARKMESH_TWO_WORKER_HYBRID_PROTOCOL_V1_2026-04-23.md`
 - Two-worker hybrid security audit: `ops/migrations/DARKMESH_TWO_WORKER_HYBRID_SECURITY_AUDIT_2026-04-23.md`
+- Domain onboarding MVP order: `ops/migrations/DOMAIN_ONBOARDING_V1_CHECKLIST_2026-04-23.md`
 - Two-worker P0 TODO: `ops/migrations/TWO_WORKER_IMPLEMENTATION_TODO_P0_2026-04-23.md`
 - Two-worker env matrix: `ops/migrations/TWO_WORKER_ENV_MATRIX_2026-04-23.md`
 - Two-worker next actions: `ops/migrations/TWO_WORKER_NEXT_ACTIONS_2026-04-23.md`
+- Two-worker tenant bootstrap runbook: `ops/migrations/TWO_WORKER_TENANT_BOOTSTRAP_RUNBOOK_2026-04-23.md`
+- Two-worker tenant bootstrap quick commands: `ops/migrations/TWO_WORKER_TENANT_BOOTSTRAP_COMMANDS_2026-04-23.md`
+- AO->gateway worker migration verification: `ops/migrations/AO_WORKER_MIGRATION_VERIFICATION_2026-04-23.md`
 - Wave evidence index: `ops/migrations/TWO_WORKER_CHANGELOG_EVIDENCE_2026-04-23.md`
 - Workers-only cleanup plan: `ops/migrations/GATEWAY_REPO_CLEANUP_PLAN_WORKERS_ONLY_2026-04-22.md`
 - Phase A executable parity gate: `ops/migrations/PHASE_A_PARITY_GATE_EXECUTABLE_CHECKLIST_2026-04-22.md`
@@ -29,11 +33,11 @@ Primary contract reference:
 
 ### What is done (landed this wave)
 
-- [x] DNS TXT parser + envelope validation landed in `workers/site-mailer-worker/src/dnsTxtParser.ts` with test coverage in `workers/site-mailer-worker/test/dns-config-validation.test.ts`.
-- [x] Config/domain validator landed in `workers/site-mailer-worker/src/configValidator.ts` (domain canonicalization + schema/time-window checks).
-- [x] Domain map state persistence landed in `workers/site-mailer-worker/src/domainMapStore.ts` and transition logic in `workers/site-mailer-worker/src/domainStateMachine.ts`.
-- [x] Secrets Worker route assertion endpoint landed: `POST /route/assert` wired in `workers/site-inbox-worker/src/index.ts` and implemented in `workers/site-inbox-worker/src/routeAssertion.ts`.
-- [x] Async Worker async wiring landed in `workers/site-mailer-worker/src/index.ts`:
+- [x] DNS TXT parser + envelope validation landed in `workers/async-worker/src/dnsTxtParser.ts` with test coverage in `workers/async-worker/test/dns-config-validation.test.ts`.
+- [x] Config/domain validator landed in `workers/async-worker/src/configValidator.ts` (domain canonicalization + schema/time-window checks).
+- [x] Domain map state persistence landed in `workers/async-worker/src/domainMapStore.ts` and transition logic in `workers/async-worker/src/domainStateMachine.ts`.
+- [x] Secrets Worker route assertion endpoint landed: `POST /route/assert` wired in `workers/secrets-worker/src/index.ts` and implemented in `workers/secrets-worker/src/routeAssertion.ts`.
+- [x] Async Worker async wiring landed in `workers/async-worker/src/index.ts`:
   - `POST /jobs/enqueue`
   - `POST /jobs/refresh-domain`
   - scheduled refresh handler (`scheduledHandler`).
