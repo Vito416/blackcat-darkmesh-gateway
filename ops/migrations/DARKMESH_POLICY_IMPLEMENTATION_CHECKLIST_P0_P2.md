@@ -1,11 +1,214 @@
 # Darkmesh policy implementation checklist (P0 -> P2)
 
-Date: 2026-04-21  
+Date: 2026-04-23  
 Status: Implementation checklist (derived from `ops/live-vps/DARKMESH_HB_POLICY_SPEC_V1.md`)
+
+Primary contract reference:
+- `ops/migrations/DARKMESH_RESOLVER_CONTRACT_V1.md`
+- Execution playbook: `ops/migrations/DARKMESH_RESOLVER_ROLLOUT_PLAYBOOK.md`
+- Adapter-thin migration matrix: `ops/migrations/DARKMESH_GATEWAY_AO_MIGRATION_MATRIX_2026-04-22.md`
+- Deep `src/` inventory baseline: `ops/migrations/GATEWAY_SRC_DEEP_INVENTORY_2026-04-22.md`
+- HB stock capability reuse matrix: `ops/migrations/HB_STOCK_CAPABILITY_REUSE_MATRIX_2026-04-23.md`
+- Two-tier worker security workflow: `ops/migrations/WORKERS_TWO_TIER_SECURITY_WORKFLOW_2026-04-23.md`
+- Async DNS/TXT workflow: `ops/migrations/ASYNC_WORKER_DNS_TXT_RESOLUTION_WORKFLOW_2026-04-23.md`
+- Two-worker hybrid protocol v1: `ops/migrations/DARKMESH_TWO_WORKER_HYBRID_PROTOCOL_V1_2026-04-23.md`
+- Two-worker hybrid security audit: `ops/migrations/DARKMESH_TWO_WORKER_HYBRID_SECURITY_AUDIT_2026-04-23.md`
+- Two-worker P0 TODO: `ops/migrations/TWO_WORKER_IMPLEMENTATION_TODO_P0_2026-04-23.md`
+- Two-worker env matrix: `ops/migrations/TWO_WORKER_ENV_MATRIX_2026-04-23.md`
+- Two-worker next actions: `ops/migrations/TWO_WORKER_NEXT_ACTIONS_2026-04-23.md`
+- Wave evidence index: `ops/migrations/TWO_WORKER_CHANGELOG_EVIDENCE_2026-04-23.md`
+- Workers-only cleanup plan: `ops/migrations/GATEWAY_REPO_CLEANUP_PLAN_WORKERS_ONLY_2026-04-22.md`
+- Phase A executable parity gate: `ops/migrations/PHASE_A_PARITY_GATE_EXECUTABLE_CHECKLIST_2026-04-22.md`
+- Resolver naming guide (alias instead of tx): `ops/migrations/RESOLVER_ALIAS_INSTEAD_OF_TX_GUIDE_2026-04-22.md`
+
+## Changelog
+
+- 2026-04-23: synced two-worker implementation wave status (parsers, validators, state machine, route assertion endpoint, async wiring), added ownership split, and linked dedicated P0 TODO/env/next-action docs.
+
+## 0) Wave sync (2026-04-23)
+
+### What is done (landed this wave)
+
+- [x] DNS TXT parser + envelope validation landed in `workers/site-mailer-worker/src/dnsTxtParser.ts` with test coverage in `workers/site-mailer-worker/test/dns-config-validation.test.ts`.
+- [x] Config/domain validator landed in `workers/site-mailer-worker/src/configValidator.ts` (domain canonicalization + schema/time-window checks).
+- [x] Domain map state persistence landed in `workers/site-mailer-worker/src/domainMapStore.ts` and transition logic in `workers/site-mailer-worker/src/domainStateMachine.ts`.
+- [x] Worker A route assertion endpoint landed: `POST /route/assert` wired in `workers/site-inbox-worker/src/index.ts` and implemented in `workers/site-inbox-worker/src/routeAssertion.ts`.
+- [x] Worker B async wiring landed in `workers/site-mailer-worker/src/index.ts`:
+  - `POST /jobs/enqueue`
+  - `POST /jobs/refresh-domain`
+  - scheduled refresh handler (`scheduledHandler`).
+
+Objective completion criteria met for this wave:
+- parser/validator/state-machine modules compile and are referenced by runtime paths,
+- route assertion endpoint is reachable in worker routing table,
+- async refresh paths are present for manual and scheduled execution,
+- no standalone resolver server introduced.
+
+### What is next (objective)
+
+1. **Cross-worker assertion verification gate**
+   - Worker B must verify Worker A assertion signatures/challenge binding before promoting map status to `valid`.
+2. **Observe -> Shadow -> Enforce promotion gates**
+   - require mismatch/error thresholds and explicit canary cohort controls.
+3. **Production bindings and secret hardening**
+   - finalize per-environment KV/DO bindings and rotate scoped tokens to production values.
+4. **Operational runbook evidence pack**
+   - attach reproducible acceptance output for each phase transition.
+
+### Blockers (current)
+
+- Missing end-to-end proof that assertion replay is blocked across Worker A/B interaction (not just isolated endpoint behavior).
+- Canary cohort + phase flags are defined, but promotion evidence is not yet attached in one runbook artifact.
+- Tenant-by-tenant secret/bootstrap automation is not yet standardized (manual setup still required).
+
+## 0.1) Ownership split (explicit)
+
+| Surface | Worker A (edge/secrets) | Worker B (async/refresh) |
+|---|---|---|
+| Assertion issuance | owner | consumer/validator |
+| DNS TXT fetch/parse | no | owner |
+| Arweave config fetch/validate | no | owner |
+| HB probe + map transition | no | owner |
+| Hot-path route decision from validated map | owner | no |
+| Scheduled refresh + job queue | no | owner |
+| Inter-worker scoped auth envelope | owner (verify) | owner (sign/call) |
 
 ## 1) Objective
 
 Implement policy-aware HB serving and reward-pool eligibility in a future-proof way, **without changing current live behavior** until we explicitly opt in.
+
+## 1.1) Strategic direction (2026-04-22)
+
+Approved direction:
+- migrate **all gateway runtime/business logic** from `blackcat-darkmesh-gateway/src` into AO processes + dedicated workers,
+- use HyperBEAM stock image + config routing only (no permanent custom runtime path in gateway `src`).
+
+Important boundary:
+- this is a staged rollout (no downtime), but the **target state is full AO/worker ownership** of request-path logic,
+- gateway `src/` is a temporary bridge only until parity/cutover gates are green.
+
+## 1.1.1) Score-watch freeze window (2026-04-23)
+
+- Current HB/Arweave routing remains unchanged during this window.
+- Observability gate is active:
+  - `darkmesh-score-watch.timer` (hourly)
+  - output: `/srv/darkmesh/metrics/score-watch/score-watch-YYYYMMDD.jsonl`
+- Purpose:
+  - capture pre-change trend for 24h (quality/reliability/volume/noise proxy),
+  - compare next score cycle before touching gateway routing policy.
+
+## 1.2) `src/` migration boundary (what moves vs stays)
+
+Move to AO/worker ownership (full-scope migration):
+- `src/runtime/template/siteResolver.ts` (canonical host->site resolution authority),
+- `src/runtime/template/actions.ts` + `src/runtime/template/validators.ts` (action contract authority),
+- policy state and decision rules currently mirrored in gateway (`src/runtime/auth/policy.ts`),
+- stateful idempotency/workflow ledgers (`src/runtime/payments/webhookIdempotency.ts`, `src/runtime/sessions/lifecycle.ts`) where feasible.
+- ingress/runtime shell: `src/server.ts`, `src/handler.ts`, `src/frontController.ts` -> worker/HB route stack,
+- edge protection: `src/securityHeaders.ts`, `src/ratelimit.ts`, `src/replay.ts` -> worker/HB policy + AO-backed limits,
+- provider-specific verification: `src/webhooks.ts`, `src/runtime/payments/gopayWebhook.ts` -> secrets worker + AO contract checks,
+- runtime config/core/crypto helpers (`src/runtime/config/*`, `src/runtime/core/*`, `src/runtime/crypto/*`) -> worker runtime + `-web` control-plane tooling,
+- telemetry/export (`src/metrics.ts`, cache surfaces) -> AO/HB metrics path + VPS/system collectors.
+
+Keep in gateway repo after runtime decommission (non-request path only):
+- migration docs, runbooks, checklists,
+- VPS ops/hardening scripts,
+- worker package manifests/scaffolding (if still hosted in this repo).
+
+## 1.3) Immediate migration sequence (no-downtime)
+
+1. AO contract-first:
+   - implement resolver/read contracts from `ops/migrations/DARKMESH_RESOLVER_CONTRACT_V1.md`,
+   - keep gateway in compatibility mode (current behavior) until AO parity checks pass.
+2. Bridge period (temporary):
+   - gateway adapters call AO/worker contracts only (no local policy authority),
+   - run in `observe` mode first (no blocking) until parity is proven.
+3. Cutover:
+   - enable deny paths only for opt-in sites,
+   - preserve one-command rollback to current `off` behavior.
+4. Decommission:
+   - remove runtime request-path responsibility from gateway `src`,
+   - keep only docs/ops/tools or worker packaging in this repository.
+
+## 1.4) Remaining `gateway/src` migration matrix (execution backlog)
+
+| Module group | Current `src/` scope | Target repo/process | Phase | Primary blocker | Status |
+|---|---|---|---|---|---|
+| Host/site resolution + template actions | `src/runtime/template/siteResolver.ts`, `src/runtime/template/actions.ts`, `src/runtime/template/validators.ts` | `blackcat-darkmesh-ao` resolver/registry actions + `blackcat-darkmesh-write` admin mutations | P0 -> P1 | AO read/write action parity not fully landed; resolver bridge still carries compatibility fallback paths | in_progress |
+| Policy authority | `src/runtime/auth/policy.ts` | `blackcat-darkmesh-ao` policy snapshot + `~darkmesh-resolver@1.0` decisions | P1 | Signed snapshot publish/verify chain incomplete | in_progress |
+| Session state + replay lifecycle | `src/runtime/sessions/lifecycle.ts`, `src/runtime/sessions/replayStore.ts` | AO registry session lifecycle actions + write-side mutation contract | P1 -> P2 | AO-capable gateway adapter landed; request-path cutover + replay guard split still pending | in_progress |
+| Payment idempotency state | `src/runtime/payments/webhookIdempotency.ts` | AO payment-state ledger process (edge webhook signature checks stay in gateway) | P1 -> P2 | AO caller landed (`ao` fail-closed + `hybrid` fallback); full production cutover to AO authority still pending | in_progress |
+| Mailing policy + queue state | `src/runtime/mailing/queue.ts`, `src/runtime/mailing/payloadPolicy.ts`, `src/runtime/mailing/delivery.ts` | AO async queue process + minimal edge transport adapter | P2 | async retry/error semantics not defined in AO contracts | remaining |
+| Telemetry policy state | `src/runtime/telemetry/analyticsPolicy.ts` | AO policy state + write-side export pipeline | P2 | policy schema/version ownership not finalized | remaining |
+| Ingress shell | `src/server.ts`, `src/handler.ts`, `src/frontController.ts` | worker runtime + HyperBEAM route/config entrypoints | P1 -> P2 | route decomposition in progress (webhook/template/internal/integrity/observability/root extracted; template+internal/integrity handlers moved out; integrity runtime state + webhook forwarding bridge + HTTP response/rate-limit toolkit + runtime mode/trace helpers + integrity cache-policy helpers extracted to dedicated runtime modules; `handler.ts` now ~328 LOC), full cutover/parity still pending | in_progress |
+| Edge security controls | `src/securityHeaders.ts`, `src/ratelimit.ts`, `src/replay.ts` | worker/HB policy + AO-backed controls | P1 -> P2 | replacement guardrails not fully implemented in AO/worker contracts | remaining |
+| Provider webhook signature checks | `src/webhooks.ts`, `src/runtime/payments/gopayWebhook.ts`, `src/runtime/payments/validators.ts` | secrets worker + AO payment/session contracts | P1 -> P2 | full worker path not yet primary in production | remaining |
+| Runtime config/core/crypto | `src/runtime/config/*`, `src/runtime/core/*`, `src/runtime/crypto/*` | worker runtime + `-web` control-plane tooling | P2 | config ownership split and packaging contract pending | remaining |
+| Integrity verification | `src/integrity/*` | AO/worker integrity pipeline + VPS audit tooling | P2 | integrity authority handoff not finalized | remaining |
+| Metrics export surface | `src/metrics.ts`, `src/cache.ts` | AO/HB metrics + infra exporters | P1 -> P2 | AO decision labels + dashboards not fully wired | remaining |
+
+## 1.5) Current wave counters (done vs remaining)
+
+Migration groups in full-AO scope: **12**
+
+- Done (fully migrated + cutover complete): **0/12**
+- In progress (AO/worker contract path active): **5/12**
+- Remaining (not started/blocked): **7/12**
+
+## 1.6) Full-AO completion cut criteria (objective)
+
+Gateway runtime can be marked **fully migrated to AO/worker** only when all are true:
+
+1. Migration groups reach **12/12 done** (table 1.4).
+2. `src/` request-path modules no longer own runtime authority (AO/worker contracts are primary).
+3. No mutable business/runtime state remains in gateway request-path code.
+4. Rollout evidence passes:
+   - `off -> observe -> soft` cutover checklist green,
+   - rollback drill (`soft -> off`) green in one restart cycle,
+   - no critical regression in runtime audit window.
+5. Contract and playbook artifacts are complete for the release wave:
+   - `DARKMESH_RESOLVER_CONTRACT_V1.md`
+   - `DARKMESH_RESOLVER_ROLLOUT_PLAYBOOK.md`
+6. Runtime decommission gate:
+   - gateway request-path runtime disabled/removed from active production traffic,
+   - only docs/ops/tools (and optional worker packaging) remain active in this repo.
+
+## 1.7) Migration Scoreboard (current wave)
+
+Tracked groups (full migration scope): **12**
+
+- Completed items count: **0**
+- In-progress items count: **5**
+- Remaining migration items count: **7**
+
+Remaining critical blockers:
+1. AO resolver/policy authority cutover is not yet the only source of truth for gateway template flows.
+2. Webhook/session/security request-path controls are not yet fully owned by AO/worker runtime.
+3. Snapshot/reason-code evidence path is not yet fully wired into AO/HB metrics for cutover confidence.
+
+## 1.8) Mapping: `gateway/src/*` groups -> AO contract endpoints now available
+
+| `src` group | AO endpoints now available | Coverage |
+|---|---|---|
+| `src/runtime/template/siteResolver.ts` | `GetSiteByHost`, `ResolveHostPolicyBundle`, `ResolveHostForNode` | partial (gateway adapter still active as temporary bridge) |
+| `src/runtime/template/actions.ts` + `validators.ts` | `RegisterSite`, `BindDomain`, `SetSiteRuntime`, `GetSiteByHost` | partial (action authority migration in progress) |
+| `src/runtime/auth/policy.ts` | `GetPolicySnapshot`, `GetDnsProofState`, `ResolveHostPolicyBundle`, `SetPolicyMode`, `PublishPolicySnapshot` | partial (snapshot verification wiring pending) |
+| `src/runtime/sessions/lifecycle.ts` + `sessions/replayStore.ts` | `CreateSessionLifecycle`, `ReadSessionLifecycle`, `GetSessionLifecycle`, `RotateSessionLifecycle`, `RevokeSessionLifecycle`, `ListSessionsBySubject` | partial (AO-capable lifecycle adapter landed in gateway runtime; request-path caller migration + replay edge split pending) |
+| `src/runtime/payments/webhookIdempotency.ts` | `CheckPaymentWebhookIdempotency`, `GetPaymentWebhookIdempotencyState`, `ResetPaymentWebhookIdempotencyState` | partial (`ao` mode now fail-closed; `hybrid` fallback remains for staged rollout only) |
+| `src/runtime/telemetry/analyticsPolicy.ts` | `GetPolicySnapshot` (policy read primitive) | partial (telemetry contract mapping pending) |
+
+## 1.9) Bridge-adapter status (temporary, to be removed after cutover)
+
+Done in current gateway wave:
+- [x] **GW-ADAPTER-01** Resolver adapter supports rich AO envelope parsing (`status/reason/policy/cache/proof`) with legacy fallback compatibility. **Owner:** `Gateway-adapter`
+- [x] **GW-ADAPTER-02** Resolver metadata is propagated as optional fields only (no new gateway policy authority). **Owner:** `Gateway-adapter`
+- [x] **GW-ADAPTER-03** Backward compatibility tests cover legacy `siteId`-only envelopes and richer contract envelopes. **Owner:** `Gateway-adapter`
+
+Next items:
+- [ ] **AO-CORE-04** Freeze AO resolver envelope schema version + compatibility guarantees for `soft/enforce`. **Owner:** `AO-core`
+- [ ] **AO-POLICY-05** Finalize snapshot signing + DNS proof freshness semantics consumed by gateway metadata path. **Owner:** `AO-policy`
+- [ ] **GW-ADAPTER-04** Add strict schema checks gated to `soft/enforce` while preserving `legacy/off/observe` compatibility behavior. **Owner:** `Gateway-adapter`
+- [ ] **WRITE-CP-03** Publish mutation/runbook parity for policy/proof state updates backing resolver metadata. **Owner:** `Write-control-plane`
 
 ## 2) Non-disruption guardrails (mandatory)
 
@@ -133,6 +336,18 @@ flowchart TD
 - [ ] **WEB-P2-01** Add opt-in enrollment workflow for funded policy tier.
 - [ ] **WEB-P2-02** Add safe rollback UI action (`set mode off`).
 
+## 5.5 P0 implementation task table (resolver rollout, repo/file scoped)
+
+| Track | Repo | File(s) | P0 task | Done criteria | Verify |
+|---|---|---|---|---|---|
+| AO | `blackcat-darkmesh-ao` | `ao/templates.lua`, `dist/registry-bundle.lua`, `docs/RUNBOOK.md` | Add resolver read contract actions (`ResolveHost`, `GetSitePolicy`, `GetDnsProofState`, `GetPolicySnapshot`) in `off`-safe mode | All actions return strict envelopes and default `allow` when `mode=off` | `cd blackcat-darkmesh-ao && scripts/verify/preflight.sh && lua scripts/verify/contracts.lua` |
+| AO | `blackcat-darkmesh-ao` | `schemas/` (new resolver envelopes), `docs/ROADMAP.md` | Add schema files and action envelope docs for resolver v1 | Schemas committed + docs cross-linked from runbook | same as above + schema lint used in repo workflow |
+| WRITE | `blackcat-darkmesh-write` | `ao/handler.ts`, `schemas/actions.schema.json`, `scripts/sign-write.js` | Add signed admin mutations for policy/dns-proof state updates | Mutations are role-gated and idempotent by `Request-Id` | `cd blackcat-darkmesh-write && bash scripts/preflight-prod.sh && lua5.4 scripts/smoke_sign.lua` |
+| WRITE | `blackcat-darkmesh-write` | `docs/RUNBOOK.md` | Add operator commands for `SetPolicyMode` + snapshot publish/revoke | Runbook includes copy/paste-safe commands and rollback path | manual runbook review + smoke send |
+| GATEWAY | `blackcat-darkmesh-gateway` | `ops/live-vps/local-tools/hb-runtime-audit.sh`, `ops/live-vps/local-tools/prodlike-full-suite.sh`, `ops/live-vps/HB_CONFIG_CHANGELOG_AND_FUTURE_GUIDE.md` | Add resolver rollout preflight checks (mode, fail mode, route health) with no behavior change | Audit script reports policy mode and fails on invalid combination | `cd blackcat-darkmesh-gateway && bash ops/live-vps/local-tools/hb-runtime-audit.sh --hours 1` |
+| GATEWAY | `blackcat-darkmesh-gateway` | `ops/live-vps/local-tools/registry-control-plane.sh`, `ops/live-vps/local-tools/dns-proof-cli.sh` | Keep control-plane and DNS proof tools aligned with resolver contract fields | Bind + proof flows emit contract-compatible fields | `bash ops/live-vps/local-tools/dns-proof-cli.sh --help` + control-plane dry-run |
+| WEB | `blackcat-darkmesh-web` | `ROADMAP.md`, `docs/ARCHITECTURE.md` | Record deferred CF automation scope and resolver onboarding requirements | `-web` docs explicitly marked deferred until HB stability window closes | docs review |
+
 ## 6) Acceptance gates per phase
 
 ## P0 gate (must pass before any observe rollout)
@@ -153,6 +368,33 @@ flowchart TD
 - [ ] Soft mode proven on opted-in test domains with no critical regressions.
 - [ ] Enforce mode proven on canary group.
 - [ ] Payout evidence export verified and reproducible.
+
+## 6.1 Cutover checklist (`off -> observe -> soft`)
+
+Use this exact order; do not skip phases.
+
+### Stage A: `off` (baseline freeze)
+
+- [ ] `DM_POLICY_MODE=off`
+- [ ] `DM_POLICY_SOURCE=none`
+- [ ] `DM_POLICY_FAIL_MODE=allow`
+- [ ] `DM_POLICY_DEFAULT_DECISION=allow`
+- [ ] `hb-runtime-audit.sh` passes and reports no critical runtime errors.
+- [ ] `prodlike-full-suite.sh` and `hb-full-parity-gate.sh` pass.
+
+### Stage B: `observe` (shadow-only)
+
+- [ ] Switch only `DM_POLICY_MODE=observe` (keep `DM_POLICY_FAIL_MODE=allow`).
+- [ ] Resolver decision metrics are visible for at least one full operating window.
+- [ ] No increase in `5xx` ratio and no latency regression beyond agreed baseline.
+- [ ] Domain smoke suite remains green for mapped/unmapped domains.
+
+### Stage C: `soft` (limited enforcement)
+
+- [ ] Enable only for explicit opt-in sites.
+- [ ] Keep global fallback `DM_POLICY_FAIL_MODE=allow` during canary.
+- [ ] Confirm deterministic deny reason codes in logs/metrics.
+- [ ] Run rollback drill once and confirm return to `off` in one restart cycle.
 
 ## 7) Suggested command set for verification
 
@@ -181,14 +423,36 @@ bash scripts/verify/preflight.sh
 lua5.4 scripts/verify/action_validation.lua
 ```
 
+## 7.1 Acceptance checklist tied to scripts/commands
+
+| Check | Command | Expected result |
+|---|---|---|
+| Runtime health | `bash ops/live-vps/local-tools/hb-runtime-audit.sh --hours 6` | no critical alerts, no persistent scheduler/cache route errors |
+| End-to-end domain read | `bash ops/live-vps/local-tools/demo-domain-smoke.sh --domains-file ops/live-vps/local-tools/demo-domains.example.txt` | mapped domains return success envelopes/content |
+| Full production-like suite | `bash ops/live-vps/local-tools/prodlike-full-suite.sh` | smoke + deep checks pass |
+| Scheduler/control-plane parity | `bash ops/live-vps/local-tools/hb-full-parity-gate.sh --hb-url https://write.darkmesh.fun --module <MODULE_TX> --wallet ./wallet.json` | read + scheduler checks pass |
+| DNS proof helper parity | `bash ops/live-vps/local-tools/dns-proof-cli.sh --help` and one verify run | helper works and output matches contract fields |
+| AO contract envelopes | `cd ../blackcat-darkmesh-ao && scripts/verify/preflight.sh && lua scripts/verify/contracts.lua` | resolver contract actions pass |
+| WRITE signer flow | `cd ../blackcat-darkmesh-write && bash scripts/preflight-prod.sh && lua5.4 scripts/verify/action_validation.lua` | write-side schema/action checks pass |
+
 ## 8) Rollback quick card
 
 If any policy rollout causes degradation:
 
-1. Set evaluator mode to off (`DM_POLICY_MODE=off`).
-2. Keep `DM_POLICY_FAIL_MODE=allow`.
-3. Restart edge runtime.
-4. Re-run smoke checks.
+1. Apply exact safe toggles:
+
+   - `DM_POLICY_MODE=off`
+   - `DM_POLICY_SOURCE=none`
+   - `DM_POLICY_FAIL_MODE=allow`
+   - `DM_POLICY_DEFAULT_DECISION=allow`
+
+2. Restart edge runtime/tunnel stack (`cloudflared` + HB runtime service/docker compose).
+3. Run immediate validation:
+
+   - `bash ops/live-vps/local-tools/hb-runtime-audit.sh --hours 1`
+   - `bash ops/live-vps/local-tools/demo-domain-smoke.sh --domains-file ops/live-vps/local-tools/demo-domains.example.txt`
+
+4. If still degraded, revert latest route/policy config change and repeat step 2+3.
 
 This must restore current behavior without requiring AO state surgery.
 

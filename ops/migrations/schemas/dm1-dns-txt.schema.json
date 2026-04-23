@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://darkmesh.fun/schemas/dm1/dns-txt.schema.json",
+  "title": "Darkmesh DM1 DNS TXT Envelope (validated)",
+  "description": "Validated envelope returned by parseAndValidateDmTxtEnvelope().",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "cfg",
+    "kid",
+    "ttl"
+  ],
+  "properties": {
+    "v": {
+      "const": "dm1"
+    },
+    "cfg": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{32,128}$",
+      "description": "cfg tx id as currently accepted by dnsTxtParser.ts"
+    },
+    "kid": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{32,128}$",
+      "description": "owner key id/address as currently accepted by dnsTxtParser.ts"
+    },
+    "ttl": {
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 86400
+    }
+  },
+  "x-runtimeRules": [
+    "Raw TXT parser MUST reject duplicate keys.",
+    "Raw TXT parser MUST reject unknown keys.",
+    "Domain binding is resolved from _darkmesh.<domain> query context, not from envelope body."
+  ]
+}
