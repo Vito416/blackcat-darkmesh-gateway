@@ -18,7 +18,7 @@ Follow-up live probe status is tracked in:
 - Write checkout adapter contract:
   - `blackcat-darkmesh-write/scripts/http/checkout_api_server.mjs`
 - Worker signer/bridge surface:
-  - `blackcat-darkmesh-ao/worker/src/index.ts`
+  - `blackcat-darkmesh-gateway/workers/secrets-worker/src/index.ts`
 
 Validation executed:
 - Gateway tests: `npm test` (106 files, 644 tests, all pass).

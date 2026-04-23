@@ -14,17 +14,10 @@ Cloudflare worker runtimes are now owned by `blackcat-darkmesh-gateway` under `w
 
 ## New canonical paths
 
-- `workers/site-inbox-worker` (migrated runtime from AO worker)
-- `workers/edge-routing-worker` (ingress HB selection scaffold)
-- `workers/site-mailer-worker` (optional per-site mailer scaffold)
+- `workers/secrets-worker` (migrated runtime from AO worker)
+- `workers/async-worker` (optional per-site mailer scaffold)
 
-## Compatibility mode
+## Migration state
 
-`blackcat-darkmesh-ao/worker/` remains as a temporary mirror so existing CI and runbooks keep passing while migration lands.
-
-## Exit criteria for removing AO mirror
-
-1. Gateway CI includes all worker runtime tests and deploy smoke.
-2. AO workflows no longer reference local `worker/` paths.
-3. Ops runbooks point only to gateway worker paths.
-4. One tagged release confirms parity.
+- AO mirror has been removed.
+- Two-worker runtime (`secrets-worker`, `async-worker`) is the only supported worker runtime topology in this repository.

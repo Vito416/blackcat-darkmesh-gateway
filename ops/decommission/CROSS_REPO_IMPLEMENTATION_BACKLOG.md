@@ -1,7 +1,7 @@
 # Cross-Repo Implementation Backlog (Batch from 6 audits)
 
 Date: 2026-04-13
-Scope: blackcat-darkmesh-write, blackcat-darkmesh-ao, blackcat-darkmesh-ao/worker, blackcat-darkmesh-gateway
+Scope: blackcat-darkmesh-write, blackcat-darkmesh-ao, blackcat-darkmesh-gateway/workers, blackcat-darkmesh-gateway
 
 ## P0 (implement now)
 

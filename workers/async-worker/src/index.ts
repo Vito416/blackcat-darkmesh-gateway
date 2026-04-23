@@ -4,6 +4,12 @@ import {
   validateAndVerifyDmConfig,
   validateConfigKidAgainstTxt
 } from './configValidator.js'
+import { applyRefreshOutcome, type DomainStateMachineOptions } from './domainStateMachine.js'
+import {
+  getDomainMapEntry,
+  putDomainMapEntry,
+  type DomainMapKvAdapter
+} from './domainMapStore.js'
 
 type QueueLike = {
   send: (message: unknown) => Promise<void> | void
@@ -21,7 +27,27 @@ type Env = {
   HB_PROBE_TIMEOUT_MS?: string
   HB_PROBE_ALLOWLIST?: string
   REFRESH_SIGNATURE_STRICT?: string
+  STALE_GRACE_SEC?: string
+  SECRETS_WORKER_BASE_URL?: string
+  ROUTE_ASSERT_TOKEN?: string
+  ROUTE_ASSERT_TIMEOUT_MS?: string
+  ROUTE_ASSERT_REQUIRE_VERIFY?: string
+  ROUTE_ASSERT_HB_HOST_OVERRIDE?: string
+  DOMAIN_MAP_KV?: KvNamespaceLike
   DOMAIN_REFRESH_QUEUE?: QueueLike
+}
+
+type KvListResult = {
+  keys: Array<{ name: string }>
+  list_complete?: boolean
+  cursor?: string
+}
+
+type KvNamespaceLike = {
+  put: (key: string, value: string) => Promise<void>
+  get: (key: string) => Promise<string | null>
+  delete?: (key: string) => Promise<void>
+  list?: (options?: { prefix?: string; cursor?: string; limit?: number }) => Promise<KvListResult>
 }
 
 type DomainRefreshRequest = {
@@ -46,11 +72,21 @@ type RefreshResult = {
   domain: string
   mode: RefreshMode
   cfgTx: string
+  ttlSec: number
+  resolvedTarget: string
+  writeProcess: string | null
+  configHash: string
   hbProbe: {
     status: 'ok' | 'failed' | 'skipped'
     code?: string
     statusCode?: number
     target?: string
+  }
+  routeAssertion: {
+    status: 'ok' | 'failed' | 'skipped'
+    required: boolean
+    code?: string
+    detail?: string
   }
 }
 
@@ -76,6 +112,8 @@ const DEFAULT_AR_GATEWAY = 'https://arweave.net'
 const DEFAULT_PROBE_TIMEOUT_MS = 2500
 const DEFAULT_REFRESH_BATCH_LIMIT = 10
 const MAX_REFRESH_BATCH_LIMIT = 100
+const DEFAULT_ROUTE_ASSERT_TIMEOUT_MS = 2500
+const DEFAULT_ROUTE_ASSERT_CHALLENGE_TTL_SEC = 90
 
 const HOST_RE = /^(?=.{1,253}$)(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}$/i
 
@@ -175,6 +213,250 @@ function mapConfigOrSignatureCodeToStatus(code: string): number {
   if (code.startsWith('sig_')) return 403
   if (code.startsWith('config_') || code === 'domain_invalid') return 422
   return 422
+}
+
+function mapControlledErrorToHttpStatus(code: string): number {
+  if (code.startsWith('sig_')) return 403
+  if (
+    code.startsWith('txt_') ||
+    code.startsWith('config_') ||
+    code.startsWith('domain_') ||
+    code.startsWith('hb_probe_')
+  ) {
+    return 422
+  }
+  return 502
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) return 'null'
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const keys = Object.keys(record).sort()
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
+  const bytes = new Uint8Array(digest)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function routeAssertionRequired(env: Env): boolean {
+  const explicit = parseBoolean(env.ROUTE_ASSERT_REQUIRE_VERIFY)
+  if (typeof explicit === 'boolean') return explicit
+  return Boolean((env.SECRETS_WORKER_BASE_URL || '').trim())
+}
+
+function randomHex(sizeBytes = 16): string {
+  const bytes = new Uint8Array(sizeBytes)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function deriveHbHostForAssertion(
+  hbProbeTarget: string | undefined,
+  rawProbeUrl: string | null,
+  env: Env
+): string | null {
+  if (typeof env.ROUTE_ASSERT_HB_HOST_OVERRIDE === 'string' && env.ROUTE_ASSERT_HB_HOST_OVERRIDE.trim()) {
+    return env.ROUTE_ASSERT_HB_HOST_OVERRIDE.trim().toLowerCase()
+  }
+
+  const candidates = [hbProbeTarget, rawProbeUrl]
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    try {
+      return new URL(candidate).hostname.toLowerCase()
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+type RouteAssertionCheckResult = {
+  status: 'ok' | 'failed' | 'skipped'
+  required: boolean
+  code?: string
+  detail?: string
+}
+
+async function verifyRouteAssertion(
+  domain: string,
+  cfgTx: string,
+  hbHost: string | null,
+  env: Env,
+  fetchImpl: FetchLike
+): Promise<RouteAssertionCheckResult> {
+  const required = routeAssertionRequired(env)
+  const base = (env.SECRETS_WORKER_BASE_URL || '').trim().replace(/\/+$/, '')
+  const token = (env.ROUTE_ASSERT_TOKEN || '').trim()
+  if (!required && (!base || !token)) {
+    return { status: 'skipped', required, code: 'route_assert_not_configured' }
+  }
+  if (!base) {
+    return { status: 'failed', required, code: 'route_assert_base_url_missing' }
+  }
+  if (!token) {
+    return { status: 'failed', required, code: 'route_assert_token_missing' }
+  }
+  if (!hbHost) {
+    return { status: 'failed', required, code: 'route_assert_hb_host_missing' }
+  }
+
+  let baseUrl: URL
+  try {
+    baseUrl = new URL(base)
+  } catch (_error) {
+    return { status: 'failed', required, code: 'route_assert_base_url_invalid' }
+  }
+
+  const timeoutMs = parsePositiveInt(
+    env.ROUTE_ASSERT_TIMEOUT_MS,
+    DEFAULT_ROUTE_ASSERT_TIMEOUT_MS
+  )
+
+  const challengeNonce = randomHex(16)
+  const nowSec = Math.floor(Date.now() / 1000)
+  const challengeExp = nowSec + DEFAULT_ROUTE_ASSERT_CHALLENGE_TTL_SEC
+
+  const issueUrl = new URL('/route/assert', baseUrl).toString()
+  const verifyUrl = new URL('/route/assert/verify', baseUrl).toString()
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const issueRes = await fetchImpl(issueUrl, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        domain,
+        cfgTx,
+        hbHost,
+        challengeNonce,
+        challengeExp
+      })
+    })
+
+    const issueBody = await issueRes.json().catch(() => null)
+    const issued = issueBody && typeof issueBody === 'object' ? (issueBody as Record<string, unknown>) : null
+    if (!issueRes.ok || !issued) {
+      return { status: 'failed', required, code: 'route_assert_issue_failed' }
+    }
+
+    const signature = typeof issued.signature === 'string' ? issued.signature.trim() : ''
+    const sigAlg = typeof issued.sigAlg === 'string' ? issued.sigAlg.trim() : ''
+    const signatureRef = typeof issued.signatureRef === 'string' ? issued.signatureRef.trim() : ''
+    const assertion =
+      issued.assertion && typeof issued.assertion === 'object' && !Array.isArray(issued.assertion)
+        ? (issued.assertion as Record<string, unknown>)
+        : null
+    if (!signature || !sigAlg || !signatureRef || !assertion) {
+      return { status: 'failed', required, code: 'route_assert_issue_invalid_response' }
+    }
+
+    const verifyRes = await fetchImpl(verifyUrl, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        assertion,
+        signature,
+        sigAlg,
+        signatureRef,
+        expectedDomain: domain,
+        expectedHbHost: hbHost
+      })
+    })
+    const verifyBody = await verifyRes.json().catch(() => null)
+    if (!verifyRes.ok) {
+      const remoteCode =
+        verifyBody && typeof verifyBody === 'object' && typeof (verifyBody as Record<string, unknown>).error === 'string'
+          ? String((verifyBody as Record<string, unknown>).error)
+          : undefined
+      return {
+        status: 'failed',
+        required,
+        code: 'route_assert_verify_failed',
+        detail: remoteCode
+      }
+    }
+
+    const verified = verifyBody && typeof verifyBody === 'object' ? (verifyBody as Record<string, unknown>) : null
+    if (!verified || verified.ok !== true) {
+      return { status: 'failed', required, code: 'route_assert_verify_invalid_response' }
+    }
+
+    return { status: 'ok', required }
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { status: 'failed', required, code: 'route_assert_timeout' }
+    }
+    return {
+      status: 'failed',
+      required,
+      code: 'route_assert_unreachable',
+      detail: error instanceof Error ? error.message : String(error)
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+class WorkersKvDomainMapAdapter implements DomainMapKvAdapter {
+  constructor(private readonly kv: KvNamespaceLike) {}
+
+  async put(key: string, value: string): Promise<void> {
+    await this.kv.put(key, value)
+  }
+
+  async get(key: string): Promise<string | null> {
+    return this.kv.get(key)
+  }
+
+  async list(prefix = ''): Promise<string[]> {
+    if (typeof this.kv.list !== 'function') return []
+    const keys: string[] = []
+    let cursor: string | undefined
+
+    do {
+      const page = await this.kv.list({ prefix, cursor, limit: 1000 })
+      keys.push(...page.keys.map((item) => item.name))
+      cursor = page.list_complete ? undefined : page.cursor
+    } while (cursor)
+
+    return keys
+  }
+
+  async delete(key: string): Promise<void> {
+    if (typeof this.kv.delete !== 'function') return
+    await this.kv.delete(key)
+  }
+}
+
+function getDomainMapAdapter(env: Env): DomainMapKvAdapter | null {
+  if (!env.DOMAIN_MAP_KV || typeof env.DOMAIN_MAP_KV.get !== 'function' || typeof env.DOMAIN_MAP_KV.put !== 'function') {
+    return null
+  }
+  return new WorkersKvDomainMapAdapter(env.DOMAIN_MAP_KV)
+}
+
+function domainStateOptionsFromEnv(env: Env): Partial<DomainStateMachineOptions> {
+  const staleGraceSec = parsePositiveInt(env.STALE_GRACE_SEC, 300)
+  return {
+    staleIfErrorMs: staleGraceSec * 1000
+  }
 }
 
 function ensureAllowlistedHbUrl(rawUrl: string, env: Env) {
@@ -419,12 +701,155 @@ async function runDomainRefresh(
     throw new ControlledError(502, hbProbe.code || 'hb_probe_failed', 'HB integrity probe failed.', hbProbe)
   }
 
+  const hbHost = deriveHbHostForAssertion(hbProbe.target, probeUrl, env)
+  const routeAssertion = await verifyRouteAssertion(domain, envelope.value.cfg, hbHost, env, fetchImpl)
+  if (routeAssertion.status === 'failed' && routeAssertion.required && !input.dryRun) {
+    throw new ControlledError(
+      mapControlledErrorToHttpStatus(routeAssertion.code || 'route_assert_verify_failed'),
+      routeAssertion.code || 'route_assert_verify_failed',
+      'Route assertion verification failed.',
+      routeAssertion
+    )
+  }
+
+  const siteProcess =
+    typeof configRaw.siteProcess === 'string' && configRaw.siteProcess.trim()
+      ? configRaw.siteProcess.trim()
+      : null
+  const writeProcess =
+    typeof configRaw.writeProcess === 'string' && configRaw.writeProcess.trim()
+      ? configRaw.writeProcess.trim()
+      : null
+  const entryPath =
+    typeof configRaw.entryPath === 'string' && configRaw.entryPath.trim().startsWith('/')
+      ? configRaw.entryPath.trim()
+      : '/'
+  const resolvedTarget = siteProcess ? `${siteProcess}${entryPath}` : `cfg:${envelope.value.cfg}`
+
+  const configHash = await sha256Hex(stableStringify(configRaw))
+
   return {
     ok: true,
     domain,
     mode,
     cfgTx: envelope.value.cfg,
-    hbProbe: { ...hbProbe }
+    ttlSec: envelope.value.ttl,
+    resolvedTarget,
+    writeProcess,
+    configHash,
+    hbProbe: { ...hbProbe },
+    routeAssertion
+  }
+}
+
+async function persistDomainRefreshSuccess(
+  result: RefreshResult,
+  env: Env,
+  domainMap: DomainMapKvAdapter
+) {
+  const nowMs = Date.now()
+  const current = await getDomainMapEntry(domainMap, result.domain)
+  const next = applyRefreshOutcome(
+    current,
+    {
+      kind: 'refresh_success',
+      cfgTx: result.cfgTx,
+      resolvedTarget: result.resolvedTarget,
+      ttlMs: result.ttlSec * 1000,
+      writeProcess: result.writeProcess,
+      configHash: result.configHash,
+      hbVerifiedAt: result.hbProbe.status === 'ok' ? nowMs : null
+    },
+    result.domain,
+    nowMs,
+    domainStateOptionsFromEnv(env)
+  )
+  await putDomainMapEntry(domainMap, next)
+}
+
+async function persistDomainRefreshFailure(
+  domain: string,
+  error: unknown,
+  env: Env,
+  domainMap: DomainMapKvAdapter
+) {
+  const nowMs = Date.now()
+  const current = await getDomainMapEntry(domainMap, domain)
+  const errorCode = error instanceof ControlledError ? error.code : 'unexpected_error'
+  const errorMessage = error instanceof Error ? error.message : String(error)
+  const next = applyRefreshOutcome(
+    current,
+    {
+      kind: 'refresh_failure',
+      error: {
+        code: errorCode,
+        message: errorMessage,
+        at: nowMs
+      }
+    },
+    domain,
+    nowMs,
+    domainStateOptionsFromEnv(env)
+  )
+  await putDomainMapEntry(domainMap, next)
+}
+
+async function runDomainRefreshWithDomainState(
+  input: DomainRefreshRequest,
+  env: Env,
+  fetchImpl: FetchLike,
+  mode: RefreshResult['mode']
+): Promise<RefreshResult> {
+  const result = await runDomainRefresh(input, env, fetchImpl, mode)
+  const domainMap = getDomainMapAdapter(env)
+  if (!domainMap) {
+    return result
+  }
+
+  try {
+    await persistDomainRefreshSuccess(result, env, domainMap)
+  } catch (error) {
+    throw new ControlledError(
+      500,
+      'domain_map_write_failed',
+      'Domain map state write failed after successful refresh.',
+      { domain: result.domain, message: error instanceof Error ? error.message : String(error) }
+    )
+  }
+  return result
+}
+
+async function runDomainRefreshTracked(
+  input: DomainRefreshRequest,
+  env: Env,
+  fetchImpl: FetchLike,
+  mode: RefreshResult['mode']
+): Promise<RefreshResult> {
+  const domain = normalizeDomain(input.domain)
+  try {
+    return await runDomainRefreshWithDomainState(
+      {
+        ...input,
+        domain
+      },
+      env,
+      fetchImpl,
+      mode
+    )
+  } catch (error) {
+    const domainMap = getDomainMapAdapter(env)
+    if (domainMap) {
+      try {
+        await persistDomainRefreshFailure(domain, error, env, domainMap)
+      } catch (writeError) {
+        logJson('error', 'domain_map_write_failed', {
+          domain,
+          code: 'domain_map_write_failed_on_error_path',
+          message: writeError instanceof Error ? writeError.message : String(writeError)
+        })
+      }
+    }
+    throw error
   }
 }
 
@@ -449,7 +874,7 @@ async function handleRefreshDomainPost(body: Record<string, unknown>, env: Env, 
         : undefined,
     hbProbeUrl: typeof body.hbProbeUrl === 'string' ? body.hbProbeUrl : undefined
   }
-  return runDomainRefresh(payload, env, fetchImpl, 'inline')
+  return runDomainRefreshTracked(payload, env, fetchImpl, 'inline')
 }
 
 function parseBatchRequests(body: Record<string, unknown>) {
@@ -529,7 +954,7 @@ async function runRefreshBatch(
   for (const request of selected) {
     const started = Date.now()
     try {
-      const result = await runDomainRefresh(request, env, fetchImpl, mode)
+      const result = await runDomainRefreshTracked(request, env, fetchImpl, mode)
       ok += 1
       logRefreshOutcome('info', mode, request.domain, 'ok', Date.now() - started)
       outcomes.push(result)
@@ -572,7 +997,7 @@ app.onError((error, c) => {
 app.get('/health', (c) =>
   c.json({
     ok: true,
-    service: 'site-mailer-worker',
+    service: 'async-worker',
     provider: c.env?.MAIL_PROVIDER || 'unset'
   })
 )
@@ -614,7 +1039,7 @@ app.post('/jobs/enqueue', async (c) => {
 
     const mode = await enqueueJob(job, c.env)
     if (mode === 'inline') {
-      const result = await runDomainRefresh(job.payload, c.env, fetch, 'inline')
+      const result = await runDomainRefreshTracked(job.payload, c.env, fetch, 'inline')
       logRefreshOutcome('info', 'inline', domain, 'ok', Date.now() - started)
       return c.json({ ok: true, accepted: true, mode, result }, 202)
     }

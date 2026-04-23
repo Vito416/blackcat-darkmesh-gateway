@@ -1,9 +1,0 @@
-node_modules/
-.wrangler/
-.mf*/
-.cache/
-coverage/
-dist/
-.vitest/
-*.log
-.DS_Store

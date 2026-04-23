@@ -66,6 +66,16 @@ describe('/route/assert', () => {
     expect(text).toContain('missing_route_assert_signing_key')
   })
 
+  it('rejects hbHost outside allowlist', async () => {
+    const res = await callRouteAssert(
+      { HB_ALLOWED_HOSTS: 'hyperbeam.darkmesh.fun' },
+      { hbHost: 'evil.example.com' },
+    )
+    expect(res.status).toBe(403)
+    const text = await res.text()
+    expect(text).toContain('hb_host_not_allowlisted')
+  })
+
   it('increments route-assert metrics counters', async () => {
     await callRouteAssert()
     await callRouteAssert({}, {}, false)

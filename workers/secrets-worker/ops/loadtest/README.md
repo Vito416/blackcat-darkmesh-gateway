@@ -11,7 +11,7 @@ Prereqs
 
 Start the Worker locally with HMAC + breaker-friendly settings (example)
 ```bash
-cd worker
+cd workers/secrets-worker
 FORGET_TOKEN=loadtest-token \
 INBOX_HMAC_SECRET=loadtest-inbox \
 NOTIFY_HMAC_SECRET=loadtest-notify \
@@ -26,9 +26,9 @@ wrangler dev --ip 0.0.0.0 --port 8787
 
 Run the k6 harness (Docker)
 ```bash
-cd worker
+cd workers/secrets-worker
 docker run --rm -it --network host \
-  -v "$PWD":/repo -w /repo/worker \
+  -v "$PWD":/repo -w /repo \
   -e WORKER_BASE_URL=http://127.0.0.1:8787 \
   -e INBOX_HMAC_SECRET=loadtest-inbox \
   -e NOTIFY_HMAC_SECRET=loadtest-notify \
@@ -54,7 +54,7 @@ Tuning knobs (match Worker env to harness env)
 - `FAILING_WEBHOOK_URL`: point at any deterministic 5xx endpoint if `httpbin` is blocked.
 
 Script location
-- `worker/ops/loadtest/k6-worker.js`
+- `workers/secrets-worker/ops/loadtest/k6-worker.js`
   - Uses a fixed `x-forwarded-for` to make rate-limit math deterministic.
   - Generates hex HMAC (`X-Signature`) over the exact JSON body for both `/inbox` and `/notify`.
 
@@ -63,7 +63,7 @@ Script location
 Use the dedicated replay drill to validate same-nonce collision handling:
 
 ```bash
-cd worker
+cd workers/secrets-worker
 WORKER_BASE_URL=https://<worker-host> \
 REPLAY_DRILL_ATTEMPTS=4 \
 REPLAY_DRILL_SUBJECT="drill-replay-$(date +%s)" \
@@ -77,5 +77,5 @@ Expected pass condition:
 - no `5xx`
 
 Runbook reference:
-- `worker/ops/runbooks/replay-contention-drill.md`
-- `worker/ops/runbooks/token-scope-rotation.md`
+- `workers/secrets-worker/ops/runbooks/replay-contention-drill.md`
+- `workers/secrets-worker/ops/runbooks/token-scope-rotation.md`

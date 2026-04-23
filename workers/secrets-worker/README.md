@@ -95,9 +95,9 @@ Env/config
   - `SIGN_POLICY_JSON` (optional fail-closed allowlist for `/sign`; JSON shape: `{ "sites": { "<siteId>": { "<Action>": ["role", ...] } }, "signatureRefs": { "<signatureRef>": { "<Action>": ["role", ...] } } }`; siteId is read from `siteId` or `payload.siteId`, signatureRef from the request or `WORKER_SIGNATURE_REF`)
 
 Build/Deploy
-- Fill `worker/wrangler.toml` (copy from `wrangler.toml.example`; set KV id). Fill `ops/env.prod.example` → `/etc/blackcat/worker.env` with real secrets (fail-closed baseline).
+- Fill `workers/secrets-worker/wrangler.toml` (copy from `wrangler.toml.example`; set KV id). Fill `ops/env.prod.example` → `/etc/blackcat/worker.env` with real secrets (fail-closed baseline).
 - Keep Durable Object migration/binding from `wrangler.toml.example` (`ReplayLockDurableObject` + `REPLAY_LOCKS`) before enabling `REPLAY_STRONG_MODE=1`.
-- `npm install` in `worker/`
+- `npm install` in `workers/secrets-worker/`
 - `wrangler dev` for local/miniflare test
 - `wrangler publish --env production` (or use deploy script below). Cloudflare Workers need `compatibility_flags = ["nodejs_compat"]` (already in `wrangler.toml.example`) to resolve `buffer`.
 - Load/perf smoke: `docker run --rm --network host -v $PWD:/repo -w /repo grafana/k6 run ops/loadtest/k6-worker.js` (expects miniflare at :8787 with HMAC secrets).
@@ -113,7 +113,7 @@ Build/Deploy
 Production-like smoke (CF Free) — 2026-03-19
 - Profile: k6 lite (10 rps /inbox, 5 rps /notify, 60s), `LITE_MODE=1`, rate limit defaults 50 req / 60s.
 - Result: 899 total, 898/899 checks OK; 1 inbox call rate-limited (expected). p95 latency 268ms, max 747ms. `http_req_failed` high only because 429s count as failures—adjust threshold if needed.
-- Command used (from `worker/`):
+- Command used (from `workers/secrets-worker/`):
   `docker run --rm -v $PWD:/repo -w /repo grafana/k6 run ops/loadtest/k6-worker-lite.js \
      -e WORKER_BASE_URL=https://<your-worker>.workers.dev \
      -e INBOX_HMAC_SECRET=$INBOX_HMAC_SECRET \

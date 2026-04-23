@@ -171,7 +171,7 @@ function assessCrossRepoDataflow(options = {}) {
     gatewaySiteResolver: resolve(gatewayRoot, 'src/runtime/template/siteResolver.ts'),
     aoPublicApi: resolve(workspaceRoot, 'blackcat-darkmesh-ao/scripts/http/public_api_server.mjs'),
     writeCheckoutApi: resolve(workspaceRoot, 'blackcat-darkmesh-write/scripts/http/checkout_api_server.mjs'),
-    workerIndex: resolve(workspaceRoot, 'blackcat-darkmesh-ao/worker/src/index.ts'),
+    workerIndex: resolve(workspaceRoot, 'blackcat-darkmesh-gateway/workers/secrets-worker/src/index.ts'),
     writeAuth: resolve(workspaceRoot, 'blackcat-darkmesh-write/ao/shared/auth.lua'),
     writeSignScript: resolve(workspaceRoot, 'blackcat-darkmesh-write/scripts/sign-write.js'),
     gatewayE2ESmoke: resolve(gatewayRoot, 'scripts/e2e-template-dataflow-smoke.js'),

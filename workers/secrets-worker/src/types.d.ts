@@ -16,6 +16,7 @@ export interface Env {
   ROUTE_ASSERT_SIGNING_KEY_HEX?: string
   ROUTE_ASSERT_VERIFY_PUB_HEX?: string
   ROUTE_ASSERT_VERIFY_SKEW_SEC?: string
+  HB_ALLOWED_HOSTS?: string
   WORKER_STRICT_TOKEN_SCOPES?: string
   FORGET_TOKEN?: string
   RATE_LIMIT_MAX?: string

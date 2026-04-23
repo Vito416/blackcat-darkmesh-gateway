@@ -10,10 +10,10 @@ Legend:
 
 ## P1-01 Worker token scope rotation runbook
 - [x] Document strict scoped token rollout (`WORKER_READ_TOKEN`, `WORKER_FORGET_TOKEN`, `WORKER_NOTIFY_TOKEN`, `WORKER_SIGN_TOKEN`) with zero-downtime overlap and rollback steps.
-- Owner: worker ops (`blackcat-darkmesh-ao/worker`).
+- Owner: worker ops (`blackcat-darkmesh-gateway/workers/secrets-worker`).
 - Evidence target: staged rotation transcript + `worker` test run in release artifacts.
 - Latest hardening batch: `ops/decommission/P1_FIX_BATCH_2026-04-15.md` (token-topology fail-closed checks landed).
-- Runbook: `blackcat-darkmesh-ao/worker/ops/runbooks/token-scope-rotation.md`
+- Runbook: `workers/secrets-worker/ops/runbooks/token-scope-rotation.md`
 - Evidence template: `ops/decommission/P1_WORKER_TOKEN_ROTATION_EVIDENCE_TEMPLATE.md`
 - Latest live probe: `ops/decommission/P1_WORKER_DRILLS_2026-04-15.md` (final v4 verification passed; wrong-token checks return `401` across scoped endpoints).
 
@@ -22,8 +22,8 @@ Legend:
 - Owner: worker ops.
 - Evidence target: replay drill log with before/after metrics snapshot.
 - Latest hardening batch: `ops/decommission/P1_FIX_BATCH_2026-04-15.md` (claim-marker ownership check + concurrency regression test landed).
-- Runbook: `blackcat-darkmesh-ao/worker/ops/runbooks/replay-contention-drill.md`
-- Drill helper: `blackcat-darkmesh-ao/worker/ops/loadtest/replay-contention-drill.mjs`
+- Runbook: `workers/secrets-worker/ops/runbooks/replay-contention-drill.md`
+- Drill helper: `workers/secrets-worker/ops/loadtest/replay-contention-drill.mjs`
 - Evidence template: `ops/decommission/P1_WORKER_REPLAY_CONTENTION_EVIDENCE_TEMPLATE.md`
 - Latest live probe: `ops/decommission/P1_WORKER_DRILLS_2026-04-15.md` (post-deploy replay drill passed: `201=1`,`409=3`).
 

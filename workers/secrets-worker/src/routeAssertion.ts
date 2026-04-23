@@ -37,6 +37,35 @@ function cleanEnv(value?: string | null) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function parseAllowlistCsv(value: string | null | undefined): string[] {
+  if (!value) return []
+  const hosts = value
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+  return Array.from(new Set(hosts))
+}
+
+function resolveAllowedHbHosts(env: Env): string[] {
+  const fromExplicit = parseAllowlistCsv(env.HB_ALLOWED_HOSTS)
+  if (fromExplicit.length > 0) {
+    return fromExplicit
+  }
+
+  const hbUrl = cleanEnv(env.AO_HB_URL)
+  if (hbUrl) {
+    try {
+      const host = new URL(hbUrl).hostname.toLowerCase()
+      if (host) return [host]
+    } catch {
+      // Keep fallback below.
+    }
+  }
+
+  // Safe default for production-like deployments when no allowlist is configured.
+  return ['hyperbeam.darkmesh.fun']
+}
+
 function normalizeDomainLike(value: string, fieldName: string) {
   let normalized = value.trim().toLowerCase()
   if (!normalized) throw new HTTPException(400, { message: `missing_${fieldName}` })
@@ -167,6 +196,11 @@ export async function handleRouteAssert(c: any) {
     throw new HTTPException(400, { message: 'invalid_cfgTx' })
   }
   const hbHost = normalizeDomainLike(readRequiredString(body.hbHost, 'hbHost'), 'hbHost')
+  const hbAllowlist = resolveAllowedHbHosts(c.env as Env)
+  if (!hbAllowlist.includes(hbHost)) {
+    inc('worker_route_assert_reject_total')
+    throw new HTTPException(403, { message: 'hb_host_not_allowlisted' })
+  }
   const challengeNonce = readRequiredString(body.challengeNonce, 'challengeNonce')
   if (!/^[A-Za-z0-9._:-]{8,256}$/.test(challengeNonce)) {
     inc('worker_route_assert_reject_total')

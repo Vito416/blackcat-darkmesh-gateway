@@ -94,7 +94,7 @@ function buildFixture(options: {
   const workerAllowedRolePart = options.roleSigned ? "'role', 'Role'," : ''
   writeFile(
     root,
-    'blackcat-darkmesh-ao/worker/src/index.ts',
+    'blackcat-darkmesh-gateway/workers/secrets-worker/src/index.ts',
     [
       "function canonicalDetachedMessage(cmd: any): string {",
       '  const parts = [',

@@ -26,9 +26,9 @@ Interpretation:
 ## P1-02 replay contention drill (live)
 
 Artifact:
-- `../../blackcat-darkmesh-ao/worker/ops/loadtest/reports/replay-contention-live-20260415T155914Z.json`
-- `../../blackcat-darkmesh-ao/worker/ops/loadtest/reports/replay-contention-live-20260415T161919Z-postdo.json`
-- `../../blackcat-darkmesh-ao/worker/ops/loadtest/reports/replay-contention-live-20260415T162523Z-postdo-verified.json`
+- `../../workers/secrets-worker/ops/loadtest/reports/replay-contention-live-20260415T155914Z.json`
+- `../../workers/secrets-worker/ops/loadtest/reports/replay-contention-live-20260415T161919Z-postdo.json`
+- `../../workers/secrets-worker/ops/loadtest/reports/replay-contention-live-20260415T162523Z-postdo-verified.json`
 
 Observed:
 - pre-fix attempts: `4`, status counts `201=3`, `409=1` -> `FAIL`

@@ -20,7 +20,7 @@ Goal: close the last P0 cross-repo blocker by making `role` part of detached sig
 ## 1) `blackcat-darkmesh-ao` (worker)
 
 Files:
-- `worker/src/index.ts`
+- `workers/secrets-worker/src/index.ts`
 
 Changes:
 - Add `role` to `canonicalDetachedMessage(cmd)` between `nonce` and `payload`.
@@ -28,7 +28,7 @@ Changes:
 - Keep replay, size checks, and auth unchanged.
 
 Validation:
-- `cd blackcat-darkmesh-ao/worker && npm test` ✅ pass (8 files / 24 tests).
+- `cd blackcat-darkmesh-gateway && npm run worker:secrets:test` ✅ pass (current canonical path).
 
 ## 2) `blackcat-darkmesh-write` (runtime + signer tooling)
 

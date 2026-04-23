@@ -1,5 +1,5 @@
 {
-  "name": "blackcat-inbox-worker",
+  "name": "blackcat-secrets-worker",
   "version": "0.1.0",
   "private": true,
   "type": "module",

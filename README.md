@@ -18,14 +18,13 @@ Consolidation status
 Worker ownership (new canonical location)
 - Cloudflare Worker runtimes are now owned in this repo under `workers/`.
 - Current worker set:
-  - `workers/site-inbox-worker` (migrated from `blackcat-darkmesh-ao/worker`, production-ready signer/inbox runtime).
-  - `workers/edge-routing-worker` (edge ingress scaffold for host->HB selection).
-  - `workers/site-mailer-worker` (optional per-site mail worker scaffold).
+  - `workers/secrets-worker` (role: **Secrets Worker**, canonical runtime).
+  - `workers/async-worker` (role: **Async Worker** for domain refresh/async control-plane).
 - Quick commands:
-  - `npm run worker:site:test`
-  - `npm run worker:edge:test`
-  - `npm run worker:mailer:test`
+  - `npm run worker:secrets:test`
+  - `npm run worker:async:test`
   - `npm run workers:test`
+  - `npm run workers:test:all` (alias to core two-worker suite)
 
 Migration status
 - Active backlog and blocker split: `ops/decommission/BACKLOG.md`
@@ -95,7 +94,17 @@ Configuration (per site)
     - `GATEWAY_CACHE_TTL_MS`, `GATEWAY_CACHE_MAX_ENTRY_BYTES`, `GATEWAY_CACHE_MAX_ENTRIES`
     - `GATEWAY_RL_WINDOW_MS`, `GATEWAY_RL_MAX`, `GATEWAY_RL_MAX_BUCKETS`
     - `GATEWAY_WEBHOOK_REPLAY_TTL_MS`, `GATEWAY_WEBHOOK_REPLAY_MAX_KEYS`, `GATEWAY_WEBHOOK_SHADOW_INVALID` (return 202 instead of 401 on bad sig)
+    - GoPay idempotency source migration knobs (safe default stays local):
+      - `GOPAY_WEBHOOK_IDEMPOTENCY_SOURCE=local|ao|hybrid` (default `local`; `ao` fails closed when AO idempotency backend is unavailable; `hybrid` falls back to local)
+      - `GOPAY_WEBHOOK_IDEMPOTENCY_AO_URL` (AO/write endpoint used for `CheckPaymentWebhookIdempotency`)
+      - `GOPAY_WEBHOOK_IDEMPOTENCY_SITE_ID` (site scope for AO idempotency ledger)
+      - `GOPAY_WEBHOOK_IDEMPOTENCY_AO_TIMEOUT_MS` (default `3000`)
     - `GATEWAY_FORGET_TOKEN` (auth for /cache/forget)
+    - Session lifecycle gateway adapter knobs (for AO migration path; default local):
+      - `GATEWAY_SESSION_LIFECYCLE_SOURCE=local|ao|hybrid` (default `local`)
+      - `GATEWAY_SESSION_LIFECYCLE_AO_URL` (AO/write endpoint for session lifecycle actions)
+      - `GATEWAY_SESSION_LIFECYCLE_SITE_ID` (site scope for lifecycle actions)
+      - `GATEWAY_SESSION_LIFECYCLE_AO_TIMEOUT_MS` (default `3000`)
     - `GATEWAY_PRODUCTION_LIKE` (recommended `1` on staging/production; or auto-derived from `GATEWAY_MODE` / `APP_ENV` / `NODE_ENV` values `production|prod|staging|stage|preprod|pre-production`)
     - Internal plane toggles (apply only in production-like mode; secure default is fail-closed):
       - `GATEWAY_INTERNAL_PLANE_ALLOW_MUTATIONS=1` (opens `/cache/*`, `/cache/forget`, `/inbox` together)
@@ -136,6 +145,11 @@ Configuration (per site)
   - `GATEWAY_TEMPLATE_TOKEN` (optional shared token required on `/template/call`)
   - `GATEWAY_TEMPLATE_ALLOW_MUTATIONS=1` (default is read-only; write actions blocked unless enabled)
   - `GATEWAY_TEMPLATE_CONTRACT_FILE` (optional path, default `config/template-backend-contract.json`; template actions must exist in this contract and match route+method)
+  - `GATEWAY_TEMPLATE_ACTION_CONTRACT_MODE` (`static`|`ao`, default `static`; `ao` enables AO-authoritative action map fetch with static fallback)
+  - `GATEWAY_TEMPLATE_ACTION_CONTRACT_AO_URL` (optional AO contract base URL; gateway calls `${base}/api/public/template-action-contract`)
+  - `GATEWAY_TEMPLATE_ACTION_CONTRACT_TIMEOUT_MS` (AO action-contract fetch timeout, default `3000`)
+  - `GATEWAY_TEMPLATE_ACTION_CONTRACT_CACHE_TTL_MS` (successful AO action-contract cache TTL, default `30000`)
+  - `GATEWAY_TEMPLATE_ACTION_CONTRACT_FAILURE_CACHE_TTL_MS` (failure cache TTL to avoid retry storms, default `5000`)
   - `AO_PUBLIC_API_URL` / `AO_READ_URL` (public read upstream target)
   - `WRITE_API_URL` (write upstream target for checkout/write actions)
   - `WORKER_API_URL` / `WORKER_SIGN_URL` (worker signer endpoint base for single-tenant/simple deployments; gateway calls `/sign`)
@@ -154,6 +168,10 @@ Configuration (per site)
   - `GATEWAY_SITE_ID_BY_HOST_MAP` (runtime-optional JSON host->site binding map; still used as highest-priority allowlist source)
   - `GATEWAY_SITE_RESOLVE_MODE` (`map`|`ao`|`hybrid`, default `hybrid`; resolver order is map first, then AO)
   - `GATEWAY_SITE_RESOLVE_AO_URL` (optional resolver base URL; gateway calls `${base}/api/public/site-by-host` with `{ "host": "<request-host>" }`)
+  - `GATEWAY_SITE_RESOLVE_POLICY_MODE` (optional AO-authoritative response guard mode: `legacy` (default, current behavior), `off`/`observe` (non-blocking guard bypass on AO deny/unavailable), `soft`/`enforce` (decision-aware parsing enabled))
+    - resolver response compatibility accepts both legacy payload shape and AO-authoritative fields (`decision`, `reasonCode`, `site`, `process`, `cache`, `proof`, `policy`)
+    - default `legacy` keeps current fallback path unchanged
+  - `GATEWAY_SITE_RESOLVE_POLICY_REASON_LOG` (`0`/`1`, default `0`; when enabled, emits lightweight structured decision logs with `reasonCode` and parsed proof/policy metadata)
   - `GATEWAY_SITE_RESOLVE_TIMEOUT_MS` (AO resolver timeout, default `3000`)
   - `GATEWAY_SITE_RESOLVE_CACHE_TTL_MS` (AO resolver cache TTL, default `30000`)
   - `GATEWAY_SITE_RESOLVE_ALLOW_BODY_FALLBACK=1` (optional override; permits body-provided `siteId` fallback when resolvers fail/miss)

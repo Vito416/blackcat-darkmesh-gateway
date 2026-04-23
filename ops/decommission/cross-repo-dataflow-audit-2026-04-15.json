@@ -14,7 +14,7 @@
     "gatewaySiteResolver": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/src/runtime/template/siteResolver.ts",
     "aoPublicApi": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-ao/scripts/http/public_api_server.mjs",
     "writeCheckoutApi": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/scripts/http/checkout_api_server.mjs",
-    "workerIndex": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-ao/worker/src/index.ts",
+    "workerIndex": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/workers/secrets-worker/src/index.ts",
     "writeAuth": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/ao/shared/auth.lua",
     "writeSignScript": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-write/scripts/sign-write.js",
     "gatewayE2ESmoke": "/mnt/c/Users/jaine/Desktop/BLACKCAT_MESH_NEXUS/blackcat-darkmesh-gateway/scripts/e2e-template-dataflow-smoke.js",

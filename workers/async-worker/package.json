@@ -1,5 +1,5 @@
 {
-  "name": "blackcat-edge-routing-worker",
+  "name": "blackcat-async-worker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
