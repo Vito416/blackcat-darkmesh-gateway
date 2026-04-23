@@ -32,8 +32,8 @@ Primary contract reference:
 - [x] DNS TXT parser + envelope validation landed in `workers/site-mailer-worker/src/dnsTxtParser.ts` with test coverage in `workers/site-mailer-worker/test/dns-config-validation.test.ts`.
 - [x] Config/domain validator landed in `workers/site-mailer-worker/src/configValidator.ts` (domain canonicalization + schema/time-window checks).
 - [x] Domain map state persistence landed in `workers/site-mailer-worker/src/domainMapStore.ts` and transition logic in `workers/site-mailer-worker/src/domainStateMachine.ts`.
-- [x] Worker A route assertion endpoint landed: `POST /route/assert` wired in `workers/site-inbox-worker/src/index.ts` and implemented in `workers/site-inbox-worker/src/routeAssertion.ts`.
-- [x] Worker B async wiring landed in `workers/site-mailer-worker/src/index.ts`:
+- [x] Secrets Worker route assertion endpoint landed: `POST /route/assert` wired in `workers/site-inbox-worker/src/index.ts` and implemented in `workers/site-inbox-worker/src/routeAssertion.ts`.
+- [x] Async Worker async wiring landed in `workers/site-mailer-worker/src/index.ts`:
   - `POST /jobs/enqueue`
   - `POST /jobs/refresh-domain`
   - scheduled refresh handler (`scheduledHandler`).
@@ -47,7 +47,7 @@ Objective completion criteria met for this wave:
 ### What is next (objective)
 
 1. **Cross-worker assertion verification gate**
-   - Worker B must verify Worker A assertion signatures/challenge binding before promoting map status to `valid`.
+   - Async Worker must verify Secrets Worker assertion signatures/challenge binding before promoting map status to `valid`.
 2. **Observe -> Shadow -> Enforce promotion gates**
    - require mismatch/error thresholds and explicit canary cohort controls.
 3. **Production bindings and secret hardening**
@@ -57,13 +57,13 @@ Objective completion criteria met for this wave:
 
 ### Blockers (current)
 
-- Missing end-to-end proof that assertion replay is blocked across Worker A/B interaction (not just isolated endpoint behavior).
+- Missing end-to-end proof that assertion replay is blocked across Secrets Worker/Async Worker interaction (not just isolated endpoint behavior).
 - Canary cohort + phase flags are defined, but promotion evidence is not yet attached in one runbook artifact.
 - Tenant-by-tenant secret/bootstrap automation is not yet standardized (manual setup still required).
 
 ## 0.1) Ownership split (explicit)
 
-| Surface | Worker A (edge/secrets) | Worker B (async/refresh) |
+| Surface | Secrets Worker (edge/secrets) | Async Worker (async/refresh) |
 |---|---|---|
 | Assertion issuance | owner | consumer/validator |
 | DNS TXT fetch/parse | no | owner |

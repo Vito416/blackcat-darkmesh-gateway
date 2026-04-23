@@ -2,7 +2,7 @@
 
 Date: 2026-04-23  
 Status: actionable runbook sync  
-Scope: Worker A (edge/secrets) + Worker B (async/refresh)
+Scope: Secrets Worker (edge/secrets) + Async Worker (async/refresh)
 
 ## Constraint
 
@@ -15,11 +15,11 @@ Scope: Worker A (edge/secrets) + Worker B (async/refresh)
 
 ## What is done (objective)
 
-- DNS TXT parsing and strict envelope validation exist in Worker B.
-- Config JSON validation (domain/time window/signature fields) exists in Worker B.
-- Domain map persistence + status transitions (`valid|stale|invalid`) are implemented in Worker B modules.
-- `POST /route/assert` is wired in Worker A.
-- Worker B async control-plane entrypoints are wired (`/jobs/enqueue`, `/jobs/refresh-domain`, `scheduled`).
+- DNS TXT parsing and strict envelope validation exist in Async Worker.
+- Config JSON validation (domain/time window/signature fields) exists in Async Worker.
+- Domain map persistence + status transitions (`valid|stale|invalid`) are implemented in Async Worker modules.
+- `POST /route/assert` is wired in Secrets Worker.
+- Async Worker async control-plane entrypoints are wired (`/jobs/enqueue`, `/jobs/refresh-domain`, `scheduled`).
 
 Done criteria used:
 - source modules exist and are referenced by runtime entrypoints,
@@ -28,7 +28,7 @@ Done criteria used:
 
 ## Ownership split
 
-| Responsibility | Worker A (edge/secrets) | Worker B (async/refresh) |
+| Responsibility | Secrets Worker (edge/secrets) | Async Worker (async/refresh) |
 |---|---|---|
 | Route assertion issuance/signing | owner | consumer |
 | DNS TXT + AR cfg refresh/validation | no | owner |
@@ -38,7 +38,7 @@ Done criteria used:
 
 ## What is next (P0 action queue)
 
-### Worker A actions
+### Secrets Worker actions
 
 1. Enforce challenge-binding verification in assertion responses (nonce, expiry, host).
 2. Add explicit replay test coverage for repeated assertions.
@@ -49,9 +49,9 @@ Exit criteria:
 - assertion TTL cap is enforced,
 - metrics exported for `ok`, `reject`, `replay_block`.
 
-### Worker B actions
+### Async Worker actions
 
-1. Consume and verify Worker A assertion before promoting map status to `valid`.
+1. Consume and verify Secrets Worker assertion before promoting map status to `valid`.
 2. Complete HB probe integration in map transition path (promote only on successful probe).
 3. Finalize refresh limits and negative-cache behavior for abuse resistance.
 
@@ -74,9 +74,9 @@ Exit criteria:
 
 | Blocker | Impact | Unblocking action | Owner |
 |---|---|---|---|
-| End-to-end replay proof not captured in one run | Risk in enforce readiness | Add a dedicated replay drill and store output artifact | Worker A |
+| End-to-end replay proof not captured in one run | Risk in enforce readiness | Add a dedicated replay drill and store output artifact | Secrets Worker |
 | No single evidence bundle for canary promotion | Delays phase transition approvals | Produce one markdown + metrics bundle per phase gate | Shared |
-| Tenant bootstrap still manual | Slow operator onboarding | Add preflight checklist for required secrets/bindings and fail-fast checks | Worker B |
+| Tenant bootstrap still manual | Slow operator onboarding | Add preflight checklist for required secrets/bindings and fail-fast checks | Async Worker |
 
 ## Phase acceptance criteria (operational)
 
@@ -100,8 +100,8 @@ Exit criteria:
 
 ## Immediate execution order (next wave)
 
-1. Worker A replay + challenge hardening.
-2. Worker B assertion-consumption + HB probe gating.
+1. Secrets Worker replay + challenge hardening.
+2. Async Worker assertion-consumption + HB probe gating.
 3. Observe evidence refresh.
 4. Shadow canary start.
 5. Enforce canary after gates pass.

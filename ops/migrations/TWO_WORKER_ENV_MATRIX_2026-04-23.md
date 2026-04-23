@@ -2,15 +2,15 @@
 
 Date: 2026-04-23  
 Status: implementation input  
-Scope: Worker A (runtime/secrets) + Worker B (async/cron)
+Scope: Secrets Worker (runtime/secrets) + Async Worker (async/cron)
 
 ## Changelog (2026-04-23 sync)
 
 ### Landed in this wave (env-affecting)
 
-- [x] Worker A route assertion endpoint exists and requires auth/signing inputs.
-- [x] Worker B DNS/TXT + cfg validation flow exists and requires explicit upstream allowlists.
-- [x] Worker B job + scheduled refresh wiring exists and needs production-safe limits.
+- [x] Secrets Worker route assertion endpoint exists and requires auth/signing inputs.
+- [x] Async Worker DNS/TXT + cfg validation flow exists and requires explicit upstream allowlists.
+- [x] Async Worker job + scheduled refresh wiring exists and needs production-safe limits.
 
 ### What is next (objective)
 
@@ -25,11 +25,11 @@ Scope: Worker A (runtime/secrets) + Worker B (async/cron)
 
 ## Constraint
 
-- **No standalone resolver server**. All resolver duties are split between Worker A and Worker B.
+- **No standalone resolver server**. All resolver duties are split between Secrets Worker and Async Worker.
 
 ## Ownership split (env authority)
 
-| Domain | Worker A | Worker B |
+| Domain | Secrets Worker | Async Worker |
 |---|---|---|
 | Assertion signing + replay control env | owner | no |
 | DNS/TXT/AR/HB refresh env | no | owner |
@@ -43,7 +43,7 @@ Scope: Worker A (runtime/secrets) + Worker B (async/cron)
 
 ---
 
-## Worker A (runtime/secrets) env
+## Secrets Worker (runtime/secrets) env
 
 | Variable | Required | Default | Purpose | Security notes |
 |---|---|---|---|---|
@@ -58,21 +58,21 @@ Scope: Worker A (runtime/secrets) + Worker B (async/cron)
 | `INTERNAL_CALL_HMAC_SECRET` | Required (secret) | none | HMAC for async->runtime internal envelope | Distinct from inbox/notify HMAC secrets. |
 | `ROUTE_ASSERT_TTL_SEC` | Optional | `120` | Max assertion validity window | Keep <=120s to reduce replay window. |
 | `ROUTE_ASSERT_SIGNATURE_REF` | Optional | `worker-ed25519` | Signature reference included in assertion response | Pin verify policy to expected refs. |
-| `HB_ALLOWED_HOSTS` | Required | `hyperbeam.darkmesh.fun` | Allowlist of HB hosts Worker A can sign for | Must be strict allowlist, comma-separated. |
+| `HB_ALLOWED_HOSTS` | Required | `hyperbeam.darkmesh.fun` | Allowlist of HB hosts Secrets Worker can sign for | Must be strict allowlist, comma-separated. |
 | `REQUIRE_SECRETS` | Required | `1` | Hard-fail boot when secrets missing | Prevent accidental insecure startup. |
 | `REQUIRE_METRICS_AUTH` | Required | `1` | Protect metrics endpoint | Never expose metrics unauthenticated in prod. |
 | `METRICS_BEARER_TOKEN` | Optional (secret) | none | Bearer auth for metrics scrape | If set, disable basic auth fallback. |
 
-### Worker A bindings (non-env, required)
+### Secrets Worker bindings (non-env, required)
 
 | Binding | Required | Purpose | Security notes |
 |---|---|---|---|
 | `REPLAY_LOCKS` (Durable Object) | Required | Nonce one-time replay protection | Do not share across unrelated apps/tenants. |
-| `DOMAIN_MAP_KV` (KV/adapter) | Required | Read validated map entries for routing decisions | Read-only path from Worker A perspective preferred. |
+| `DOMAIN_MAP_KV` (KV/adapter) | Required | Read validated map entries for routing decisions | Read-only path from Secrets Worker perspective preferred. |
 
 ---
 
-## Worker B (async/scheduled) env
+## Async Worker (async/scheduled) env
 
 | Variable | Required | Default | Purpose | Security notes |
 |---|---|---|---|---|
@@ -97,7 +97,7 @@ Scope: Worker A (runtime/secrets) + Worker B (async/cron)
 | `SHADOW_MODE` | Optional | `0` | Compare shadow decisions to active route | Enable before enforce. |
 | `ENFORCE_MODE` | Optional | `0` | Make map-backed decision authoritative | Enable progressively by cohort. |
 
-### Worker B bindings (non-env, required)
+### Async Worker bindings (non-env, required)
 
 | Binding | Required | Purpose | Security notes |
 |---|---|---|---|
@@ -119,7 +119,7 @@ Scope: Worker A (runtime/secrets) + Worker B (async/cron)
 
 ## Minimum production set (P0)
 
-### Worker A minimum required
+### Secrets Worker minimum required
 
 - `WORKER_STRICT_TOKEN_SCOPES=1`
 - `AUTH_REQUIRE_SIGNATURE=1`
@@ -129,7 +129,7 @@ Scope: Worker A (runtime/secrets) + Worker B (async/cron)
 - secrets: `WORKER_AUTH_TOKEN`, `WORKER_READ_TOKEN`, `WORKER_SIGN_TOKEN`, `ROUTE_ASSERT_TOKEN`, `ROUTE_ASSERT_SIGNING_KEY_HEX`, `INTERNAL_CALL_HMAC_SECRET`
 - bindings: `REPLAY_LOCKS`, `DOMAIN_MAP_KV`
 
-### Worker B minimum required
+### Async Worker minimum required
 
 - `DM_PROTOCOL_VERSION=dm1`
 - `HB_PROBE_ALLOWLIST` (non-empty)
