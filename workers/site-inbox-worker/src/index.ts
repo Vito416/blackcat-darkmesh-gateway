@@ -6,6 +6,8 @@ import { Buffer } from 'node:buffer'
 import * as ed25519 from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha512'
 import { hexToBytes, normalizeHmacSignature } from './runtime/crypto/hmac'
+import { handleRouteAssert } from './routeAssertion'
+import { handleRouteAssertVerify } from './routeAssertionVerify'
 
 type InboxItem = {
   payload: string
@@ -2807,6 +2809,9 @@ app.post('/sign', async (c) => {
   const signature = await signCommand(c.env, signBody)
   return c.json({ signature, signatureRef: signContext.signatureRef })
 })
+
+app.post('/route/assert', handleRouteAssert)
+app.post('/route/assert/verify', handleRouteAssertVerify)
 
 app.get('/api/health', async (c) => {
   const aoModule = await loadAoConnect().catch(() => null)
