@@ -53,6 +53,8 @@
     "ops:check-production-readiness": "node scripts/check-production-readiness-summary.js",
     "ops:audit-cross-repo-dataflow": "node scripts/audit-cross-repo-dataflow.js",
     "ops:check-ao-gate-evidence": "node scripts/check-ao-gate-evidence.js",
+    "ops:validate-resolver-fixtures": "lua scripts/run-resolver-fixtures.lua",
+    "ops:validate-resolver-pack": "node scripts/validate-resolver-pack.js",
     "ops:validate-final-migration-summary": "node scripts/validate-final-migration-summary.js",
     "ops:validate-signoff-record": "node scripts/validate-signoff-record.js",
     "ops:check-release-readiness": "node scripts/check-release-readiness.js",

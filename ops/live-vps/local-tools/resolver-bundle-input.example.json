@@ -1,0 +1,53 @@
+{
+  "hosts": [
+    {
+      "host": "jdwt.fun",
+      "siteId": "site-jdwt",
+      "processId": "xIxP6d9N_B6Lr9nI6ddUJPv7wm5xkA9aHf1_l6R2q8Q",
+      "moduleId": "TrNj8CSFaevoYSAsnxuQ97SkdDuPvpkgxR-L6i3QCzY",
+      "scheduler": "_wCF37G9t-xfJuYZqc6JXI9VrG4dzM5WUFgDfOn9LdM",
+      "routePrefix": "/",
+      "status": "active",
+      "proof": {
+        "state": "valid",
+        "checkedAt": "2026-04-24T08:00:00Z",
+        "validUntil": "2026-04-24T09:00:00Z",
+        "source": "dns_txt"
+      },
+      "route": {
+        "defaultActionHint": "read",
+        "rules": [
+          {
+            "pathPrefix": "/api",
+            "methods": ["GET", "HEAD"],
+            "actionHint": "read"
+          }
+        ]
+      }
+    },
+    {
+      "host": "vddl.fun",
+      "siteId": "site-vddl",
+      "processId": "xIxP6d9N_B6Lr9nI6ddUJPv7wm5xkA9aHf1_l6R2q8Q",
+      "moduleId": "TrNj8CSFaevoYSAsnxuQ97SkdDuPvpkgxR-L6i3QCzY",
+      "scheduler": "_wCF37G9t-xfJuYZqc6JXI9VrG4dzM5WUFgDfOn9LdM",
+      "routePrefix": "/",
+      "status": "active",
+      "proof": {
+        "state": "unchecked"
+      }
+    },
+    {
+      "host": "blgateway.fun",
+      "siteId": "site-blgateway",
+      "processId": "xIxP6d9N_B6Lr9nI6ddUJPv7wm5xkA9aHf1_l6R2q8Q",
+      "moduleId": "TrNj8CSFaevoYSAsnxuQ97SkdDuPvpkgxR-L6i3QCzY",
+      "scheduler": "_wCF37G9t-xfJuYZqc6JXI9VrG4dzM5WUFgDfOn9LdM",
+      "routePrefix": "/",
+      "status": "active",
+      "proof": {
+        "state": "unchecked"
+      }
+    }
+  ]
+}
